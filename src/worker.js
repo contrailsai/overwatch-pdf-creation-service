@@ -26,9 +26,12 @@ const pdfGenerationDuration = meter.createHistogram('job_generate_pdf_duration_s
   unit: 's',
 });
 
-const DetailedCasesReportDocument = require('./components/DetailedCaseReport').DetailedCasesReportDocument;
+const { DetailedCasesReportDocument } = require('./components/DetailedCaseReport');
+const { SingleCaseReportDocument } = require('./components/SingleCaseReport');
+const { ProfileReportDocument } = require('./components/ProfileReport');
+const { RiskReportDocument } = require('./components/SummaryReport');
 
-// Normalization function adapted from getPostsByIds.js
+// Normalization function
 function normalizePost(post, signedImageUrl = null) {
   return {
     _id: post._id.toString(),
@@ -72,48 +75,62 @@ function normalizePost(post, signedImageUrl = null) {
 
 const IMAGE_CACHE_DIR = path.join(__dirname, '../cache/images');
 
+// Ensure cache directory exists
+if (!fs.existsSync(IMAGE_CACHE_DIR)) {
+  fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+}
+
+async function processImage(imageUrl, id, suffix = 'processed') {
+  if (!imageUrl) return null;
+
+  const cachedPath = path.join(IMAGE_CACHE_DIR, `${id}_${suffix}.jpg`);
+  
+  if (!fs.existsSync(cachedPath)) {
+    try {
+      const buffer = await fetchImageFromS3Url(imageUrl);
+      await sharp(buffer)
+        .resize({ width: 800, withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toFile(cachedPath);
+    } catch (error) {
+      console.error(`Failed to process image ${imageUrl} for ${id}:`, error.message);
+      return null; // Return null instead of throwing to prevent failing the entire report
+    }
+  }
+  return cachedPath;
+}
+
+// Optimization: Process all images concurrently using Promise.all
 async function processAndCacheImages(posts) {
-  const compressedImages = [];
-  for (const post of posts) {
-    // Assuming the image URL is stored in post.imageUrl or post.media.url or post.s3_url
+  const promises = posts.map(async (post) => {
     let imageUrl = null;
     if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
       imageUrl = post.post_content.media_urls[0].s3_url || post.post_content.media_urls[0].url;
     } else if (post.s3_url) {
       imageUrl = post.s3_url;
-    }
-
-    if (!imageUrl) {
-      compressedImages.push(null);
-      continue;
-    }
-
-    const cachedPath = path.join(IMAGE_CACHE_DIR, `${post._id}_processed.jpg`);
-    let localPath = cachedPath;
-
-    // Check if already cached
-    if (!fs.existsSync(cachedPath)) {
-      try {
-        // Fetch raw image
-        const buffer = await fetchImageFromS3Url(imageUrl);
-        
-        // Process with sharp
-        await sharp(buffer)
-          .resize({ width: 800, withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toFile(cachedPath);
-      } catch (error) {
-        console.error(`Failed to process image ${imageUrl} for post ${post._id}`, error);
-        localPath = null;
-        // Fallback placeholder logic can be added here
-      }
+    } else if (post.image_url) {
+      imageUrl = post.image_url;
     }
     
-    // Convert local path to a URL-like format that react-pdf can read
-    // react-pdf in Node environment can read absolute paths if prefixed with 'file://' or just as absolute path string.
-    compressedImages.push(localPath);
-  }
-  return compressedImages;
+    return await processImage(imageUrl, post._id);
+  });
+
+  return await Promise.all(promises);
+}
+
+// OTel Tracing Wrapper
+async function withSpan(name, attributes, fn) {
+  return await tracer.startActiveSpan(name, { attributes }, async (span) => {
+    try {
+      return await fn(span);
+    } catch (error) {
+      span.recordException(error);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 async function startWorker() {
@@ -136,103 +153,113 @@ async function startWorker() {
         }
       }, async (span) => {
         const startTime = process.hrtime();
+        const { projectId, postIds, reportHash, reportType, database_name, project, profile } = job.data;
+        
         try {
-          const { projectId, postIds, reportHash, reportType, database_name, project } = job.data;
           span.setAttribute('project.id', projectId);
           span.setAttribute('report.type', reportType);
-        
-        await job.updateProgress(10);
-        
-        // 1. Fetch full post data from Mongo
-        span.addEvent('Fetching posts from DB');
-        const db = client.db(database_name);
-        const objectIds = postIds.map(id => new ObjectId(id));
-        const rawPosts = await db.collection('Posts')
-          .find({ _id: { $in: objectIds } })
-          .toArray();
-
-        // Maintain order of IDs if possible
-        const orderedPosts = objectIds.map(id => rawPosts.find(p => p._id.toString() === id.toString())).filter(Boolean);
+          await job.updateProgress(10);
           
-        await job.updateProgress(30);
-        
-        // 2. Process/Fetch Images from Volume Cache
-        span.addEvent('Processing images');
-        const compressedImages = await processAndCacheImages(orderedPosts);
-        
-        // Normalize posts
-        const posts = orderedPosts.map(p => normalizePost(p));
-        
-        await job.updateProgress(50);
-        
-        // 3. Render PDF
-        span.addEvent('Rendering PDF');
-        let pdfStream;
-        if (reportType === 'Detailed') {
-          pdfStream = await renderToStream(React.createElement(DetailedCasesReportDocument, { posts, project, compressedImages }));
-        } else {
-          pdfStream = await renderToStream(React.createElement('Document', null, React.createElement('Page', null, React.createElement('Text', null, 'Report (Not Detailed)'))));
-        }
-        
-        await job.updateProgress(70);
+          // 1. Fetch full post data from Mongo
+          const rawPosts = await withSpan('db-fetch-posts', { 'db.name': database_name, 'post.count': postIds.length }, async () => {
+            const db = client.db(database_name);
+            const objectIds = postIds.map(id => new ObjectId(id));
+            return await db.collection('Posts')
+              .find({ _id: { $in: objectIds } })
+              .toArray();
+          });
 
-        // 4. Upload Stream directly to S3
-        span.addEvent('Uploading Stream to S3');
-        const s3Url = await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
-        
-        await job.updateProgress(90);
-
-        // 5. Save PDF metadata to DB
-        span.addEvent('Saving metadata to DB');
-        await db.collection('pdf_reports').updateOne(
-          { reportHash },
-          {
-            $set: {
-              reportHash,
-              url: s3Url,
-              created_at: new Date()
+          // Maintain order of IDs
+          const orderedPosts = postIds.map(id => rawPosts.find(p => p._id.toString() === id.toString())).filter(Boolean);
+            
+          await job.updateProgress(30);
+          
+          // 2. Process/Fetch Images from Volume Cache Concurrently
+          const { compressedImages, compressedProfilePic } = await withSpan('process-images', { 'images.count': orderedPosts.length }, async () => {
+            const imgs = await processAndCacheImages(orderedPosts);
+            let profilePic = null;
+            if (reportType === 'Profile' && profile?.metadata?.profile_pic) {
+              profilePic = await processImage(profile.metadata.profile_pic, profile._id, 'profile');
             }
-          },
-          { upsert: true }
-        );
-        
-        await job.updateProgress(100);
+            return { compressedImages: imgs, compressedProfilePic: profilePic };
+          });
+          
+          // Normalize posts
+          const posts = orderedPosts.map(p => normalizePost(p));
+          
+          await job.updateProgress(50);
+          
+          // 3. Render PDF
+          const pdfStream = await withSpan('render-pdf', { 'report.type': reportType }, async () => {
+            if (reportType === 'Detailed') {
+              return await renderToStream(React.createElement(DetailedCasesReportDocument, { posts, project, compressedImages }));
+            } else if (reportType === 'Single') {
+              return await renderToStream(React.createElement(SingleCaseReportDocument, { post: posts[0], project, compressedImage: compressedImages[0] }));
+            } else if (reportType === 'Profile') {
+              return await renderToStream(React.createElement(ProfileReportDocument, { profile, cases: posts, project, compressedImages, compressedProfilePic }));
+            } else if (reportType === 'Summary') {
+              return await renderToStream(React.createElement(RiskReportDocument, { posts, project, compressedImages }));
+            } else {
+              return await renderToStream(React.createElement('Document', null, React.createElement('Page', null, React.createElement('Text', null, 'Report type not supported'))));
+            }
+          });
+          
+          await job.updateProgress(70);
 
-        const [seconds, nanoseconds] = process.hrtime(startTime);
-        pdfGenerationDuration.record(seconds + nanoseconds / 1e9, {
-          'report.type': reportType,
-          'project.id': projectId,
-          'status': 'success'
-        });
+          // 4. Upload Stream directly to S3
+          const s3Url = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
+            return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
+          });
+          
+          await job.updateProgress(90);
 
-        span.end();
-        return { url: s3Url };
-      } catch (error) {
-        const [seconds, nanoseconds] = process.hrtime(startTime);
-        pdfGenerationDuration.record(seconds + nanoseconds / 1e9, {
-          'report.type': job?.data?.reportType || 'Unknown',
-          'project.id': job?.data?.projectId || 'Unknown',
-          'status': 'failed'
-        });
+          // 5. Save PDF metadata to DB
+          await withSpan('db-save-metadata', { 'report.hash': reportHash }, async () => {
+            await client.db(database_name).collection('pdf_reports').updateOne(
+              { reportHash },
+              { $set: { reportHash, url: s3Url, created_at: new Date() } },
+              { upsert: true }
+            );
+          });
+          
+          await job.updateProgress(100);
 
-        span.recordException(error);
-        span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
-        span.end();
-        throw error;
-      }
-    });
+          const [seconds, nanoseconds] = process.hrtime(startTime);
+          pdfGenerationDuration.record(seconds + nanoseconds / 1e9, {
+            'report.type': reportType,
+            'project.id': projectId,
+            'status': 'success'
+          });
+
+          span.end();
+          return { url: s3Url };
+
+        } catch (error) {
+          const [seconds, nanoseconds] = process.hrtime(startTime);
+          pdfGenerationDuration.record(seconds + nanoseconds / 1e9, {
+            'report.type': job?.data?.reportType || 'Unknown',
+            'project.id': job?.data?.projectId || 'Unknown',
+            'status': 'failed'
+          });
+
+          span.recordException(error);
+          span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+          span.end();
+          throw error;
+        }
+      });
     }); 
   }, { 
     connection: redisConnection, 
-    concurrency: 2 
+    concurrency: process.env.WORKER_CONCURRENCY ? parseInt(process.env.WORKER_CONCURRENCY, 10) : 2 
   });
 
   worker.on('completed', job => {
-    console.log(`Job ${job.id} completed!`);
+    console.log(`Job ${job.id} completed successfully.`);
   });
 
   worker.on('failed', (job, err) => {
-    console.log(`Job ${job.id} failed with error ${err.message}`);
+    console.error(`Job ${job.id} failed:`, err.message);
   });
 }
 

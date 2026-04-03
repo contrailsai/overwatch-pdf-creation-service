@@ -13,21 +13,21 @@ app.use(express.json());
 
 const pdfQueue = new Queue('pdf-generation', { connection: redisConnection });
 
-function generateReportHash(projectId, postIds, reportType) {
+function generateReportHash(projectId, postIds, reportType, profileId = '') {
   const sortedIds = [...postIds].sort();
-  const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}`;
+  const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}`;
   return crypto.createHash('sha256').update(rawString).digest('hex');
 }
 
 app.post('/generate', async (req, res) => {
   try {
-    const { projectId, postIds, reportType, database_name, project } = req.body;
+    const { projectId, postIds, reportType, database_name, project, profile } = req.body;
 
     if (!projectId || !postIds || !Array.isArray(postIds) || !database_name) {
       return res.status(400).json({ error: 'Invalid payload: missing projectId, postIds, or database_name' });
     }
 
-    const reportHash = generateReportHash(projectId, postIds, reportType);
+    const reportHash = generateReportHash(projectId, postIds, reportType, profile?._id);
     const client = getMongoClient();
     const db = client.db(database_name);
 
@@ -70,6 +70,7 @@ app.post('/generate', async (req, res) => {
       reportHash,
       database_name,
       project, // Allow passing full project details directly
+      profile, // Pass full profile details for profile reports
       otelCarrier,
     });
 
