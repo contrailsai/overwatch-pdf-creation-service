@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Install OS-level dependencies required for Sharp or canvas if needed
-RUN apk add --no-cache python3 make g++ vips-dev build-base
+# Install OS-level dependencies required for node-gyp (removed vips-dev so sharp downloads its pre-compiled musl binaries with all codecs)
+RUN apk add --no-cache python3 make g++ build-base
 
 WORKDIR /app
 

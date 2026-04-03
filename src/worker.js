@@ -86,14 +86,32 @@ async function processImage(imageUrl, id, suffix = 'processed') {
   const cachedPath = path.join(IMAGE_CACHE_DIR, `${id}_${suffix}.jpg`);
   
   if (!fs.existsSync(cachedPath)) {
+    let buffer;
     try {
-      const buffer = await fetchImageFromS3Url(imageUrl);
+      buffer = await fetchImageFromS3Url(imageUrl);
+    } catch (error) {
+      console.error(`Failed to fetch image ${imageUrl} for ${id}:`, error.message);
+      return null;
+    }
+
+    try {
+      // 1. Attempt optimized processing with Sharp
       await sharp(buffer)
         .resize({ width: 800, withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toFile(cachedPath);
-    } catch (error) {
-      console.error(`Failed to process image ${imageUrl} for ${id}:`, error.message);
+    } catch (sharpError) {
+      // 2. Intelligent Raw Fallback: If Sharp fails but it's a valid JPEG/PNG, React-PDF can read it natively
+      const magicBytes = buffer.toString('hex', 0, 4).toLowerCase();
+      
+      // JPEG (ffd8...), PNG (8950...)
+      if (magicBytes.startsWith('ffd8') || magicBytes.startsWith('8950')) {
+        console.warn(`[Fallback Triggered] Sharp failed, but recognized valid JPEG/PNG magic bytes (${magicBytes}) for ${id}. Saving raw file. Reason: ${sharpError.message}`);
+        fs.writeFileSync(cachedPath, buffer);
+        return cachedPath;
+      }
+      
+      console.error(`[Irrecoverable] Failed to process image ${imageUrl} for ${id}. Magic Bytes: ${magicBytes} - Error:`, sharpError.message);
       return null; // Return null instead of throwing to prevent failing the entire report
     }
   }

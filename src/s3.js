@@ -90,7 +90,7 @@ async function fetchImageFromS3Url(url) {
   }
 
   const contentType = response.headers.get('content-type');
-  if (contentType && !contentType.startsWith('image/')) {
+  if (contentType && !contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
     throw new Error(`Resource is not an image (content-type: ${contentType})`);
   }
 
