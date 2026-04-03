@@ -88,6 +88,12 @@ async function fetchImageFromS3Url(url) {
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.statusText}`);
   }
+
+  const contentType = response.headers.get('content-type');
+  if (contentType && !contentType.startsWith('image/')) {
+    throw new Error(`Resource is not an image (content-type: ${contentType})`);
+  }
+
   return Buffer.from(await response.arrayBuffer());
 }
 

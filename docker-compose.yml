@@ -28,7 +28,7 @@ services:
 
   worker:
     build: .
-    command: node --require ./src/instrumentation.js src/worker.js
+    command: node --max-old-space-size=1792 --require ./src/instrumentation.js src/worker.js
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
@@ -44,7 +44,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1.5G
+          memory: 2.5G
     volumes:
       - .:/app
       - /app/node_modules

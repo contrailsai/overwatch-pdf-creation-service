@@ -100,22 +100,33 @@ async function processImage(imageUrl, id, suffix = 'processed') {
   return cachedPath;
 }
 
-// Optimization: Process all images concurrently using Promise.all
-async function processAndCacheImages(posts) {
-  const promises = posts.map(async (post) => {
-    let imageUrl = null;
-    if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-      imageUrl = post.post_content.media_urls[0].s3_url || post.post_content.media_urls[0].url;
-    } else if (post.s3_url) {
-      imageUrl = post.s3_url;
-    } else if (post.image_url) {
-      imageUrl = post.image_url;
-    }
+// Optimization: Process images in chunks to prevent Heap OOM
+async function processAndCacheImages(posts, concurrency = 5) {
+  const results = new Array(posts.length);
+  
+  for (let i = 0; i < posts.length; i += concurrency) {
+    const chunk = posts.slice(i, i + concurrency);
+    const promises = chunk.map(async (post, index) => {
+      let imageUrl = null;
+      if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
+        imageUrl = post.post_content.media_urls[0].s3_url || post.post_content.media_urls[0].url;
+      } else if (post.s3_url) {
+        imageUrl = post.s3_url;
+      } else if (post.image_url) {
+        imageUrl = post.image_url;
+      }
+      
+      const localPath = await processImage(imageUrl, post._id);
+      results[i + index] = localPath;
+    });
     
-    return await processImage(imageUrl, post._id);
-  });
+    await Promise.all(promises);
+    
+    // Optional: Small delay to let GC catch up if needed
+    // await new Promise(resolve => setTimeout(resolve, 50));
+  }
 
-  return await Promise.all(promises);
+  return results;
 }
 
 // OTel Tracing Wrapper
@@ -158,6 +169,8 @@ async function startWorker() {
         try {
           span.setAttribute('project.id', projectId);
           span.setAttribute('report.type', reportType);
+          span.setAttribute('post.count', postIds.length);
+          
           await job.updateProgress(10);
           
           // 1. Fetch full post data from Mongo
@@ -174,9 +187,9 @@ async function startWorker() {
             
           await job.updateProgress(30);
           
-          // 2. Process/Fetch Images from Volume Cache Concurrently
+          // 2. Process/Fetch Images from Volume Cache with concurrency limit
           const { compressedImages, compressedProfilePic } = await withSpan('process-images', { 'images.count': orderedPosts.length }, async () => {
-            const imgs = await processAndCacheImages(orderedPosts);
+            const imgs = await processAndCacheImages(orderedPosts, 10); // Process 10 at a time
             let profilePic = null;
             if (reportType === 'Profile' && profile?.metadata?.profile_pic) {
               profilePic = await processImage(profile.metadata.profile_pic, profile._id, 'profile');
@@ -190,7 +203,8 @@ async function startWorker() {
           await job.updateProgress(50);
           
           // 3. Render PDF
-          const pdfStream = await withSpan('render-pdf', { 'report.type': reportType }, async () => {
+          // Note: For very large reports, this is the main memory consumer
+          const pdfStream = await withSpan('render-pdf', { 'report.type': reportType, 'post.count': posts.length }, async () => {
             if (reportType === 'Detailed') {
               return await renderToStream(React.createElement(DetailedCasesReportDocument, { posts, project, compressedImages }));
             } else if (reportType === 'Single') {
@@ -251,7 +265,9 @@ async function startWorker() {
     }); 
   }, { 
     connection: redisConnection, 
-    concurrency: process.env.WORKER_CONCURRENCY ? parseInt(process.env.WORKER_CONCURRENCY, 10) : 2 
+    concurrency: process.env.WORKER_CONCURRENCY ? parseInt(process.env.WORKER_CONCURRENCY, 10) : 1,
+    lockDuration: 600000, // 10 minutes lock for massive reports
+    lockRenewTime: 30000, // Renew every 30 seconds
   });
 
   worker.on('completed', job => {
