@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
     paddingTop: 30,
     paddingHorizontal: 30,
     paddingBottom: 40,
-    fontFamily: 'Outfit',
+    fontFamily: ['Outfit', 'Noto Sans Devanagari', 'Noto Sans Tamil', 'Noto Sans Arabic', 'Noto Sans Gurmukhi', 'Noto Sans Gujarati', 'Noto Sans Bengali'],
     backgroundColor: '#FFFFFF',
   },
   // --- HEADERS & FOOTERS ---

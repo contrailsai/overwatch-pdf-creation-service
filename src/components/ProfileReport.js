@@ -18,7 +18,7 @@ const Theme = {
 };
 
 const styles = StyleSheet.create({
-  page: { paddingTop: 30, paddingHorizontal: 30, paddingBottom: 40, fontFamily: 'Outfit', backgroundColor: '#FFFFFF' },
+  page: { paddingTop: 30, paddingHorizontal: 30, paddingBottom: 40, fontFamily: ['Outfit', 'Noto Sans Devanagari', 'Noto Sans Tamil', 'Noto Sans Arabic', 'Noto Sans Gurmukhi', 'Noto Sans Gujarati', 'Noto Sans Bengali'], backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: Theme.BORDER_LIGHT, paddingBottom: 12, marginBottom: 16 },
   title: { fontSize: 18, fontWeight: '900', color: Theme.PRIMARY_BLUE, letterSpacing: 0.5 },
   subtitle: { fontSize: 7, color: Theme.SECONDARY_GRAY, textTransform: 'uppercase', letterSpacing: 1.5 },

@@ -15,9 +15,28 @@ export const registerFonts = () => {
         ]
     });
 
+    // Support for Indian Languages & Urdu
+    const indicFonts = [
+        { family: 'Noto Sans Devanagari', file: 'NotoSansDevanagari-Regular.ttf' },
+        { family: 'Noto Sans Tamil', file: 'NotoSansTamil-Regular.ttf' },
+        { family: 'Noto Sans Arabic', file: 'NotoSansArabic-Regular.ttf' }, // Urdu
+        { family: 'Noto Sans Gurmukhi', file: 'NotoSansGurmukhi-Regular.ttf' }, // Punjabi
+        { family: 'Noto Sans Gujarati', file: 'NotoSansGujarati-Regular.ttf' },
+        { family: 'Noto Sans Bengali', file: 'NotoSansBengali-Regular.ttf' },
+    ];
+
+    indicFonts.forEach(({ family, file }) => {
+        Font.register({
+            family,
+            src: path.join(__dirname, `../../../public/fonts/${file}`)
+        });
+    });
+
+    // Emoji Support - Point to the local directory (no network latency)
+    // The trailing slash is required for react-pdf to construct the path correctly.
     Font.registerEmojiSource({
         format: 'png',
-        url: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/'
+        url: path.join(__dirname, '../../../public/fonts/emojis') + '/'
     });
 
     fontsRegistered = true;

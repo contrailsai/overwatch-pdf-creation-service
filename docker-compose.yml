@@ -28,7 +28,7 @@ services:
 
   worker:
     build: .
-    command: node --max-old-space-size=1792 --require ./src/instrumentation.js src/worker.js
+    command: node --max-old-space-size=3072 --require ./src/instrumentation.js src/worker.js
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
@@ -41,10 +41,11 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=https://record-metrics.contrails.ai
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic b3RlbF91c2VyOnN1cGVyX3NlY3JldF9wYXNzd29yZA==
+      - WORKER_CONCURRENCY=2
     deploy:
       resources:
         limits:
-          memory: 2.5G
+          memory: 4G
     volumes:
       - .:/app
       - /app/node_modules
