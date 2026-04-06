@@ -1,6 +1,7 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image, Link } from '@react-pdf/renderer';
 import { format, isValid, parseISO } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { registerFonts } from './utils/FontRegister';
 
 // --- FONT REGISTRATION ---
@@ -325,8 +326,8 @@ const formatCompleteDate = (dateInput) => {
     try {
         const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
         if (isValid(dateObj)) {
-            // Displays: 02 Mar 2026, 02:30 PM
-            return format(dateObj, "dd MMM yyyy, hh:mm a");
+            // Displays: 02 Mar 2026, 02:30 PM IST
+            return formatInTimeZone(dateObj, 'Asia/Kolkata', "dd MMM yyyy, hh:mm a 'IST'");
         }
     } catch (error) {
         return "N/A";
