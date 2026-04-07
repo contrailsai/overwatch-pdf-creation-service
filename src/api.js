@@ -54,9 +54,10 @@ app.post('/generate', async (req, res) => {
     // Check if we have an existing PDF
     const existingPdf = await db.collection('pdf_reports').findOne({ reportHash });
 
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    // If last pdf was made in the last 2 minutes, use it
+    const cacheCheckMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
-    if (existingPdf && new Date(existingPdf.created_at) > latestUpdatedAt && new Date(existingPdf.created_at) > fiveMinutesAgo) {
+    if (existingPdf && new Date(existingPdf.created_at) > latestUpdatedAt && new Date(existingPdf.created_at) > cacheCheckMinutesAgo) {
       // CACHE HIT
       return res.json({ status: 'completed', url: existingPdf.url });
     }
