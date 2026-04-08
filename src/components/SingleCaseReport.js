@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
         paddingTop: 30,
         paddingHorizontal: 30,
         paddingBottom: 40,
-        fontFamily: ['Outfit', 'Noto Sans Devanagari', 'Noto Sans Tamil', 'Noto Sans Arabic', 'Noto Sans Gurmukhi', 'Noto Sans Gujarati', 'Noto Sans Bengali'],
+        fontFamily: ['Outfit', 'Mukta'],
         backgroundColor: '#FFFFFF',
     },
     // ID-in-Header

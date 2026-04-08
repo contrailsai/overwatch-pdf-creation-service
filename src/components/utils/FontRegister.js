@@ -15,14 +15,9 @@ export const registerFonts = () => {
         ]
     });
 
-    // Support for Indian Languages & Urdu
+    // Support for Indian Languages
     const indicFonts = [
-        { family: 'Noto Sans Devanagari', file: 'NotoSansDevanagari-Regular.ttf' },
-        { family: 'Noto Sans Tamil', file: 'NotoSansTamil-Regular.ttf' },
-        { family: 'Noto Sans Arabic', file: 'NotoSansArabic-Regular.ttf' }, // Urdu
-        { family: 'Noto Sans Gurmukhi', file: 'NotoSansGurmukhi-Regular.ttf' }, // Punjabi
-        { family: 'Noto Sans Gujarati', file: 'NotoSansGujarati-Regular.ttf' },
-        { family: 'Noto Sans Bengali', file: 'NotoSansBengali-Regular.ttf' },
+        { family: 'Mukta', file: 'Mukta-Regular.ttf' },
     ];
 
     indicFonts.forEach(({ family, file }) => {
