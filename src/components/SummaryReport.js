@@ -589,12 +589,12 @@ const TableRow = ({ post, project, compressedImage }) => {
         </View>
         <View style={styles.dateItem}>
           <Text style={styles.dateLabel}>Alert Date:</Text>
-          <Text style={styles.dateValue}>{sourcedDate}</Text>
-        </View>
-        <View style={styles.dateItem}>
-          <Text style={styles.dateLabel}>Review Date:</Text>
           <Text style={styles.dateValue}>{reviewedDate}</Text>
         </View>
+        {/* <View style={styles.dateItem}>
+          <Text style={styles.dateLabel}>Review Date:</Text>
+          <Text style={styles.dateValue}>{reviewedDate}</Text>
+        </View> */}
       </View>
     </View>
   );

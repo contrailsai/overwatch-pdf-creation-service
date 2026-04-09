@@ -481,14 +481,15 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                         <Text style={styles.detailLabel}>Publish Date:</Text>
                         <Text style={styles.detailValue}>{posted_date}</Text>
                     </View>
+                    {/* ALERT DATE IS WHEN WE REVIEW THE CONTENT FOR THEM TO SEE */}
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Alert Date:</Text>
-                        <Text style={styles.detailValue}>{sourced_date}</Text>
+                        <Text style={styles.detailValue}>{reviewedDate}</Text> 
                     </View>
-                    <View style={styles.detailRow}>
+                    {/* <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Review Date:</Text>
                         <Text style={styles.detailValue}>{reviewedDate}</Text>
-                    </View>
+                    </View> */}
 
                 </View>
 

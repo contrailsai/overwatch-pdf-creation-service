@@ -406,14 +406,15 @@ const TableRow = ({ post, project, compressedImage }) => {
           <Text style={styles.dateLabel}>Publish Date:</Text>
           <Text style={styles.dateValue}>{postedDate}</Text>
         </View>
+        {/* ALERT DATE IS WHEN WE REVIEW THE CONTENT FOR THEM TO SEE */}
         <View style={styles.dateItem}>
           <Text style={styles.dateLabel}>Alert Date:</Text>
-          <Text style={styles.dateValue}>{sourcedDate}</Text>
-        </View>
-        <View style={styles.dateItem}>
-          <Text style={styles.dateLabel}>Review Date:</Text>
           <Text style={styles.dateValue}>{reviewedDate}</Text>
         </View>
+        {/* <View style={styles.dateItem}>
+          <Text style={styles.dateLabel}>Review Date:</Text>
+          <Text style={styles.dateValue}>{reviewedDate}</Text>
+        </View> */}
       </View>
     </View>
   );
