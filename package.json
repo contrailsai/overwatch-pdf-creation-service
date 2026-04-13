@@ -2,12 +2,9 @@
   "name": "overwatch-pdf-service",
   "version": "1.0.0",
   "description": "Standalone backend service for generating PDFs",
-  "main": "src/api.js",
+  "main": "src/index.js",
   "scripts": {
-    "start:api": "node src/api.js",
-    "start:worker": "node src/worker.js",
-    "dev:api": "nodemon src/api.js",
-    "dev:worker": "nodemon src/worker.js"
+    "start": "node src/index.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.500.0",
@@ -19,13 +16,10 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.214.0",
     "@opentelemetry/sdk-node": "^0.214.0",
     "@react-pdf/renderer": "^3.1.14",
-    "bullmq": "^5.0.0",
-    "cors": "^2.8.5",
+    "@supabase/supabase-js": "^2.103.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.1",
-    "express": "^4.18.2",
-    "ioredis": "^5.3.2",
     "mongodb": "^6.3.0",
     "react": "^18.2.0",
     "sharp": "^0.33.2"
@@ -34,7 +28,6 @@
     "@babel/core": "^7.23.9",
     "@babel/preset-env": "^7.23.9",
     "@babel/preset-react": "^7.23.3",
-    "@babel/register": "^7.23.7",
-    "nodemon": "^3.0.3"
+    "@babel/register": "^7.23.7"
   }
 }

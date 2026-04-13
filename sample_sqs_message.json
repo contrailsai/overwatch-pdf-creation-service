@@ -1,0 +1,8 @@
+{
+  "projectId": "ICICI",
+  "postIds": ["69971de6d954acef4dc30207", "69971de9d954acef4dc30208"],
+  "database_name": "ICICI-Data-Search",
+  "reportType": "Detailed",
+  "project": [{"idx":1,"created_at":"2026-02-19 13:20:37.079288+00","project_name":"ICICI","mongo_db_map":"ICICI-Data-Search","project_details":"{\"description\":\"ICICI data scraping\",\"labels\":[{\"name\":\"new-fake-2-ads\",\"description\":\"fake-ads\",\"severity\":\"high\"},{\"name\":\"investment-scams\",\"description\":\"scams based on investment ideas and such relating to company somehow\",\"severity\":\"medium\"},{\"name\":\"hate-speech\",\"description\":\"bad mouthing the company \",\"severity\":\"low\"},{\"name\":\"misinformation\",\"description\":\"spreading false /fake information about the company \",\"severity\":\"low\"},{\"name\":\"nsfw\",\"description\":\"sexual content against our company or its employees / major people\",\"severity\":\"low\"},{\"name\":\"fraud\",\"description\":\"fraud done in the name of the company \",\"severity\":\"low\"},{\"name\":\"asset-misuse\",\"description\":\"doing ads using our companies names\",\"severity\":\"low\"},{\"name\":\"satire\",\"description\":\"jokes that harm our companies name\",\"severity\":\"low\"}],\"legal_codes\":[{\"actName\":\"test ACT\",\"codeName\":\"SECTION YY\",\"description\":\"\",\"name\":\"test ACT - SECTION YY\",\"severity\":\"low\"},{\"actName\":\"IT ACT 2000\",\"codeName\":\"SECTION 69\",\"description\":\"\",\"name\":\"IT ACT 2000 - SECTION 69\",\"severity\":\"medium\"}]}","editable":true}],
+  "profile": null
+}

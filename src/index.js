@@ -3,20 +3,22 @@ require('dotenv').config();
 // Enable Babel for JSX parsing in Node.js
 require('@babel/register')({
   presets: ['@babel/preset-env', '@babel/preset-react'],
-  extensions: ['.js', '.jsx']
+  extensions: ['.js', '.jsx'],
+  cache: false // Disable cache to prevent permission warnings in Lambda
 });
 
-const { Worker } = require('bullmq');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { connectToMongo, getMongoClient } = require('./mongo');
-const { redisConnection } = require('./redis');
 const { uploadStreamToS3, fetchImageFromS3Url } = require('./s3');
 const { renderToStream } = require('@react-pdf/renderer');
 const React = require('react');
 const { trace, context, propagation, SpanKind, metrics, SpanStatusCode } = require('@opentelemetry/api');
+const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
+const { MeterProvider } = require('@opentelemetry/sdk-metrics');
 
 const tracer = trace.getTracer('overwatch-pdf-worker-tracer');
 const meter = metrics.getMeter('overwatch-pdf-worker-meter');
@@ -30,8 +32,44 @@ const { DetailedCasesReportDocument } = require('./components/DetailedCaseReport
 const { SingleCaseReportDocument } = require('./components/SingleCaseReport');
 const { ProfileReportDocument } = require('./components/ProfileReport');
 const { RiskReportDocument } = require('./components/SummaryReport');
+const { supabase } = require('./supabase');
 
-// Normalization function
+async function updateReportStatus(reportHash, statusText, extraFields = {}) {
+  try {
+    const updatePayload = {
+      status: statusText,
+      last_update: new Date().toISOString(),
+      ...extraFields
+    };
+    const { error } = await supabase
+      .from('reports_generation')
+      .update(updatePayload)
+      .eq('report_hash', reportHash);
+    
+    if (error) {
+      console.error(`Failed to update status for ${reportHash} to "${statusText}":`, error.message);
+    } else {
+      console.log(`[Supabase] Updated ${reportHash} status: ${statusText}`);
+    }
+  } catch (err) {
+    console.error(`Exception updating status for ${reportHash}:`, err.message);
+  }
+}
+
+let isMongoConnected = false;
+
+// Lambda /tmp storage
+const IMAGE_CACHE_DIR = '/tmp/images';
+if (!fs.existsSync(IMAGE_CACHE_DIR)) {
+  fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+}
+
+function generateReportHash(projectId, postIds, reportType, profileId = '') {
+  const sortedIds = [...postIds].sort();
+  const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}`;
+  return crypto.createHash('sha256').update(rawString).digest('hex');
+}
+
 function normalizePost(post, signedImageUrl = null) {
   return {
     _id: post._id.toString(),
@@ -73,13 +111,6 @@ function normalizePost(post, signedImageUrl = null) {
   };
 }
 
-const IMAGE_CACHE_DIR = path.join(__dirname, '../cache/images');
-
-// Ensure cache directory exists
-if (!fs.existsSync(IMAGE_CACHE_DIR)) {
-  fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
-}
-
 async function processImage(imageUrl, id, suffix = 'processed') {
   if (!imageUrl) return null;
 
@@ -95,33 +126,26 @@ async function processImage(imageUrl, id, suffix = 'processed') {
     }
 
     try {
-      // 1. Attempt optimized processing with Sharp
       await sharp(buffer)
         .resize({ width: 800, withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toFile(cachedPath);
     } catch (sharpError) {
-      // 2. Intelligent Raw Fallback: If Sharp fails but it's a valid JPEG/PNG, React-PDF can read it natively
       const magicBytes = buffer.toString('hex', 0, 4).toLowerCase();
-      
-      // JPEG (ffd8...), PNG (8950...)
       if (magicBytes.startsWith('ffd8') || magicBytes.startsWith('8950')) {
         console.warn(`[Fallback Triggered] Sharp failed, but recognized valid JPEG/PNG magic bytes (${magicBytes}) for ${id}. Saving raw file. Reason: ${sharpError.message}`);
         fs.writeFileSync(cachedPath, buffer);
         return cachedPath;
       }
-      
       console.error(`[Irrecoverable] Failed to process image ${imageUrl} for ${id}. Magic Bytes: ${magicBytes} - Error:`, sharpError.message);
-      return null; // Return null instead of throwing to prevent failing the entire report
+      return null;
     }
   }
   return cachedPath;
 }
 
-// Optimization: Process images in chunks to prevent Heap OOM
 async function processAndCacheImages(posts, concurrency = 5) {
   const results = new Array(posts.length);
-  
   for (let i = 0; i < posts.length; i += concurrency) {
     const chunk = posts.slice(i, i + concurrency);
     const promises = chunk.map(async (post, index) => {
@@ -133,21 +157,14 @@ async function processAndCacheImages(posts, concurrency = 5) {
       } else if (post.image_url) {
         imageUrl = post.image_url;
       }
-      
       const localPath = await processImage(imageUrl, post._id);
       results[i + index] = localPath;
     });
-    
     await Promise.all(promises);
-    
-    // Optional: Small delay to let GC catch up if needed
-    // await new Promise(resolve => setTimeout(resolve, 50));
   }
-
   return results;
 }
 
-// OTel Tracing Wrapper
 async function withSpan(name, attributes, fn) {
   return await tracer.startActiveSpan(name, { attributes }, async (span) => {
     try {
@@ -162,66 +179,78 @@ async function withSpan(name, attributes, fn) {
   });
 }
 
-async function startWorker() {
-  await connectToMongo();
+exports.handler = async (event) => {
+  if (!isMongoConnected) {
+    await connectToMongo();
+    isMongoConnected = true;
+  }
   const client = getMongoClient();
 
-  console.log('Worker is ready and waiting for jobs...');
+  for (const record of event.Records) {
+    let payload;
+    try {
+      payload = JSON.parse(record.body);
+    } catch (e) {
+      console.error("Failed to parse SQS message body", record.body);
+      continue;
+    }
 
-  const worker = new Worker('pdf-generation', async (job) => {
-    const parentContext = propagation.extract(context.active(), job.data.otelCarrier || {});
+    const { projectId, postIds, reportType, database_name, project, profile, otelCarrier } = payload;
 
-    return await context.with(parentContext, async () => {
+    if (!projectId || !postIds || !Array.isArray(postIds) || !database_name) {
+      console.error('Invalid payload: missing projectId, postIds, or database_name');
+      continue;
+    }
+
+    const parentContext = otelCarrier ? propagation.extract(context.active(), otelCarrier) : context.active();
+
+    await context.with(parentContext, async () => {
       return await tracer.startActiveSpan(`job-generate-pdf`, {
         kind: SpanKind.CONSUMER,
         attributes: {
-          'messaging.system': 'bullmq',
-          'messaging.destination': 'pdf-generation',
+          'messaging.system': 'sqs',
           'messaging.operation': 'process',
-          'job.id': job.id
+          'message.id': record.messageId
         }
       }, async (span) => {
         const startTime = process.hrtime();
-        const { projectId, postIds, reportHash, reportType, database_name, project, profile } = job.data;
+        const reportHash = generateReportHash(projectId, postIds, reportType, profile?._id);
         
         try {
           span.setAttribute('project.id', projectId);
           span.setAttribute('report.type', reportType);
           span.setAttribute('post.count', postIds.length);
+
+          const db = client.db(database_name);
           
-          await job.updateProgress(10);
-          
-          // 1. Fetch full post data from Mongo
-          const rawPosts = await withSpan('db-fetch-posts', { 'db.name': database_name, 'post.count': postIds.length }, async () => {
-            const db = client.db(database_name);
-            const objectIds = postIds.map(id => new ObjectId(id));
-            return await db.collection('Posts')
-              .find({ _id: { $in: objectIds } })
-              .toArray();
-          });
+          await updateReportStatus(reportHash, '[10%] Fetching Posts from DB');
+
+          const objectIds = postIds.map(id => new ObjectId(id));
+          const postsFromDb = await db.collection('Posts')
+            .find({ _id: { $in: objectIds } })
+            .toArray();
+
+          span.setAttribute('cache.hit', false);
 
           // Maintain order of IDs
-          const orderedPosts = postIds.map(id => rawPosts.find(p => p._id.toString() === id.toString())).filter(Boolean);
-            
-          await job.updateProgress(30);
-          
-          // 2. Process/Fetch Images from Volume Cache with concurrency limit
+          const orderedPosts = postIds.map(id => postsFromDb.find(p => p._id.toString() === id.toString())).filter(Boolean);
+
+          await updateReportStatus(reportHash, '[30%] Processing Images');
+
+          // --- Processing Phase ---
           const { compressedImages, compressedProfilePic } = await withSpan('process-images', { 'images.count': orderedPosts.length }, async () => {
-            const imgs = await processAndCacheImages(orderedPosts, 10); // Process 10 at a time
+            const imgs = await processAndCacheImages(orderedPosts, 10);
             let profilePic = null;
             if (reportType === 'Profile' && profile?.metadata?.profile_pic) {
               profilePic = await processImage(profile.metadata.profile_pic, profile._id, 'profile');
             }
             return { compressedImages: imgs, compressedProfilePic: profilePic };
           });
-          
-          // Normalize posts
+
           const posts = orderedPosts.map(p => normalizePost(p));
-          
-          await job.updateProgress(50);
-          
-          // 3. Render PDF
-          // Note: For very large reports, this is the main memory consumer
+
+          await updateReportStatus(reportHash, '[60%] Generating PDF report');
+
           const pdfStream = await withSpan('render-pdf', { 'report.type': reportType, 'post.count': posts.length }, async () => {
             if (reportType === 'Detailed') {
               return await renderToStream(React.createElement(DetailedCasesReportDocument, { posts, project, compressedImages }));
@@ -235,26 +264,21 @@ async function startWorker() {
               return await renderToStream(React.createElement('Document', null, React.createElement('Page', null, React.createElement('Text', null, 'Report type not supported'))));
             }
           });
-          
-          await job.updateProgress(70);
 
-          // 4. Upload Stream directly to S3
+          await updateReportStatus(reportHash, '[80%] Uploading to S3');
+
           const s3Url = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
             return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
           });
-          
-          await job.updateProgress(90);
 
-          // 5. Save PDF metadata to DB
-          await withSpan('db-save-metadata', { 'report.hash': reportHash }, async () => {
-            await client.db(database_name).collection('pdf_reports').updateOne(
-              { reportHash },
-              { $set: { reportHash, url: s3Url, created_at: new Date() } },
-              { upsert: true }
-            );
+          await withSpan('supabase-save-metadata', { 'report.hash': reportHash }, async () => {
+            await updateReportStatus(reportHash, '[100%] Complete', {
+              s3_path: s3Url,
+              finish_time: new Date().toISOString()
+            });
           });
-          
-          await job.updateProgress(100);
+
+          console.log(`Successfully generated and saved PDF: ${s3Url}`);
 
           const [seconds, nanoseconds] = process.hrtime(startTime);
           pdfGenerationDuration.record(seconds + nanoseconds / 1e9, {
@@ -264,13 +288,15 @@ async function startWorker() {
           });
 
           span.end();
-          return { url: s3Url };
-
         } catch (error) {
+          await updateReportStatus(reportHash, `[Error] ${error.message.substring(0, 100)}`, {
+            finish_time: new Date().toISOString()
+          });
+
           const [seconds, nanoseconds] = process.hrtime(startTime);
           pdfGenerationDuration.record(seconds + nanoseconds / 1e9, {
-            'report.type': job?.data?.reportType || 'Unknown',
-            'project.id': job?.data?.projectId || 'Unknown',
+            'report.type': reportType || 'Unknown',
+            'project.id': projectId || 'Unknown',
             'status': 'failed'
           });
 
@@ -280,21 +306,21 @@ async function startWorker() {
           throw error;
         }
       });
-    }); 
-  }, { 
-    connection: redisConnection, 
-    concurrency: process.env.WORKER_CONCURRENCY ? parseInt(process.env.WORKER_CONCURRENCY, 10) : 1,
-    lockDuration: 600000, // 10 minutes lock for massive reports
-    lockRenewTime: 30000, // Renew every 30 seconds
-  });
+    });
+  }
 
-  worker.on('completed', job => {
-    console.log(`Job ${job.id} completed successfully.`);
-  });
-
-  worker.on('failed', (job, err) => {
-    console.error(`Job ${job.id} failed:`, err.message);
-  });
-}
-
-startWorker().catch(console.error);
+  // Force flush telemetry before the Lambda freezes
+  try {
+    const tracerProvider = trace.getTracerProvider();
+    if (tracerProvider instanceof NodeTracerProvider && typeof tracerProvider.forceFlush === 'function') {
+      await tracerProvider.forceFlush();
+    }
+    
+    const meterProvider = metrics.getMeterProvider();
+    if (meterProvider instanceof MeterProvider && typeof meterProvider.forceFlush === 'function') {
+      await meterProvider.forceFlush();
+    }
+  } catch (e) {
+    console.error("Failed to force flush telemetry", e);
+  }
+};
