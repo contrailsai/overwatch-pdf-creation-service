@@ -1,4 +1,5 @@
 require('dotenv').config();
+const telemetry = require('./instrumentation');
 
 // Enable Babel for JSX parsing in Node.js
 require('@babel/register')({
@@ -17,13 +18,11 @@ const { uploadStreamToS3, fetchImageFromS3Url } = require('./s3');
 const { renderToStream } = require('@react-pdf/renderer');
 const React = require('react');
 const { trace, context, propagation, SpanKind, metrics, SpanStatusCode } = require('@opentelemetry/api');
-const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
-const { MeterProvider } = require('@opentelemetry/sdk-metrics');
 
-const tracer = trace.getTracer('overwatch-pdf-worker-tracer');
-const meter = metrics.getMeter('overwatch-pdf-worker-meter');
+const tracer = trace.getTracer('overwatch-pdf-service');
+const meter = metrics.getMeter('overwatch-pdf-service');
 
-const pdfGenerationDuration = meter.createHistogram('job_generate_pdf_duration_seconds', {
+const pdfGenerationDuration = meter.createHistogram('generate_pdf_duration_seconds', {
   description: 'Time taken to generate a PDF report',
   unit: 's',
 });
@@ -180,13 +179,14 @@ async function withSpan(name, attributes, fn) {
 }
 
 exports.handler = async (event) => {
-  if (!isMongoConnected) {
-    await connectToMongo();
-    isMongoConnected = true;
-  }
-  const client = getMongoClient();
+  try {
+    if (!isMongoConnected) {
+      await connectToMongo();
+      isMongoConnected = true;
+    }
+    const client = getMongoClient();
 
-  for (const record of event.Records) {
+    for (const record of event.Records) {
     let payload;
     try {
       payload = JSON.parse(record.body);
@@ -202,19 +202,31 @@ exports.handler = async (event) => {
       continue;
     }
 
-    const parentContext = otelCarrier ? propagation.extract(context.active(), otelCarrier) : context.active();
+    let parentContext = context.active();
+    if (otelCarrier) {
+      parentContext = propagation.extract(parentContext, otelCarrier);
+    } else if (record.messageAttributes) {
+      const carrier = {};
+      for (const [key, attr] of Object.entries(record.messageAttributes)) {
+        if (attr.stringValue) carrier[key.toLowerCase()] = attr.stringValue;
+      }
+      parentContext = propagation.extract(parentContext, carrier);
+    }
 
     await context.with(parentContext, async () => {
-      return await tracer.startActiveSpan(`job-generate-pdf`, {
+      return await tracer.startActiveSpan(`sqs.process generate-pdf`, {
         kind: SpanKind.CONSUMER,
         attributes: {
-          'messaging.system': 'sqs',
+          'messaging.system': 'aws_sqs',
           'messaging.operation': 'process',
-          'message.id': record.messageId
+          'message.id': record.messageId,
+          'messaging.message.id': record.messageId
         }
       }, async (span) => {
         const startTime = process.hrtime();
         const reportHash = generateReportHash(projectId, postIds, reportType, profile?._id);
+
+        console.log(`Created the report Hash as: ${reportHash}`)
         
         try {
           span.setAttribute('project.id', projectId);
@@ -309,18 +321,8 @@ exports.handler = async (event) => {
     });
   }
 
-  // Force flush telemetry before the Lambda freezes
-  try {
-    const tracerProvider = trace.getTracerProvider();
-    if (tracerProvider instanceof NodeTracerProvider && typeof tracerProvider.forceFlush === 'function') {
-      await tracerProvider.forceFlush();
-    }
-    
-    const meterProvider = metrics.getMeterProvider();
-    if (meterProvider instanceof MeterProvider && typeof meterProvider.forceFlush === 'function') {
-      await meterProvider.forceFlush();
-    }
-  } catch (e) {
-    console.error("Failed to force flush telemetry", e);
+  } finally {
+    // Force flush telemetry before the Lambda freezes
+    await telemetry.forceFlush();
   }
 };
