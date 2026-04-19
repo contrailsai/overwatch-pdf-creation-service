@@ -438,7 +438,8 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
 
     const stats = post.stats || {};
     const imageUrl = compressedImage || post.signedImageUrl || post.image_url || null;
-    const legalCodes = review.legal_codes || [];
+    const legalCodesRaw = review.legal_codes || [];
+    const legalCodes = legalCodesRaw.map(lc => typeof lc === 'object' && lc !== null ? lc.code || lc.name : lc).filter(Boolean);
 
     // Safely parse client notes/comments
     let parsedComments = [];
