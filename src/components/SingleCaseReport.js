@@ -373,7 +373,10 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
     const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
     const riskInfo = getRiskLabel(riskScore);
 
-    const reasoning = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence. No detailed reasoning provided.";
+    let reasoningRaw = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence. No detailed reasoning provided.";
+    let reasoning = typeof reasoningRaw === 'object' && reasoningRaw !== null 
+        ? (reasoningRaw.reasoning || reasoningRaw.text || JSON.stringify(reasoningRaw)) 
+        : reasoningRaw;
 
     // Safely parse project details if it's a string
     let projectDetails = project?.project_details;
