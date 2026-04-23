@@ -277,7 +277,7 @@ exports.handler = async (event) => {
             }
           });
 
-          await updateReportStatus(reportHash, '[80%] Uploading to S3');
+          await updateReportStatus(reportHash, '[80%] Uploading to Storage');
 
           const s3Url = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
             return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
