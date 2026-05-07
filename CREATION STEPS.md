@@ -1,13 +1,22 @@
 CREATION STEPS
 
-# BUILD THE IMAGE
-docker build --platform linux/arm64 --provenance=false -t 992382580458.dkr.ecr.ap-south-1.amazonaws.com/overwatch-pdf-creation:latest .
+# 1) Set your values
+export AWS_ACCOUNT_ID="<aws-account-id>"
+export AWS_REGION="<region>"
+export ECR_REPOSITORY="<repository-name>"
+export IMAGE_TAG="latest"
+export LAMBDA_FUNCTION_NAME="<lambda-function-name>"
 
-# LOGIN DOCKER WITH AWS IF PUSH DOESNT WORK..
-aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 992382580458.dkr.ecr.ap-south-1.amazonaws.com
+export IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
 
-# PUSH IT TO AWS
-docker push 992382580458.dkr.ecr.ap-south-1.amazonaws.com/overwatch-pdf-creation:latest
+# 2) Build the image
+docker build --platform linux/arm64 --provenance=false -t "$IMAGE_URI" .
 
-# UPDATE THE FUNCTION IMAGE 
-aws lambda update-function-code --function-name overwatch-report-generation --image-uri 992382580458.dkr.ecr.ap-south-1.amazonaws.com/overwatch-pdf-creation:latest
+# 3) Login to Amazon ECR (if push fails or auth is expired)
+aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+# 4) Push image to Amazon ECR
+docker push "$IMAGE_URI"
+
+# 5) Update Lambda to use the new image
+aws lambda update-function-code --function-name "$LAMBDA_FUNCTION_NAME" --image-uri "$IMAGE_URI"
