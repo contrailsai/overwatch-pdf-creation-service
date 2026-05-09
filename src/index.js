@@ -14,7 +14,7 @@ const sharp = require('sharp');
 const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { connectToMongo, getMongoClient } = require('./mongo');
-const { uploadStreamToS3, fetchImageFromS3Url } = require('./s3');
+const { uploadStreamToS3, uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
 const { renderToStream } = require('@react-pdf/renderer');
 const React = require('react');
 const { trace, context, propagation, SpanKind, metrics, SpanStatusCode } = require('@opentelemetry/api');
@@ -32,6 +32,11 @@ const { SingleCaseReportDocument } = require('./components/SingleCaseReport');
 const { ProfileReportDocument } = require('./components/ProfileReport');
 const { RiskReportDocument } = require('./components/SummaryReport');
 const { supabase } = require('./supabase');
+
+// ── DOCX generators (Node.js / Lambda versions) ──────────────────────────────
+const { generateSingleCaseDocxBuffer }   = require('./components/docx/SingleCaseReportDocx');
+const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
+const { generateProfileDocxBuffer }       = require('./components/docx/ProfileReportDocx');
 
 async function updateReportStatus(reportHash, statusText, extraFields = {}) {
   try {
@@ -63,9 +68,9 @@ if (!fs.existsSync(IMAGE_CACHE_DIR)) {
   fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
 }
 
-function generateReportHash(projectId, postIds, reportType, profileId = '') {
+function generateReportHash(projectId, postIds, reportType, profileId = '', reportFormat = 'pdf') {
   const sortedIds = [...postIds].sort();
-  const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}`;
+  const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}-${reportFormat}`;
   return crypto.createHash('sha256').update(rawString).digest('hex');
 }
 
@@ -93,7 +98,8 @@ function normalizePost(post, signedImageUrl = null) {
       username: post.profile?.username || post.user?.username || 'Unknown',
       full_name: post.profile?.display_name || '',
       profile_pic_url: post.profile?.profile_pic_url || post.profile?.profile_url || '',
-      is_verified: post.profile?.is_verified || false
+      is_verified: post.profile?.is_verified || false,
+      follower_count: post.profile?.metadata?.follower_count ?? post.profile?.follower_count ?? null
     },
     assigned_to: post?.assigned_to || null,
     content_reviewed_by: post?.content_reviewed_by || null,
@@ -195,7 +201,8 @@ exports.handler = async (event) => {
       continue;
     }
 
-    const { projectId, postIds, reportType, database_name, project, profile, otelCarrier } = payload;
+    const { projectId, postIds, reportType, reportFormat, database_name, project, profile, otelCarrier } = payload;
+    const isDocx = (reportFormat || '').toLowerCase() === 'docx';
 
     if (!projectId || !postIds || !Array.isArray(postIds) || !database_name) {
       console.error('Invalid payload: missing projectId, postIds, or database_name');
@@ -224,7 +231,7 @@ exports.handler = async (event) => {
         }
       }, async (span) => {
         const startTime = process.hrtime();
-        const reportHash = generateReportHash(projectId, postIds, reportType, profile?._id);
+        const reportHash = generateReportHash(projectId, postIds, reportType, profile?._id, reportFormat || 'pdf');
 
         console.log(`Created the report Hash as: ${reportHash}`)
         
@@ -261,9 +268,34 @@ exports.handler = async (event) => {
 
           const posts = orderedPosts.map(p => normalizePost(p));
 
-          await updateReportStatus(reportHash, '[60%] Generating PDF report');
+          const reportLabel = isDocx ? 'DOCX' : 'PDF';
+          await updateReportStatus(reportHash, `[60%] Generating ${reportLabel} report`);
 
-          const pdfStream = await withSpan('render-pdf', { 'report.type': reportType, 'post.count': posts.length }, async () => {
+          let s3Url;
+
+          if (isDocx) {
+            // ── DOCX branch ─────────────────────────────────────────────────
+            const docxBuffer = await withSpan('render-docx', { 'report.type': reportType, 'post.count': posts.length }, async () => {
+              const clientDetails = { organization: project?.project_name || null };
+              if (reportType === 'Detailed') {
+                return await generateDetailedCasesDocxBuffer(posts, project, compressedImages, clientDetails);
+              } else if (reportType === 'Single') {
+                return await generateSingleCaseDocxBuffer(posts[0], project, compressedImages[0], clientDetails);
+              } else if (reportType === 'Profile') {
+                return await generateProfileDocxBuffer(profile, posts, project, compressedImages, compressedProfilePic, clientDetails);
+              } else {
+                throw new Error(`DOCX report type '${reportType}' is not supported`);
+              }
+            });
+
+            await updateReportStatus(reportHash, '[80%] Uploading DOCX to Storage');
+
+            s3Url = await withSpan('upload-s3-docx', { 's3.key': `reports/${reportHash}.docx` }, async () => {
+              return await uploadBufferToS3(docxBuffer, `reports/${reportHash}.docx`);
+            });
+          } else {
+            // ── PDF branch ──────────────────────────────────────────────────
+            const pdfStream = await withSpan('render-pdf', { 'report.type': reportType, 'post.count': posts.length }, async () => {
             if (reportType === 'Detailed') {
               return await renderToStream(React.createElement(DetailedCasesReportDocument, { posts, project, compressedImages }));
             } else if (reportType === 'Single') {
@@ -279,9 +311,10 @@ exports.handler = async (event) => {
 
           await updateReportStatus(reportHash, '[80%] Uploading to Storage');
 
-          const s3Url = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
+          s3Url = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
             return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
           });
+          }
 
           await withSpan('supabase-save-metadata', { 'report.hash': reportHash }, async () => {
             await updateReportStatus(reportHash, '[100%] Complete', {
