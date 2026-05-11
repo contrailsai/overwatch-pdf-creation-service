@@ -7,7 +7,7 @@ const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'ap-south-1', // Defaulting to the region from the logs
 });
 
-const bucketName = process.env.AWS_S3_BUCKET;
+const bucketName = process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET;
 
 /**
  * Uploads a readable stream directly to S3.
@@ -15,20 +15,43 @@ const bucketName = process.env.AWS_S3_BUCKET;
  * @param {string} key
  * @returns {Promise<string>} The uploaded object URL
  */
-async function uploadStreamToS3(readStream, key) {
+async function uploadStreamToS3(readStream, key, contentType = 'application/pdf') {
   const upload = new Upload({
     client: s3Client,
     params: {
       Bucket: bucketName,
       Key: key,
       Body: readStream,
-      ContentType: 'application/pdf',
+      ContentType: contentType,
     },
   });
 
   await upload.done();
   
   // Return standard S3 URL format
+  return `https://${bucketName}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${key}`;
+}
+
+/**
+ * Uploads a Buffer directly to S3 (used for DOCX files generated via Packer.toBuffer()).
+ * @param {Buffer} buffer
+ * @param {string} key
+ * @param {string} contentType
+ * @returns {Promise<string>} The uploaded object URL
+ */
+async function uploadBufferToS3(buffer, key, contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+  const upload = new Upload({
+    client: s3Client,
+    params: {
+      Bucket: bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    },
+  });
+
+  await upload.done();
+
   return `https://${bucketName}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${key}`;
 }
 
@@ -96,6 +119,7 @@ async function fetchImageFromS3Url(url) {
 module.exports = {
   s3Client,
   uploadStreamToS3,
+  uploadBufferToS3,
   fetchImageFromS3Url,
   getSignedImageUrl,
 };
