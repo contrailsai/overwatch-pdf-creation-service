@@ -72,3 +72,39 @@ The container requires the following environment variables to run properly:
   * `OTEL_EXPORTER_OTLP_HEADERS`: Auth headers for the collector.
   * `OTEL_EXPORTER_OTLP_PROTOCOL`: `http/protobuf` or `grpc`.
   * `OTEL_SERVICE_NAME`: Set to `overwatch-pdf-service` to correctly aggregate in Grafana Service Graphs.
+
+---
+
+## Local Verification (No ECR/Lambda Deploy Required)
+
+You can now validate report generation locally with automated tests.
+
+### 1) Install dependencies
+
+```bash
+npm install
+```
+
+### 2) Run all tests
+
+```bash
+npm test
+```
+
+This runs:
+- Unit tests for payload validation, hash determinism, and ordering logic.
+- Local smoke tests that generate:
+  - one real PDF stream using the Summary report renderer
+  - one real DOCX buffer using the single-case DOCX generator
+
+### 3) Run suites separately (optional)
+
+```bash
+npm run test:unit
+npm run test:integration
+```
+
+### Notes
+
+- These tests do not require Docker, ECR, or Lambda deployment.
+- Integration smoke tests validate renderer output signatures (`%PDF` and DOCX zip header `PK`) to catch report-generation regressions quickly.

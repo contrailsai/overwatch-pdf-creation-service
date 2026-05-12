@@ -5,7 +5,10 @@ let client = null;
 async function connectToMongo() {
   if (client) return client;
 
-  const uri = process.env.MONGO_URI || 'mongodb://localhost:27017';
+  const uri = process.env.MONGO_URI;
+  if (!uri) {
+    throw new Error('Missing required environment variable MONGO_URI.');
+  }
   client = new MongoClient(uri);
 
   try {

@@ -1,13 +1,22 @@
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const stream = require('stream');
+const DEFAULT_REGION = process.env.AWS_REGION || 'ap-south-1';
+const IMAGE_FETCH_TIMEOUT_MS = Number(process.env.IMAGE_FETCH_TIMEOUT_MS || 8000);
+const IMAGE_FETCH_MAX_RETRIES = Number(process.env.IMAGE_FETCH_MAX_RETRIES || 2);
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'ap-south-1', // Defaulting to the region from the logs
-});
+const s3Client = new S3Client({ region: DEFAULT_REGION });
+const bucketName = process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET || '';
 
-const bucketName = process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET;
+function ensureBucketConfigured() {
+  if (!bucketName) {
+    throw new Error('Missing AWS bucket configuration. Set AWS_BUCKET_NAME or AWS_S3_BUCKET.');
+  }
+}
+
+function buildS3Url(key) {
+  return `https://${bucketName}.s3.${DEFAULT_REGION}.amazonaws.com/${key}`;
+}
 
 /**
  * Uploads a readable stream directly to S3.
@@ -16,6 +25,7 @@ const bucketName = process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET;
  * @returns {Promise<string>} The uploaded object URL
  */
 async function uploadStreamToS3(readStream, key, contentType = 'application/pdf') {
+  ensureBucketConfigured();
   const upload = new Upload({
     client: s3Client,
     params: {
@@ -28,8 +38,7 @@ async function uploadStreamToS3(readStream, key, contentType = 'application/pdf'
 
   await upload.done();
   
-  // Return standard S3 URL format
-  return `https://${bucketName}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${key}`;
+  return buildS3Url(key);
 }
 
 /**
@@ -40,6 +49,7 @@ async function uploadStreamToS3(readStream, key, contentType = 'application/pdf'
  * @returns {Promise<string>} The uploaded object URL
  */
 async function uploadBufferToS3(buffer, key, contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+  ensureBucketConfigured();
   const upload = new Upload({
     client: s3Client,
     params: {
@@ -52,7 +62,7 @@ async function uploadBufferToS3(buffer, key, contentType = 'application/vnd.open
 
   await upload.done();
 
-  return `https://${bucketName}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${key}`;
+  return buildS3Url(key);
 }
 
 /**
@@ -99,21 +109,39 @@ async function getSignedImageUrl(url, expiresIn = 3600) {
  * If we need to fetch them from HTTP, we can just use `fetch`.
  */
 async function fetchImageFromS3Url(url) {
-  // First, attempt to sign the URL if it's an S3 URL
   const signedUrl = await getSignedImageUrl(url);
-  
-  // Fetch using the signed URL
-  const response = await fetch(signedUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`);
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= IMAGE_FETCH_MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(signedUrl, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && !contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
+        throw new Error(`Resource is not an image (content-type: ${contentType})`);
+      }
+
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      lastError = error;
+      const isLastAttempt = attempt === IMAGE_FETCH_MAX_RETRIES;
+      if (isLastAttempt) {
+        break;
+      }
+      const backoffMs = 250 * (2 ** attempt);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
-  const contentType = response.headers.get('content-type');
-  if (contentType && !contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
-    throw new Error(`Resource is not an image (content-type: ${contentType})`);
-  }
-
-  return Buffer.from(await response.arrayBuffer());
+  throw new Error(`Image fetch failed after ${IMAGE_FETCH_MAX_RETRIES + 1} attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
 module.exports = {

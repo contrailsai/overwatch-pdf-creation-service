@@ -11,13 +11,18 @@ require('@babel/register')({
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
-const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { connectToMongo, getMongoClient } = require('./mongo');
 const { uploadStreamToS3, uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
 const { renderToStream } = require('@react-pdf/renderer');
 const React = require('react');
 const { trace, context, propagation, SpanKind, metrics, SpanStatusCode } = require('@opentelemetry/api');
+const {
+  generateReportHash,
+  normalizePost,
+  validatePayload,
+  orderPostsByRequestedIds,
+} = require('./core-utils');
 
 const tracer = trace.getTracer('overwatch-pdf-service');
 const meter = metrics.getMeter('overwatch-pdf-service');
@@ -31,14 +36,22 @@ const { DetailedCasesReportDocument } = require('./components/DetailedCaseReport
 const { SingleCaseReportDocument } = require('./components/SingleCaseReport');
 const { ProfileReportDocument } = require('./components/ProfileReport');
 const { RiskReportDocument } = require('./components/SummaryReport');
-const { supabase } = require('./supabase');
+const { supabase, supabaseEnabled } = require('./supabase');
 
 // ── DOCX generators (Node.js / Lambda versions) ──────────────────────────────
 const { generateSingleCaseDocxBuffer }   = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer }       = require('./components/docx/ProfileReportDocx');
 
+function buildObjectIds(postIds) {
+  return postIds.map((id) => new ObjectId(id));
+}
+
 async function updateReportStatus(reportHash, statusText, extraFields = {}) {
+  if (!supabaseEnabled) {
+    console.warn(`[Supabase] Skipping status update for ${reportHash}: ${statusText}`);
+    return;
+  }
   try {
     const updatePayload = {
       status: statusText,
@@ -68,53 +81,6 @@ if (!fs.existsSync(IMAGE_CACHE_DIR)) {
   fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
 }
 
-function generateReportHash(projectId, postIds, reportType, profileId = '', reportFormat = 'pdf') {
-  const sortedIds = [...postIds].sort();
-  const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}-${reportFormat}`;
-  return crypto.createHash('sha256').update(rawString).digest('hex');
-}
-
-function normalizePost(post, signedImageUrl = null) {
-  return {
-    _id: post._id.toString(),
-    created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-    sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-    posted_date: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.posted_date ? new Date(post.metadata.posted_date).toISOString() : null,
-    taken_at: post.post_content?.taken_at || post.taken_at || null,
-    updated_at: post.metadata?.updated_at ? new Date(post.metadata.updated_at).toISOString() : null,
-    reviewed_at: post.review_details?.reviewed_at ? new Date(post.review_details.reviewed_at).toISOString() : null,
-    update_history: post.metadata?.update_history ? post.metadata.update_history.map(update => ({
-      ...update,
-      updated_at: update.updated_at ? new Date(update.updated_at).toISOString() : null,
-    })) : [],
-    platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-    processed: post.processed || false,
-    client_status: post.client_status || 'To Be Reviewed',
-    caption: post.post_content?.caption || post.caption || '',
-    signedImageUrl: signedImageUrl,
-    original_url: post.original_url,
-    post_id: post.post_id || post.code,
-    user: {
-      username: post.profile?.username || post.user?.username || 'Unknown',
-      full_name: post.profile?.display_name || '',
-      profile_pic_url: post.profile?.profile_pic_url || post.profile?.profile_url || '',
-      is_verified: post.profile?.is_verified || false,
-      follower_count: post.profile?.metadata?.follower_count ?? post.profile?.follower_count ?? null
-    },
-    assigned_to: post?.assigned_to || null,
-    content_reviewed_by: post?.content_reviewed_by || null,
-    review_details: post.review_details || null,
-    takedown_info: post.takedown_info || null,
-    analysis_results: post.analysis_results || null,
-    client_notes: post.client_notes || [],
-    stats: {
-      like_count: post.engagement?.likes || 0,
-      comment_count: post.engagement?.comments || 0,
-      share_count: post.engagement?.shares || 0,
-      view_count: post.engagement?.views || 0
-    }
-  };
-}
 
 async function processImage(imageUrl, id, suffix = 'processed') {
   if (!imageUrl) return null;
@@ -192,7 +158,7 @@ exports.handler = async (event) => {
     }
     const client = getMongoClient();
 
-    for (const record of event.Records) {
+    for (const record of event.Records || []) {
     let payload;
     try {
       payload = JSON.parse(record.body);
@@ -202,10 +168,16 @@ exports.handler = async (event) => {
     }
 
     const { projectId, postIds, reportType, reportFormat, database_name, project, profile, otelCarrier } = payload;
-    const isDocx = (reportFormat || '').toLowerCase() === 'docx';
+    const validation = validatePayload(payload);
+    const isDocx = validation.normalizedReportFormat === 'docx';
 
-    if (!projectId || !postIds || !Array.isArray(postIds) || !database_name) {
-      console.error('Invalid payload: missing projectId, postIds, or database_name');
+    if (!validation.valid) {
+      console.error('Invalid payload:', validation.errors.join('; '), {
+        messageId: record.messageId,
+        reportType,
+        reportFormat,
+        projectId,
+      });
       continue;
     }
 
@@ -220,7 +192,8 @@ exports.handler = async (event) => {
       parentContext = propagation.extract(parentContext, carrier);
     }
 
-    await context.with(parentContext, async () => {
+    try {
+      await context.with(parentContext, async () => {
       return await tracer.startActiveSpan(`sqs.process generate-pdf`, {
         kind: SpanKind.CONSUMER,
         attributes: {
@@ -244,7 +217,7 @@ exports.handler = async (event) => {
           
           await updateReportStatus(reportHash, '[10%] Fetching Posts from DB');
 
-          const objectIds = postIds.map(id => new ObjectId(id));
+          const objectIds = buildObjectIds(postIds);
           const postsFromDb = await db.collection('Posts')
             .find({ _id: { $in: objectIds } })
             .toArray();
@@ -252,7 +225,7 @@ exports.handler = async (event) => {
           span.setAttribute('cache.hit', false);
 
           // Maintain order of IDs
-          const orderedPosts = postIds.map(id => postsFromDb.find(p => p._id.toString() === id.toString())).filter(Boolean);
+          const orderedPosts = orderPostsByRequestedIds(postIds, postsFromDb);
 
           await updateReportStatus(reportHash, '[30%] Processing Images');
 
@@ -305,7 +278,7 @@ exports.handler = async (event) => {
             } else if (reportType === 'Summary') {
               return await renderToStream(React.createElement(RiskReportDocument, { posts, project, compressedImages }));
             } else {
-              return await renderToStream(React.createElement('Document', null, React.createElement('Page', null, React.createElement('Text', null, 'Report type not supported'))));
+              throw new Error(`PDF report type '${reportType}' is not supported`);
             }
           });
 
@@ -348,14 +321,30 @@ exports.handler = async (event) => {
           span.recordException(error);
           span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
           span.end();
-          throw error;
         }
       });
-    });
+      });
+    } catch (recordError) {
+      console.error('Record processing failed', {
+        messageId: record.messageId,
+        projectId,
+        reportType,
+        error: recordError.message,
+      });
+      continue;
+    }
   }
 
   } finally {
     // Force flush telemetry before the Lambda freezes
     await telemetry.forceFlush();
   }
+};
+
+module.exports = {
+  handler: exports.handler,
+  generateReportHash,
+  normalizePost,
+  validatePayload,
+  orderPostsByRequestedIds,
 };

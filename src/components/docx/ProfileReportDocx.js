@@ -12,7 +12,7 @@ const {
     Header, Footer,
     VerticalAlign,
 } = require('docx');
-const { format } = require('date-fns');
+const { format, isValid } = require('date-fns');
 const path = require('path');
 
 const {
@@ -38,6 +38,19 @@ const {
  * @returns {Promise<Buffer>}
  */
 const generateProfileDocxBuffer = async (profile, cases, project, imagePaths, profilePicPath, clientDetails) => {
+    const safeFormatDate = (value, pattern = 'dd MMM yyyy') => {
+        if (!value) return 'N/A';
+        try {
+            const date = new Date(value);
+            if (isValid(date)) {
+                return format(date, pattern);
+            }
+        } catch (error) {
+            return 'N/A';
+        }
+        return 'N/A';
+    };
+
     const docChildren = [];
 
     // ── 1. PROFILE OVERVIEW ─────────────────────────────────────────────────
@@ -76,7 +89,7 @@ const generateProfileDocxBuffer = async (profile, cases, project, imagePaths, pr
                                 metaPara('Following', profile?.metadata?.following_count?.toLocaleString() || '0'),
                                 metaPara('Total Posts', profile?.metadata?.media_count?.toLocaleString() || '0'),
                                 metaPara('Verified', profile?.metadata?.is_verified ? 'Yes' : 'No'),
-                                ...(profile?.metadata?.account_creation_date ? [metaPara('Account Creation Date', format(new Date(profile.metadata.account_creation_date), 'dd MMM yyyy') || 'N/A')] : []),
+                                ...(profile?.metadata?.account_creation_date ? [metaPara('Account Creation Date', safeFormatDate(profile.metadata.account_creation_date, 'dd MMM yyyy'))] : []),
                                 ...(profile?.metadata?.location ? [metaPara('Location', profile?.metadata?.location || 'N/A')] : []),
                                 ...(profile?.profile_url ? [metaPara('Profile URL', profile.profile_url, true)] : []),
                             ].filter(Boolean),

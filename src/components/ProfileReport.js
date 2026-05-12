@@ -118,6 +118,19 @@ const formatCompleteDate = (dateInput) => {
   return "N/A";
 };
 
+const formatMonthYearSafe = (dateInput) => {
+  if (!dateInput) return 'N/A';
+  try {
+    const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
+    if (isValid(dateObj)) {
+      return format(dateObj, 'MMM yyyy');
+    }
+  } catch (error) {
+    return 'N/A';
+  }
+  return 'N/A';
+};
+
 const getRiskLabel = (score) => {
   if (score > 95) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
   if (score > 75) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
@@ -226,7 +239,7 @@ const ProfileSummarySection = ({ profile, profilePic }) => {
           <View style={styles.profileDetailRow}>
             <Text style={styles.profileDetailLabel}>Joined:</Text>
             <Text style={styles.profileDetailValue}>
-              {format(new Date(metadata.account_creation_date), 'MMM yyyy')}
+              {formatMonthYearSafe(metadata.account_creation_date)}
             </Text>
           </View>
         )}
