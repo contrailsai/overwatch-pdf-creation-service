@@ -15,7 +15,7 @@ const { ProfileReportDocument } = require('../../src/components/ProfileReport');
 const { RiskReportDocument } = require('../../src/components/SummaryReport');
 const { generateDetailedCasesDocxBuffer } = require('../../src/components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('../../src/components/docx/ProfileReportDocx');
-const { makeProject, makeProfile, makeNormalizedPost } = require('../fixtures/report-fixtures');
+const { makeProject, makeProfile, makeNormalizedPost } = require('./smoke-fixtures');
 
 async function streamToBuffer(readable) {
   const chunks = [];

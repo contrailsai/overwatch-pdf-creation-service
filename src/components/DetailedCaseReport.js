@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        marginBottom: 6,
+        marginBottom: 3,
     },
     brandTitle: {
         fontSize: 18,
@@ -65,9 +65,9 @@ const styles = StyleSheet.create({
         color: Theme.MUTED,
         textTransform: 'uppercase',
         letterSpacing: 1.4,
-        fontWeight: 'bold',
-        marginBottom: 14,
-        paddingBottom: 14,
+        // fontWeight: 'bold',
+        marginBottom: 9,
+        paddingBottom: 9,
         borderBottomWidth: 0.5,
         borderBottomColor: Theme.LINE,
     },
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     caseTitle: {
         fontSize: 16,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
         borderColor: Theme.LINE,
         borderRadius: 6,
         padding: 12,
-        marginBottom: 14,
+        marginBottom: 8,
     },
     infoRow: {
         flexDirection: 'row',
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     mediaImage: {
         width: '100%',
         height: 208,
-        objectFit: 'cover',
+        objectFit: 'contain',
     },
     mediaPlaceholder: {
         height: 208,
@@ -355,21 +355,41 @@ const styles = StyleSheet.create({
         marginHorizontal: 14,
     },
 
-    // Legal violation card
-    legalCard: {
-        padding: 4,
-        borderRadius: 6,
+    // Legal violations — neutral surface + ink type (readable on long copy)
+    legalCardShell: {
+        flexDirection: 'row',
+        // marginBottom: 4,
+        // borderRadius: 5,
         borderWidth: 0.5,
-        marginBottom: 6,
+        borderColor: Theme.LINK,
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: Theme.LINK,
+        borderRightColor: Theme.LINK,
+        borderTopColor: Theme.LINK,
+        borderBottomColor: Theme.LINK,
+        backgroundColor: Theme.SURFACE,
+        overflow: 'hidden',
     },
-    legalCardLast: {
+    legalCardShellLast: {
         marginBottom: 0,
+    },
+    legalCardAccent: {
+        width: 3,
+        backgroundColor: Theme.LINK,
+    },
+    legalCardInner: {
+        flex: 1,
+        paddingVertical: 4,
+        paddingHorizontal: 4,
     },
     legalCardHeader: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 6,
-        marginBottom: 4,
+        marginBottom: 3,
     },
     legalPill: {
         paddingHorizontal: 5,
@@ -388,13 +408,22 @@ const styles = StyleSheet.create({
     },
     legalCode: {
         fontSize: 6.5,
-        fontWeight: 600,
-        color: Theme.RISK_HIGH,
+        fontWeight: 700,
+        color: Theme.INK,
+        letterSpacing: 0.15,
     },
     legalReason: {
         fontSize: 5.5,
-        lineHeight: 1.4,
-        color: Theme.RISK_HIGH,
+        lineHeight: 1.52,
+        color: Theme.INK_SOFT,
+    },
+    legalSectionLabel: {
+        fontSize: 5,
+        color: Theme.INK,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontWeight: 700,
+        marginBottom: 8,
     },
 
     // Badge row (AI labels)
@@ -649,14 +678,14 @@ const getLabelColor = (key) => labelColorMap[key] || labelColorMap.slate;
 const BrandHeader = () => (
     <View>
         <View style={styles.brandHeader}>
-            <Svg viewBox="0 0 24 24" width={24} height={24}>
+            {/* <Svg viewBox="0 0 24 24" width={24} height={24}>
                 <Circle cx="12" cy="12" r="10" stroke={Theme.INK} strokeWidth={1.8} fill="none" />
                 <Circle cx="12" cy="12" r="5.5" stroke={Theme.INK} strokeWidth={1.8} fill="none" />
                 <Circle cx="12" cy="12" r="2" fill={Theme.INK} />
-            </Svg>
+            </Svg> */}
             <Text style={styles.brandTitle}>Overwatch</Text>
         </View>
-        <Text style={styles.brandSubtitle}>Digital Risk Protection · India Threat Brief</Text>
+        <Text style={styles.brandSubtitle}>Digital Risk Protection</Text>
     </View>
 );
 
@@ -691,7 +720,7 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
 
     const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
     const riskInfo = getRiskInfo(riskScore);
-    const statusInfo = getStatusInfo(post.client_status);
+    // const statusInfo = getStatusInfo(post.client_status);
 
     let projectDetails = project?.project_details;
     if (typeof projectDetails === 'string') {
@@ -750,7 +779,7 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
 
     const postedShort = formatShortDateTime(post.posted_date || post.metadata?.posted_date || post.timestamp);
     const processedShort = formatShortDateTime(post.metadata?.created_at || post.created_at);
-    const caseIdShort = String(post._id || '').slice(-16);
+    const caseId = post._id ? `${String(post._id).toUpperCase()}` : '';
 
     const updateHistory = Array.isArray(post.update_history) ? post.update_history : [];
 
@@ -790,13 +819,13 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
 
             {/* Case heading row */}
             <View style={styles.caseHeadingRow}>
-                <View>
+                {/* <View> */}
                     <Text style={styles.caseTitle}>{caseTitle}</Text>
-                    <Text style={styles.caseId}>ID: {String(post._id).toUpperCase()}</Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg, borderColor: statusInfo.border }]}>
+                    {/* <Text style={styles.caseId}>ID: {String(post._id).toUpperCase()}</Text> */}
+                {/* </View> */}
+                {/* <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg, borderColor: statusInfo.border }]}>
                     <Text style={[styles.statusBadgeText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
-                </View>
+                </View> */}
             </View>
 
             {/* Info banner */}
@@ -935,7 +964,7 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
                             </View>
                             <View style={styles.statCell}>
                                 <Text style={styles.statLabel}>Case ID</Text>
-                                <Text style={styles.statValueMono}>{caseIdShort}</Text>
+                                <Text style={styles.statValueMono}>{caseId}</Text>
                             </View>
                         </View>
                     </View>
@@ -949,27 +978,22 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
                         {legalCodes.length > 0 && (
                             <>
                                 <View style={styles.rightSection}>
-                                    <Text style={styles.rightSectionLabel}>Legal Violations</Text>
+                                    <Text style={styles.legalSectionLabel}>Legal Violations</Text>
                                     {legalCodes.map((lc, i) => {
-                                        const tone = i % 2 === 0
-                                            ? { bg: Theme.RISK_HIGH_BG, border: Theme.RISK_HIGH_BORDER }
-                                            : { bg: Theme.RISK_MEDIUM_BG, border: Theme.RISK_MEDIUM_BORDER };
                                         const isLast = i === legalCodes.length - 1;
                                         const projCode = projectDetails?.legal_codes?.find(pc => pc.name === lc.code);
                                         const description = lc.reasoning || projCode?.description || '';
                                         return (
-                                            <View key={i} style={[styles.legalCard, isLast && styles.legalCardLast, { backgroundColor: tone.bg, borderColor: tone.border }]}>
-                                                <View style={styles.legalCardHeader}>
-                                                    {isAigc ? (
-                                                        <View style={styles.legalPill}>
-                                                            <Text style={styles.legalPillText}>AIGC</Text>
-                                                        </View>
+                                            <View key={i} style={[styles.legalCardShell, isLast && styles.legalCardShellLast]}>
+                                                <View style={styles.legalCardAccent} />
+                                                <View style={styles.legalCardInner}>
+                                                    <View style={styles.legalCardHeader}>
+                                                        <Text style={styles.legalCode}>{lc.code}</Text>
+                                                    </View>
+                                                    {description ? (
+                                                        <Text style={styles.legalReason}>{truncate(description, 220)}</Text>
                                                     ) : null}
-                                                    <Text style={styles.legalCode}>{lc.code}</Text>
                                                 </View>
-                                                {description ? (
-                                                    <Text style={styles.legalReason}>{truncate(description, 220)}</Text>
-                                                ) : null}
                                             </View>
                                         );
                                     })}
@@ -995,7 +1019,8 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
                                         <View key={i} style={[styles.reasoningSection, isLast && styles.reasoningSectionLast]}>
                                             <Text style={styles.reasoningContent}>
                                                 {sec.label ? <Text style={styles.reasoningLabel}>{sec.label}: </Text> : null}
-                                                {truncate(sec.content, 240)}
+                                                {/* {truncate(sec.content, 240)} */}
+                                                {sec.content}
                                             </Text>
                                         </View>
                                     );
@@ -1044,7 +1069,7 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
                         {rightSections.indexOf('risk') < rightSections.length - 1 && <View style={styles.rightDivider} />}
 
                         {/* Action Logs */}
-                        {updateHistory.length > 0 && (
+                        {/* {updateHistory.length > 0 && (
                             <>
                                 <View style={styles.rightSection}>
                                     <Text style={styles.rightSectionLabel}>Action Logs</Text>
@@ -1079,7 +1104,7 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
                                 </View>
                                 {rightSections.indexOf('logs') < rightSections.length - 1 && <View style={styles.rightDivider} />}
                             </>
-                        )}
+                        )} */}
 
                         {/* Comments */}
                         {comments.length > 0 && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Link, Svg, Path, Circle } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image, Link } from '@react-pdf/renderer';
 import { isValid, parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { registerFonts } from './utils/FontRegister';
@@ -7,49 +7,34 @@ import { registerFonts } from './utils/FontRegister';
 // --- FONT REGISTRATION ---
 registerFonts();
 
-// --- THEME & STYLES ---
-// Aligned with DetailedCaseReport.js so both PDF surfaces share the same compact
-// design language (slate text, rose/amber/emerald risk accents).
+// --- THEME (aligned with DetailedCaseReport.js) ---
 const Theme = {
-    INK: '#0F172A',          // slate-900
-    INK_SOFT: '#334155',     // slate-700
-    BODY: '#1E293B',         // slate-800 (kept for backward compat)
-    MUTED: '#64748B',        // slate-500
-    SUBTLE: '#94A3B8',       // slate-400
-    SOFT: '#94A3B8',         // alias of SUBTLE (kept for backward compat)
-    LINE: '#E2E8F0',         // slate-200
-    LINE_SOFT: '#F1F5F9',    // slate-100
-    BG: '#FFFFFF',
-    SURFACE: '#FFFFFF',      // alias of BG
-    PANEL: '#F8FAFC',        // slate-50
-    SURFACE_ALT: '#F8FAFC',  // alias of PANEL
-    PANEL_INSET: '#F1F5F9',  // slate-100
-    LINK: '#2563EB',         // blue-600
-    RISK_HIGH: '#E11D48',    // rose-600
-    RISK_MEDIUM: '#EA580C',  // orange-600
-    RISK_LOW: '#D97706',     // amber-600
-    RISK_SAFE: '#059669',    // emerald-600
-    BADGE_GREEN_BG: '#ECFDF5',
-    BADGE_GREEN_FG: '#047857',
-    BADGE_GREEN_LINE: '#A7F3D0',
-    BADGE_AMBER_BG: '#FFFBEB',
-    BADGE_AMBER_FG: '#B45309',
-    BADGE_AMBER_LINE: '#FCD34D',
-    BADGE_PURPLE_BG: '#F5F3FF',
-    BADGE_PURPLE_FG: '#6D28D9',
-    BADGE_PURPLE_LINE: '#DDD6FE',
-    BADGE_ROSE_BG: '#FFF1F2',
-    BADGE_ROSE_FG: '#BE123C',
-    BADGE_ROSE_LINE: '#FECDD3',
-    BADGE_ORANGE_BG: '#FFF7ED',
-    BADGE_ORANGE_FG: '#C2410C',
-    BADGE_ORANGE_LINE: '#FED7AA',
-    BADGE_BLUE_BG: '#EFF6FF',
-    BADGE_BLUE_FG: '#1D4ED8',
-    BADGE_BLUE_LINE: '#BFDBFE',
-    BADGE_SLATE_BG: '#F8FAFC',
-    BADGE_SLATE_FG: '#475569',
-    BADGE_SLATE_LINE: '#E2E8F0',
+    INK: '#0F172A',
+    INK_SOFT: '#334155',
+    MUTED: '#64748B',
+    SUBTLE: '#94A3B8',
+    LINE: '#E2E8F0',
+    LINE_SOFT: '#F1F5F9',
+    SURFACE: '#FFFFFF',
+    SURFACE_ALT: '#F8FAFC',
+    LINK: '#2563EB',
+
+    RISK_HIGH: '#E11D48',
+    RISK_HIGH_BG: '#FFF1F2',
+    RISK_HIGH_BORDER: '#FECDD3',
+    RISK_MEDIUM: '#EA580C',
+    RISK_MEDIUM_BG: '#FFF7ED',
+    RISK_MEDIUM_BORDER: '#FED7AA',
+    RISK_LOW: '#D97706',
+    RISK_LOW_BG: '#FFFBEB',
+    RISK_LOW_BORDER: '#FDE68A',
+    RISK_SAFE: '#059669',
+    RISK_SAFE_BG: '#ECFDF5',
+    RISK_SAFE_BORDER: '#A7F3D0',
+
+    PENDING_BG: '#FFF7ED',
+    PENDING_BORDER: '#FED7AA',
+    PENDING_TEXT: '#C2410C',
 };
 
 const styles = StyleSheet.create({
@@ -61,270 +46,482 @@ const styles = StyleSheet.create({
         backgroundColor: Theme.SURFACE,
         color: Theme.INK,
     },
+
     // --- BRAND HEADER ---
     brandHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        marginBottom: 6,
+        marginBottom: 3,
     },
     brandTitle: {
-        fontSize: 18, fontWeight: 700, color: Theme.INK,
+        fontSize: 18,
+        fontWeight: 700,
+        color: Theme.INK,
         letterSpacing: 0.2,
     },
     brandSubtitle: {
-        fontSize: 8, color: Theme.MUTED,
-        textTransform: 'uppercase', letterSpacing: 1.4,
-        fontWeight: 'bold',
-        marginBottom: 14, paddingBottom: 14,
-        borderBottomWidth: 0.5, borderBottomColor: Theme.LINE,
+        fontSize: 8,
+        color: Theme.MUTED,
+        textTransform: 'uppercase',
+        letterSpacing: 1.4,
+        marginBottom: 9,
+        paddingBottom: 9,
+        borderBottomWidth: 0.5,
+        borderBottomColor: Theme.LINE,
     },
-    // --- CASE TITLE STRIP ---
-    caseTitleRow: {
-        flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', marginBottom: 12,
+
+    // --- CASE HEADING ROW ---
+    caseHeadingRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
     },
-    caseTitle: { fontSize: 16, fontWeight: 700, color: Theme.INK },
+    caseTitle: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: Theme.INK,
+    },
     caseId: {
-        fontSize: 8, color: Theme.SUBTLE, marginTop: 2,
+        fontSize: 8,
+        color: Theme.SUBTLE,
+        marginTop: 2,
     },
     statusBadge: {
-        paddingHorizontal: 12, paddingVertical: 6,
-        borderRadius: 4, borderWidth: 0.5, alignSelf: 'flex-start',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 4,
+        borderWidth: 0.5,
     },
     statusBadgeText: {
-        fontSize: 9, fontWeight: 'bold',
-        textTransform: 'uppercase', letterSpacing: 1,
+        fontSize: 9,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
     },
-    // --- ACCOUNT CARD (info banner) ---
-    accountCard: {
+
+    // --- INFO BANNER ---
+    infoBanner: {
         backgroundColor: Theme.SURFACE_ALT,
-        borderWidth: 0.5, borderColor: Theme.LINE,
-        borderRadius: 6, padding: 12, marginBottom: 14,
+        borderWidth: 0.5,
+        borderColor: Theme.LINE,
+        borderRadius: 6,
+        padding: 12,
+        marginBottom: 8,
     },
-    accountRow: {
-        flexDirection: 'row', alignItems: 'flex-start',
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
         marginBottom: 5,
     },
-    accountLabel: {
+    infoRowLast: {
+        marginBottom: 0,
+    },
+    infoLabel: {
+        fontSize: 7.2,
+        color: Theme.MUTED,
         width: 60,
-        fontSize: 7.2, color: Theme.MUTED,
     },
-    accountValue: {
-        flex: 1, fontSize: 8, fontWeight: 'bold', color: Theme.INK,
+    infoValue: {
+        fontSize: 8,
+        fontWeight: 'bold',
+        color: Theme.INK,
+        flex: 1,
     },
-    accountLink: {
-        flex: 1, fontSize: 8, fontWeight: 700, color: Theme.LINK,
+    infoLink: {
+        fontSize: 8,
+        color: Theme.LINK,
         textDecoration: 'none',
+        flex: 1,
+        fontWeight: 700,
     },
-    // --- TWO-COL BODY ---
-    body: { flexDirection: 'row', gap: 12 },
-    leftCol: { width: '54%', flexDirection: 'column', gap: 8 },
+
+    // --- TWO COLUMNS ---
+    columns: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    leftCol: {
+        width: '54%',
+    },
     rightCol: {
-        width: '46%', flexDirection: 'column', gap: 8,
-        borderWidth: 0.5, borderColor: Theme.LINE,
-        borderRadius: 5, padding: 10,
+        width: '46%',
+    },
+
+    // --- LEFT CARD ---
+    leftCard: {
+        borderWidth: 0.5,
+        borderColor: Theme.LINE,
+        borderRadius: 5,
+        overflow: 'hidden',
         backgroundColor: Theme.SURFACE,
     },
-    // --- MEDIA CARD ---
-    mediaCard: {
-        borderWidth: 0.5, borderColor: Theme.LINE,
-        borderRadius: 5, overflow: 'hidden',
-        backgroundColor: Theme.SURFACE,
+
+    // Media
+    mediaWrap: {
+        width: '100%',
+        backgroundColor: '#0F172A',
+        position: 'relative',
     },
-    mediaImage: { width: '100%', height: 208, objectFit: 'cover', backgroundColor: '#0F172A' },
+    mediaImage: {
+        width: '100%',
+        height: 208,
+        objectFit: 'contain',
+    },
     mediaPlaceholder: {
-        height: 208, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: Theme.SURFACE_ALT,
+        height: 208,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    mediaFooter: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingHorizontal: 10, paddingVertical: 6,
-        borderTopWidth: 0.5, borderTopColor: Theme.LINE,
-        backgroundColor: Theme.SURFACE,
+    mediaPlaceholderText: {
+        fontSize: 9,
+        color: '#94A3B8',
     },
-    inlineBadgeRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap' },
-    miniBadge: {
-        paddingHorizontal: 6, paddingVertical: 3,
-        borderRadius: 3, borderWidth: 0.5,
+    mediaBadgesRow: {
+        position: 'absolute',
+        bottom: 10,
+        left: 10,
+        flexDirection: 'row',
+        gap: 4,
     },
-    miniBadgeText: {
-        fontSize: 6.5, fontWeight: 'bold',
-        textTransform: 'uppercase', letterSpacing: 0.5,
+    mediaBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 3,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 0.5,
+        borderColor: '#E2E8F0',
+    },
+    mediaBadgeText: {
+        fontSize: 6.5,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     viewSourcePill: {
-        flexDirection: 'row', alignItems: 'center', gap: 4,
-        paddingHorizontal: 10, paddingVertical: 6,
-        borderRadius: 4, backgroundColor: Theme.INK,
+        position: 'absolute',
+        bottom: 10,
+        right: 10,
+        backgroundColor: '#0F172A',
+        borderRadius: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
-    viewSourceText: {
-        fontSize: 6, fontWeight: 'bold', color: '#FFFFFF',
-        letterSpacing: 0.4,
+    viewSourcePillText: {
+        fontSize: 6,
+        color: '#FFFFFF',
+        fontWeight: 'bold',
+        textDecoration: 'none',
     },
-    // --- USER ROW ---
-    userRow: {
-        flexDirection: 'row', alignItems: 'center',
-        gap: 10, paddingTop: 8, paddingBottom: 4,
+
+    // User strip (no card border, just padded)
+    userStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 14,
+        paddingTop: 8,
+        paddingBottom: 4,
     },
-    avatar: {
-        width: 32, height: 32, borderRadius: 16,
-        alignItems: 'center', justifyContent: 'center',
+    userAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    avatarLetter: { color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' },
-    userName: { fontSize: 8, fontWeight: 'bold', color: Theme.INK },
-    userHandle: { fontSize: 6, color: Theme.MUTED, marginTop: 2 },
-    // --- SECTION HEADERS ---
-    sectionLabel: {
-        fontSize: 6, fontWeight: 500,
-        color: Theme.MUTED, textTransform: 'uppercase',
-        letterSpacing: 1, marginBottom: 4,
+    userAvatarText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
     },
-    sectionDivider: {
-        marginVertical: 6,
-        borderBottomWidth: 0.5, borderBottomColor: Theme.LINE_SOFT,
+    userName: {
+        fontSize: 8,
+        fontWeight: 'bold',
+        color: Theme.INK,
     },
-    // --- CAPTION / TEXT BLOCKS ---
-    paragraph: {
-        fontSize: 5.5, lineHeight: 1.55, color: Theme.INK_SOFT,
+    userMeta: {
+        fontSize: 6,
+        color: Theme.MUTED,
+        marginTop: 2,
+    },
+
+    // Section inside left card
+    leftSection: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    leftSectionLabel: {
+        fontSize: 6,
+        color: Theme.MUTED,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontWeight: 'medium',
+        marginBottom: 4,
+    },
+    bodyText: {
+        fontSize: 5.5,
+        lineHeight: 1.55,
+        color: Theme.INK_SOFT,
+    },
+    bodyTextMuted: {
+        fontSize: 5.5,
+        lineHeight: 1.55,
+        color: Theme.MUTED,
     },
     hashtagText: {
-        fontSize: 6, color: Theme.LINK, lineHeight: 1.55,
+        fontSize: 6,
+        color: Theme.LINK,
+        lineHeight: 1.55,
     },
-    // --- KV GRID (Platform / Handle / Followers etc.) ---
-    kvGrid: {
+    softDivider: {
+        borderTopWidth: 0.5,
+        borderTopColor: Theme.LINE_SOFT,
+        marginHorizontal: 14,
+    },
+
+    // Stats grid
+    statsRow: {
         flexDirection: 'row',
-        marginTop: 4,
-        borderTopWidth: 0.5, borderTopColor: Theme.LINE_SOFT,
-        paddingTop: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
     },
-    kvCell: { flex: 1, paddingRight: 6 },
-    kvLabel: {
-        fontSize: 6, fontWeight: 400, color: Theme.MUTED,
-        textTransform: 'uppercase', letterSpacing: 0.8,
+    statCell: {
+        flex: 1,
+    },
+    statLabel: {
+        fontSize: 6,
+        fontWeight: 400,
+        color: Theme.MUTED,
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
         marginBottom: 4,
     },
-    kvValue: { fontSize: 6, fontWeight: 400, color: Theme.INK },
-    // --- LEGAL VIOLATIONS ---
-    legalCard: {
-        borderRadius: 6, borderWidth: 0.5,
-        padding: 4, marginBottom: 6,
+    statValue: {
+        fontSize: 6,
+        fontWeight: 400,
+        color: Theme.INK,
+    },
+    statValueMono: {
+        fontSize: 6,
+        fontWeight: 400,
+        color: Theme.INK,
+    },
+
+    // --- RIGHT CARD ---
+    rightCard: {
+        borderWidth: 0.5,
+        borderColor: Theme.LINE,
+        borderRadius: 5,
+        overflow: 'hidden',
+        backgroundColor: Theme.SURFACE,
+    },
+    rightSection: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    rightSectionLabel: {
+        fontSize: 5,
+        color: Theme.MUTED,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontWeight: 500,
+        marginBottom: 6,
+    },
+    reasoningSection: {
+        marginBottom: 4,
+    },
+    reasoningSectionLast: {
+        marginBottom: 0,
+    },
+    reasoningLabel: {
+        fontSize: 5.5,
+        fontWeight: 500,
+        color: Theme.INK,
+    },
+    reasoningContent: {
+        fontSize: 5.5,
+        lineHeight: 1.5,
+        color: Theme.INK_SOFT,
+    },
+    rightDivider: {
+        borderTopWidth: 0.5,
+        borderTopColor: Theme.LINE_SOFT,
+        marginHorizontal: 14,
+    },
+
+    // Legal violations — neutral surface + ink type (readable on long copy)
+    legalCardShell: {
+        flexDirection: 'row',
+        borderWidth: 0.5,
+        borderColor: Theme.LINK,
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: Theme.LINK,
+        borderRightColor: Theme.LINK,
+        borderTopColor: Theme.LINK,
+        borderBottomColor: Theme.LINK,
+        backgroundColor: Theme.SURFACE,
+        overflow: 'hidden',
+    },
+    legalCardShellLast: {
+        marginBottom: 0,
+    },
+    legalCardAccent: {
+        width: 3,
+        backgroundColor: Theme.LINK,
+    },
+    legalCardInner: {
+        flex: 1,
+        paddingVertical: 4,
+        paddingHorizontal: 4,
     },
     legalCardHeader: {
-        flexDirection: 'row', alignItems: 'center', gap: 6,
-        marginBottom: 4,
-    },
-    legalAigcBadge: {
-        paddingHorizontal: 5, paddingVertical: 2,
-        borderRadius: 3, borderWidth: 0.5,
-        backgroundColor: Theme.BADGE_PURPLE_BG, borderColor: Theme.BADGE_PURPLE_LINE,
-    },
-    legalAigcText: {
-        fontSize: 6.5, fontWeight: 500,
-        color: Theme.BADGE_PURPLE_FG,
-        textTransform: 'uppercase', letterSpacing: 0.4,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 6,
+        marginBottom: 3,
     },
     legalCode: {
-        fontSize: 6.5, fontWeight: 600, color: Theme.RISK_HIGH,
+        fontSize: 6.5,
+        fontWeight: 700,
+        color: Theme.INK,
+        letterSpacing: 0.15,
     },
-    legalReasoning: {
-        fontSize: 5.5, color: Theme.RISK_HIGH, lineHeight: 1.4,
+    legalReason: {
+        fontSize: 5.5,
+        lineHeight: 1.52,
+        color: Theme.INK_SOFT,
     },
-    // --- BADGES (AI Labels) ---
-    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-    badge: {
-        paddingHorizontal: 9, paddingVertical: 4,
-        borderRadius: 3, borderWidth: 0.5,
+    legalSectionLabel: {
+        fontSize: 5,
+        color: Theme.INK,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontWeight: 700,
+        marginBottom: 8,
     },
-    badgeText: {
-        fontSize: 4.5, fontWeight: 600, letterSpacing: 0.2,
+
+    // Badge row (AI labels)
+    badgeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 5,
     },
-    riskBadgeOutline: {
+    aiLabelBadge: {
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 3,
+        borderWidth: 0.5,
+    },
+    aiLabelBadgeText: {
+        fontSize: 4.5,
+        fontWeight: 600,
+    },
+
+    // Risk badge
+    riskBadgeSmall: {
         alignSelf: 'flex-start',
-        paddingHorizontal: 10, paddingVertical: 5,
-        borderRadius: 4, borderWidth: 0.5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 4,
+        borderWidth: 0.5,
     },
-    riskBadgeOutlineText: {
-        fontSize: 4.5, fontWeight: 600, letterSpacing: 0.3,
+    riskBadgeSmallText: {
+        fontSize: 4.5,
+        fontWeight: 600,
     },
-    // --- AUDIT LOG / TIMELINE ---
-    auditWrap: { position: 'relative' },
-    auditLine: {
-        position: 'absolute',
-        left: 13, top: 14, bottom: 14,
-        width: 0.8, backgroundColor: Theme.LINE,
+
+    // Comments block
+    commentItem: {
+        marginBottom: 5,
     },
-    auditEntry: {
-        flexDirection: 'row', gap: 10, marginBottom: 9,
-        alignItems: 'flex-start',
+    commentItemLast: {
+        marginBottom: 0,
     },
-    auditDot: {
-        width: 26, height: 26, borderRadius: 13,
-        backgroundColor: Theme.SURFACE,
-        borderWidth: 0.5, borderColor: Theme.LINE,
-        alignItems: 'center', justifyContent: 'center',
-    },
-    auditText: { flex: 1, paddingTop: 3 },
-    auditWho: { fontSize: 6, fontWeight: 600, color: Theme.INK },
-    auditWhen: { fontSize: 5, color: Theme.SUBTLE, marginTop: 1 },
-    auditDetail: { fontSize: 5.5, color: Theme.INK_SOFT, marginTop: 2, lineHeight: 1.5 },
-    // --- REASONING SECTIONS ---
-    reasoningSection: { marginBottom: 4 },
-    reasoningSectionLast: { marginBottom: 0 },
-    reasoningLabel: { fontSize: 5.5, fontWeight: 500, color: Theme.INK },
-    // --- COMMENTS ---
-    commentBox: {
-        backgroundColor: Theme.SURFACE_ALT,
-        borderWidth: 0.5, borderColor: Theme.LINE_SOFT,
-        borderRadius: 6, padding: 8, marginBottom: 5,
-    },
-    commentMeta: {
-        flexDirection: 'row', justifyContent: 'space-between',
+    commentMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: 4,
     },
-    commentMetaText: { fontSize: 5.5, color: Theme.MUTED, fontWeight: 500 },
-    commentText: { fontSize: 5.5, color: Theme.INK_SOFT, lineHeight: 1.55 },
-    // --- FOOTER ---
+    commentMeta: {
+        fontSize: 5.5,
+        fontWeight: 500,
+        color: Theme.MUTED,
+    },
+    commentText: {
+        fontSize: 5.5,
+        lineHeight: 1.55,
+        color: Theme.INK_SOFT,
+    },
+
+    // Footer
     footer: {
         position: 'absolute',
-        bottom: 16, left: 28, right: 28,
-        flexDirection: 'row', justifyContent: 'space-between',
-        alignItems: 'center', fontSize: 6.5, color: Theme.MUTED,
-        borderTopWidth: 0.5, borderTopColor: Theme.LINE,
+        bottom: 16,
+        left: 28,
+        right: 28,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: 6.5,
+        color: Theme.MUTED,
+        borderTopWidth: 0.5,
+        borderTopColor: Theme.LINE,
         paddingTop: 8,
     },
-    footerLeft: { textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: 0.6 },
-    footerCenter: { textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: 0.6 },
-    footerRight: { textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: 0.6 },
+    footerText: {
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        fontWeight: 'bold',
+    },
 });
 
-// --- ICONS ---
-const UserIcon = ({ color = Theme.MUTED }) => (
-    <Svg viewBox="0 0 24 24" width={13} height={13}>
-        <Circle cx="12" cy="9" r="3.6" stroke={color} strokeWidth={1.7} fill="none" />
-        <Path
-            d="M4.5 20.5 V19 a5.5 5.5 0 0 1 5.5 -5.5 h4 a5.5 5.5 0 0 1 5.5 5.5 V20.5"
-            stroke={color} strokeWidth={1.7} fill="none"
-            strokeLinecap="round" strokeLinejoin="round"
-        />
-    </Svg>
-);
-
-const SystemIcon = ({ color = Theme.MUTED }) => (
-    <Svg viewBox="0 0 24 24" width={13} height={13}>
-        <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth={1.5} fill="none" />
-        <Circle cx="12" cy="12" r="5.2" stroke={color} strokeWidth={1.5} fill="none" />
-        <Circle cx="12" cy="12" r="1.8" fill={color} />
-    </Svg>
-);
-
-// --- UTILS ---
-const sanitizeText = (text) => {
+// --- HELPERS (aligned with DetailedCaseReport.js) ---
+const sanitize = (text) => {
     if (!text) return '';
     return Array.from(String(text)).filter(char => {
         const cp = char.codePointAt(0);
         return (cp >= 32 && cp <= 126) || cp === 10 || cp === 13 || cp === 9 ||
             /[\u{0900}-\u{097F}\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{FE00}-\u{FE0F}]/u.test(char);
     }).join('');
+};
+
+const truncate = (text, max = 600) => {
+    const s = sanitize(text);
+    if (s.length <= max) return s;
+    return s.slice(0, max).trim() + '...';
+};
+
+const formatDateTime = (dateInput) => {
+    if (!dateInput) return 'N/A';
+    try {
+        const d = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
+        if (isValid(d)) return formatInTimeZone(d, 'Asia/Kolkata', 'dd MMM yyyy, hh:mm a');
+    } catch (e) { /* empty */ }
+    return 'N/A';
+};
+
+const formatShortDateTime = (dateInput) => {
+    if (!dateInput) return 'N/A';
+    try {
+        const d = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
+        if (isValid(d)) return formatInTimeZone(d, 'Asia/Kolkata', 'dd/MM/yyyy hh:mm a');
+    } catch (e) { /* empty */ }
+    return 'N/A';
+};
+
+const getRiskInfo = (score) => {
+    if (score >= 96) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: Theme.RISK_HIGH_BG, border: Theme.RISK_HIGH_BORDER };
+    if (score >= 76) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: Theme.RISK_MEDIUM_BG, border: Theme.RISK_MEDIUM_BORDER };
+    if (score >= 41) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: Theme.RISK_LOW_BG, border: Theme.RISK_LOW_BORDER };
+    return { label: 'Safe', color: Theme.RISK_SAFE, bg: Theme.RISK_SAFE_BG, border: Theme.RISK_SAFE_BORDER };
 };
 
 // Mirrors overwatch_ui/src/components/ProfilePic.js so the PDF avatar matches
@@ -355,10 +552,8 @@ const profilePicColor = (name) => {
     return profilePicPalette[Math.abs(hash) % profilePicPalette.length];
 };
 
-// Splits a caption into body text and a trailing run of hashtags so they can be
-// rendered with different styling (link color for tags).
 const splitCaptionAndTags = (caption) => {
-    const text = sanitizeText(caption || '');
+    const text = sanitize(caption || '');
     if (!text) return { body: '', hashtags: '' };
     const tagMatch = text.match(/((?:^|\s)#[\w\-À-￿]+(?:\s+#[\w\-À-￿]+)*)\s*$/);
     if (!tagMatch) return { body: text, hashtags: '' };
@@ -368,11 +563,9 @@ const splitCaptionAndTags = (caption) => {
 };
 
 // Parses reasoning text that comes as `\r\n`-separated structured sections
-// like "Description: ...", "IT Act and Rules: ...", "BNS & Other Laws: ...",
-// "Take Down: ...". Falls back to a single section when no labels are found.
 const parseReasoning = (text) => {
     if (!text) return [];
-    const cleaned = sanitizeText(String(text));
+    const cleaned = sanitize(String(text));
     const lines = cleaned.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (lines.length === 0) return [];
     return lines.map((line) => {
@@ -382,179 +575,39 @@ const parseReasoning = (text) => {
     });
 };
 
-const truncate = (text, maxLength) => {
-    if (!text) return '';
-    const sanitized = sanitizeText(text);
-    if (sanitized.length <= maxLength) return sanitized;
-    return sanitized.substring(0, maxLength).trim() + '…';
+const labelColorMap = {
+    purple: { color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+    rose: { color: '#E11D48', bg: '#FFF1F2', border: '#FECDD3' },
+    orange: { color: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' },
+    indigo: { color: '#4F46E5', bg: '#EEF2FF', border: '#C7D2FE' },
+    red: { color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+    yellow: { color: '#CA8A04', bg: '#FEFCE8', border: '#FEF08A' },
+    blue: { color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+    emerald: { color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
+    amber: { color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+    slate: { color: '#475569', bg: '#F8FAFC', border: '#E2E8F0' },
 };
+const getLabelColor = (key) => labelColorMap[key] || labelColorMap.slate;
 
-const formatLongDate = (dateInput) => {
-    if (!dateInput) return 'N/A';
-    try {
-        const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
-        if (isValid(dateObj)) {
-            return formatInTimeZone(dateObj, 'Asia/Kolkata', "dd MMM yyyy, hh:mm a");
-        }
-    } catch (e) { return 'N/A'; }
-    return 'N/A';
-};
-
-const formatShortDate = (dateInput) => {
-    if (!dateInput) return '';
-    try {
-        const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
-        if (isValid(dateObj)) {
-            return formatInTimeZone(dateObj, 'Asia/Kolkata', "dd/MM/yyyy HH:mm");
-        }
-    } catch (e) { return ''; }
-    return '';
-};
-
-const getRiskInfo = (score) => {
-    if (score > 95) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: Theme.BADGE_ROSE_BG, line: Theme.BADGE_ROSE_LINE };
-    if (score > 75) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: Theme.BADGE_ORANGE_BG, line: Theme.BADGE_ORANGE_LINE };
-    if (score > 40) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: Theme.BADGE_AMBER_BG, line: Theme.BADGE_AMBER_LINE };
-    return { label: 'Safe', color: Theme.RISK_SAFE, bg: Theme.BADGE_GREEN_BG, line: Theme.BADGE_GREEN_LINE };
-};
-
-// Map a UI client_status to a header status badge style.
-const getStatusBadge = (clientStatus, takedownInfo) => {
-    const status = (clientStatus || 'To Be Reviewed').trim();
-    const td = (takedownInfo?.takedown_status || takedownInfo?.status || '').toLowerCase();
-    if (td === 'requested' || status.toLowerCase().includes('takedown')) {
-        return { label: 'Takedown', fg: Theme.BADGE_ROSE_FG, bg: Theme.BADGE_ROSE_BG, line: Theme.BADGE_ROSE_LINE };
-    }
-    if (status === 'No Action' || status === 'Pass') {
-        return { label: 'No Action', fg: Theme.BADGE_GREEN_FG, bg: Theme.BADGE_GREEN_BG, line: Theme.BADGE_GREEN_LINE };
-    }
-    if (status === 'Flag for Takedown') {
-        return { label: 'Flagged', fg: Theme.BADGE_AMBER_FG, bg: Theme.BADGE_AMBER_BG, line: Theme.BADGE_AMBER_LINE };
-    }
-    return { label: 'Pending', fg: Theme.BADGE_AMBER_FG, bg: Theme.BADGE_AMBER_BG, line: Theme.BADGE_AMBER_LINE };
-};
-
-// Convert label severity / type into a badge palette tuple.
-const badgePalette = (color) => {
-    const map = {
-        rose: { bg: Theme.BADGE_ROSE_BG, fg: Theme.BADGE_ROSE_FG, line: Theme.BADGE_ROSE_LINE },
-        orange: { bg: Theme.BADGE_ORANGE_BG, fg: Theme.BADGE_ORANGE_FG, line: Theme.BADGE_ORANGE_LINE },
-        amber: { bg: Theme.BADGE_AMBER_BG, fg: Theme.BADGE_AMBER_FG, line: Theme.BADGE_AMBER_LINE },
-        purple: { bg: Theme.BADGE_PURPLE_BG, fg: Theme.BADGE_PURPLE_FG, line: Theme.BADGE_PURPLE_LINE },
-        emerald: { bg: Theme.BADGE_GREEN_BG, fg: Theme.BADGE_GREEN_FG, line: Theme.BADGE_GREEN_LINE },
-        blue: { bg: Theme.BADGE_BLUE_BG, fg: Theme.BADGE_BLUE_FG, line: Theme.BADGE_BLUE_LINE },
-    };
-    return map[color] || { bg: Theme.BADGE_SLATE_BG, fg: Theme.BADGE_SLATE_FG, line: Theme.BADGE_SLATE_LINE };
-};
-
-const severityToColor = (severity) => {
-    if (severity === 'high') return 'rose';
-    if (severity === 'medium') return 'orange';
-    if (severity === 'low') return 'amber';
-    return 'orange';
-};
-
-const titleCase = (raw) =>
-    String(raw || '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-// Resolves project labels + legacy flags + threat_types into a deduped list of
-// { title, color } badges for the "AI Labels Detected" panel.
-const resolveActiveLabels = (projectLabels, review) => {
-    const out = [];
-    const threatTypes = Array.isArray(review.threat_types) ? review.threat_types : [];
-
-    projectLabels.forEach(label => {
-        const inFlags = review.flags?.[label.name] === true;
-        const inThreatTypes = threatTypes.includes(label.name);
-        if (inFlags || inThreatTypes) {
-            out.push({
-                title: titleCase(label.name),
-                color: severityToColor(label.severity),
-            });
-        }
-    });
-
-    const legacyFlagMap = {
-        is_hate_speech: { title: 'Hate Speech', color: 'orange' },
-        is_fake_news: { title: 'Misinformation', color: 'orange' },
-        is_nsfw: { title: 'NSFW Content', color: 'orange' },
-        is_fraud: { title: 'Fraud', color: 'rose' },
-        is_asset_misuse: { title: 'Asset Misuse', color: 'amber' },
-        is_humor: { title: 'Satire', color: 'amber' },
-        is_terrorism: { title: 'Terrorism', color: 'rose' },
-        is_violence: { title: 'Violence', color: 'orange' },
-    };
-    Object.entries(legacyFlagMap).forEach(([key, cfg]) => {
-        if (review.flags?.[key] === true && !out.some(l => l.title === cfg.title)) {
-            out.push(cfg);
-        }
-    });
-
-    threatTypes.forEach(type => {
-        if (!type || type === 'safe') return;
-        const formatted = titleCase(type);
-        if (!out.some(l => l.title.toLowerCase() === formatted.toLowerCase())) {
-            out.push({ title: formatted, color: 'slate' });
-        }
-    });
-
-    return out;
-};
-
-// --- COMPONENTS ---
-const PageHeader = () => (
-    <View fixed>
+// --- BRAND HEADER (matches DetailedCaseReport.js) ---
+const BrandHeader = () => (
+    <View>
         <View style={styles.brandHeader}>
-            <Svg viewBox="0 0 24 24" width={24} height={24}>
-                <Circle cx="12" cy="12" r="10" stroke={Theme.INK} strokeWidth={1.8} fill="none" />
-                <Circle cx="12" cy="12" r="5.5" stroke={Theme.INK} strokeWidth={1.8} fill="none" />
-                <Circle cx="12" cy="12" r="2" fill={Theme.INK} />
-            </Svg>
             <Text style={styles.brandTitle}>Overwatch</Text>
         </View>
-        <Text style={styles.brandSubtitle}>Digital Risk Protection · India Threat Brief</Text>
+        <Text style={styles.brandSubtitle}>Digital Risk Protection</Text>
     </View>
 );
 
 const PageFooter = () => (
-    <View style={styles.footer} fixed>
-        <Text style={styles.footerLeft}>Confidential Document</Text>
-        <Text style={styles.footerCenter}>Powered by Contrails AI</Text>
-        <Text
-            style={styles.footerRight}
-            render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-        />
+    <View style={styles.footer}>
+        <Text style={styles.footerText}>Confidential Document</Text>
+        <Text style={styles.footerText}>Powered by Contrails AI</Text>
+        <Text style={styles.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
 );
 
-const Badge = ({ color, children }) => {
-    const p = badgePalette(color);
-    return (
-        <View style={[styles.badge, { backgroundColor: p.bg, borderColor: p.line }]}>
-            <Text style={[styles.badgeText, { color: p.fg }]}>{children}</Text>
-        </View>
-    );
-};
-
-const KV = ({ label, value }) => (
-    <View style={styles.kvCell}>
-        <Text style={styles.kvLabel}>{label}</Text>
-        <Text style={styles.kvValue}>{value || '—'}</Text>
-    </View>
-);
-
-const AccountRow = ({ label, value, link }) => (
-    <View style={styles.accountRow}>
-        <Text style={styles.accountLabel}>{label}</Text>
-        {link ? (
-            <Link src={link} style={styles.accountLink}>{truncate(value, 90)}</Link>
-        ) : (
-            <Text style={styles.accountValue}>{truncate(value || '—', 90)}</Text>
-        )}
-    </View>
-);
-
-// --- MAIN PAGE ---
+// --- SINGLE CASE PAGE (layout mirrors DetailedCaseReport.js DetailedCasePage) ---
 export const SingleCasePage = ({ post, project, compressedImage }) => {
     const review = post.review_details || {};
     const analysis = post.analysis_results || {};
@@ -562,341 +615,361 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
     const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
     const riskInfo = getRiskInfo(riskScore);
 
-    let reasoningRaw = review.reasoning || analysis.categorization_reason ||
-        'No detailed reasoning provided.';
+    let projectDetails = project?.project_details;
+    if (typeof projectDetails === 'string') {
+        try { projectDetails = JSON.parse(projectDetails); } catch (e) { projectDetails = {}; }
+    }
+
+    let reasoningRaw = review.reasoning || analysis.categorization_reason || 'No detailed reasoning provided.';
     const reasoning = typeof reasoningRaw === 'object' && reasoningRaw !== null
         ? (reasoningRaw.reasoning || reasoningRaw.text || JSON.stringify(reasoningRaw))
         : reasoningRaw;
 
-    // Project details (string or object).
-    let projectDetails = project?.project_details;
-    if (typeof projectDetails === 'string') {
-        try { projectDetails = JSON.parse(projectDetails); } catch { projectDetails = {}; }
-    }
-    const projectLabels = projectDetails?.labels || [];
-    const projectLegalCodes = projectDetails?.legal_codes || [];
+    const legalCodesRaw = Array.isArray(review.legal_codes) ? review.legal_codes : [];
+    const legalCodes = legalCodesRaw.map((item) => {
+        if (typeof item === 'string') return { code: item, reasoning: '' };
+        return { code: item.code || item.name || '', reasoning: item.reasoning || '' };
+    }).filter(e => e.code);
 
-    // Active AI labels (flags + threat_types + legacy)
-    const activeLabels = resolveActiveLabels(projectLabels, review);
-    const isAigc = review.is_aigc ?? review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
     const isPoiPresent = review.face_present ?? review.flags?.poi_confirmed ??
         (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
+    const isAigc = review.is_aigc ?? review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
 
-    // Legal codes — array of strings or { code, reasoning } objects.
-    const legalCodesRaw = review.legal_codes || [];
-    const legalCodes = legalCodesRaw.map(item => {
-        if (typeof item === 'string') return { code: item, reasoning: '' };
-        return { code: item.code || item.name, reasoning: item.reasoning || '' };
-    }).filter(l => l.code);
-
-    // Mini badges over the image (≤ 3 of the most important labels for compactness).
-    const miniBadges = [];
-    if (isAigc) miniBadges.push({ title: 'AIGC', color: 'purple' });
-    if (isPoiPresent) miniBadges.push({ title: 'POI', color: 'emerald' });
-    activeLabels.slice(0, 2).forEach(l => {
-        const short = l.title.length > 4 ? l.title.substring(0, 3).toUpperCase() : l.title.toUpperCase();
-        miniBadges.push({ title: short, color: l.color });
+    const projectLabels = projectDetails?.labels || [];
+    const aiLabels = [];
+    projectLabels.forEach(label => {
+        if (review.flags?.[label.name] === true) {
+            const title = String(label.name).replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const colorKey = label.severity === 'high' ? 'rose' : label.severity === 'medium' ? 'orange' : label.severity === 'low' ? 'yellow' : 'purple';
+            aiLabels.push({ title, color: colorKey });
+        }
+    });
+    const legacyFlagMap = {
+        is_hate_speech: { title: 'Hate Speech', color: 'orange' },
+        is_fake_news: { title: 'Misinformation', color: 'purple' },
+        is_nsfw: { title: 'NSFW Content', color: 'orange' },
+        is_fraud: { title: 'Fraud', color: 'rose' },
+        is_asset_misuse: { title: 'Asset Misuse', color: 'yellow' },
+        is_humor: { title: 'Satire', color: 'yellow' },
+        is_terrorism: { title: 'Terrorism', color: 'rose' },
+        is_violence: { title: 'Violence', color: 'orange' },
+    };
+    Object.entries(legacyFlagMap).forEach(([key, cfg]) => {
+        if (review.flags?.[key] === true && !aiLabels.some(l => l.title === cfg.title)) {
+            aiLabels.push(cfg);
+        }
     });
 
-    // Dates
-    const postedDate = formatLongDate(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date);
-    const alertDate = formatLongDate(post.updated_at || review.reviewed_at || post.created_at);
+    const { body: captionBody, hashtags: captionTags } = splitCaptionAndTags(post.caption);
 
-    // Stats
-    const stats = post.stats || {};
-    const platformLabel = (post.platform || 'Unknown').toUpperCase();
-    const username = post.user?.username || 'unknown';
-    const fullName = post.user?.full_name || post.user?.username || 'Unknown';
-    const sourceUrl = post.original_url || post.url || '#';
     const imageUrl = compressedImage || post.signedImageUrl || post.image_url || null;
 
-    // Status / takedown
-    const statusBadge = getStatusBadge(post.client_status, post.takedown_info);
+    const platformLabel = post.platform
+        ? (post.platform === 'x' || post.platform === 'twitter'
+            ? 'X (Twitter)'
+            : post.platform.charAt(0).toUpperCase() + post.platform.slice(1))
+        : 'Unknown';
+    const sourceUrl = post.original_url || post.url || '';
+    const publishedAt = formatDateTime(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date);
+    const alertedAt = formatDateTime(post.created_at || post.metadata?.created_at);
 
-    // Audit log
-    const auditEntries = Array.isArray(post.update_history) ? post.update_history.slice().reverse() : [];
+    const postedShort = formatShortDateTime(post.posted_date || post.metadata?.posted_date || post.timestamp);
+    const processedShort = formatShortDateTime(post.metadata?.created_at || post.created_at);
+    const caseId = post._id ? `${String(post._id).toUpperCase()}` : '';
 
-    // Comments
+    const updateHistory = Array.isArray(post.update_history) ? post.update_history : [];
+
     let comments = [];
     const rawComments = post.client_notes || post.notes || post.comments;
-    if (Array.isArray(rawComments)) {
-        comments = rawComments;
-    } else if (typeof rawComments === 'string' && rawComments.trim() && rawComments !== '[]') {
+    if (Array.isArray(rawComments)) comments = rawComments;
+    else if (typeof rawComments === 'string') {
         try { comments = JSON.parse(rawComments); }
-        catch { comments = [{ text: rawComments }]; }
+        catch (e) {
+            if (rawComments.trim().length > 0 && rawComments !== '[]') comments = [{ text: rawComments }];
+        }
     }
 
-    // Case title: prefer human-friendly post.post_id, fall back to last 5 chars of _id.
-    const idStr = String(post._id || '');
-    const caseNumber = post.post_id || (idStr ? `#${idStr.slice(-5)}` : '');
-    const caseTitleText = caseNumber
+    const displayName = post.user?.full_name || post.user?.username || 'Unknown';
+    const handle = post.user?.username ? `@${post.user.username}` : '';
+
+    const mediaBadges = [];
+    if (isAigc) mediaBadges.push({ label: 'AIGC', color: '#7C3AED' });
+    if (review.flags?.is_fake_news === true || review.flags?.misinformation === true) {
+        mediaBadges.push({ label: 'MIS', color: '#EA580C' });
+    }
+    if (isPoiPresent) mediaBadges.push({ label: 'POI', color: '#059669' });
+
+    const caseNumber = post.post_id || (post._id ? `#${String(post._id).slice(-5)}` : '');
+    const caseTitle = caseNumber
         ? `Case ${typeof caseNumber === 'string' && caseNumber.startsWith('#') ? caseNumber : '#' + caseNumber}`
         : 'Case Detail';
 
-    // Caption split into body + trailing hashtags so tags can render as links.
-    const { body: captionBody, hashtags: captionTags } = splitCaptionAndTags(post.caption || post.content);
+    const rightSections = [];
+    if (legalCodes.length > 0) rightSections.push('legal');
+    rightSections.push('reasoning');
+    if (isPoiPresent || isAigc || aiLabels.length > 0) rightSections.push('labels');
+    rightSections.push('risk');
+    if (updateHistory.length > 0) rightSections.push('logs');
 
     return (
         <Page size="A4" style={styles.page}>
-            <PageHeader />
+            <BrandHeader />
 
-            {/* CASE TITLE STRIP */}
-            <View style={styles.caseTitleRow}>
-                <View>
-                    <Text style={styles.caseTitle}>{caseTitleText}</Text>
-                    <Text style={styles.caseId}>ID: {idStr}</Text>
+            <View style={styles.caseHeadingRow}>
+                <Text style={styles.caseTitle}>{caseTitle}</Text>
+            </View>
+
+            <View style={styles.infoBanner}>
+                <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Account</Text>
+                    <Text style={styles.infoValue}>{handle || '—'}</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg, borderColor: statusBadge.line }]}>
-                    <Text style={[styles.statusBadgeText, { color: statusBadge.fg }]}>{statusBadge.label}</Text>
+                <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Platform</Text>
+                    <Text style={styles.infoValue}>{platformLabel}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>URL</Text>
+                    {sourceUrl ? (
+                        <Link src={sourceUrl} style={styles.infoLink}>{truncate(sourceUrl, 80)}</Link>
+                    ) : (
+                        <Text style={styles.infoValue}>N/A</Text>
+                    )}
+                </View>
+                <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Published</Text>
+                    <Text style={styles.infoValue}>{publishedAt}</Text>
+                </View>
+                <View style={[styles.infoRow, styles.infoRowLast]}>
+                    <Text style={styles.infoLabel}>Alerted</Text>
+                    <Text style={styles.infoValue}>{alertedAt}</Text>
                 </View>
             </View>
 
-            {/* ACCOUNT CARD */}
-            <View style={styles.accountCard}>
-                <AccountRow label="Account" value={`@${username}`} />
-                <AccountRow label="Platform" value={platformLabel} />
-                <AccountRow label="URL" value={sourceUrl} link={sourceUrl !== '#' ? sourceUrl : null} />
-                <AccountRow label="Published" value={postedDate} />
-                <AccountRow label="Alerted" value={alertDate} />
-            </View>
+            <View style={styles.columns}>
 
-            {/* TWO-COLUMN BODY */}
-            <View style={styles.body}>
-
-                {/* LEFT COLUMN */}
                 <View style={styles.leftCol}>
-                    {/* Media */}
-                    <View style={styles.mediaCard}>
-                        {imageUrl ? (
-                            <Image src={imageUrl} style={styles.mediaImage} />
-                        ) : (
-                            <View style={styles.mediaPlaceholder}>
-                                <Text style={{ color: Theme.MUTED, fontSize: 8 }}>No media available</Text>
+                    <View style={styles.leftCard}>
+                        <View style={styles.mediaWrap}>
+                            {imageUrl ? (
+                                <Image src={imageUrl} style={styles.mediaImage} />
+                            ) : (
+                                <View style={styles.mediaPlaceholder}>
+                                    <Text style={styles.mediaPlaceholderText}>No image attached</Text>
+                                </View>
+                            )}
+                            {mediaBadges.length > 0 && (
+                                <View style={styles.mediaBadgesRow}>
+                                    {mediaBadges.map((b, i) => (
+                                        <View key={i} style={styles.mediaBadge}>
+                                            <Text style={[styles.mediaBadgeText, { color: b.color }]}>{b.label}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                            {sourceUrl ? (
+                                <View style={styles.viewSourcePill}>
+                                    <Link src={sourceUrl} style={styles.viewSourcePillText}>View Source</Link>
+                                </View>
+                            ) : null}
+                        </View>
+
+                        <View style={styles.userStrip}>
+                            <View style={[styles.userAvatar, { backgroundColor: profilePicColor(post.user?.username) }]}>
+                                <Text style={styles.userAvatarText}>{profilePicInitials(post.user?.username)}</Text>
                             </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.userName}>{displayName}</Text>
+                                <Text style={styles.userMeta}>
+                                    {handle}{handle && platformLabel ? ' · ' : ''}{platformLabel}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.leftSection}>
+                            <Text style={styles.leftSectionLabel}>Post Caption</Text>
+                            {captionBody ? (
+                                <Text style={styles.bodyText}>{truncate(captionBody, 700)}</Text>
+                            ) : (
+                                <Text style={styles.bodyTextMuted}>No caption content available.</Text>
+                            )}
+                            {captionTags ? (
+                                <Text style={[styles.hashtagText, { marginTop: 8, height: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }]}>
+                                    {captionTags}
+                                </Text>
+                            ) : null}
+                        </View>
+
+                        <View style={styles.softDivider} />
+
+                        <View style={styles.statsRow}>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Platform</Text>
+                                <Text style={styles.statValue}>{platformLabel}</Text>
+                            </View>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>User Handle</Text>
+                                <Text style={styles.statValue}>{handle || '—'}</Text>
+                            </View>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Followers</Text>
+                                <Text style={styles.statValue}>
+                                    {post.user?.follower_count != null
+                                        ? Number(post.user.follower_count).toLocaleString()
+                                        : '—'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.softDivider} />
+
+                        <View style={styles.statsRow}>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Likes</Text>
+                                <Text style={styles.statValue}>{(post.stats?.like_count || 0).toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Comments</Text>
+                                <Text style={styles.statValue}>{(post.stats?.comment_count || 0).toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Shares</Text>
+                                <Text style={styles.statValue}>{(post.stats?.share_count || 0).toLocaleString()}</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.softDivider} />
+
+                        <View style={styles.statsRow}>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Posted On</Text>
+                                <Text style={styles.statValue}>{postedShort}</Text>
+                            </View>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Processed On</Text>
+                                <Text style={styles.statValue}>{processedShort}</Text>
+                            </View>
+                            <View style={styles.statCell}>
+                                <Text style={styles.statLabel}>Case ID</Text>
+                                <Text style={styles.statValueMono}>{caseId}</Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.rightCol}>
+                    <View style={styles.rightCard}>
+
+                        {legalCodes.length > 0 && (
+                            <>
+                                <View style={styles.rightSection}>
+                                    <Text style={styles.legalSectionLabel}>Legal Violations</Text>
+                                    {legalCodes.map((lc, i) => {
+                                        const isLast = i === legalCodes.length - 1;
+                                        const projCode = projectDetails?.legal_codes?.find(pc => pc.name === lc.code);
+                                        const description = lc.reasoning || projCode?.description || '';
+                                        return (
+                                            <View key={i} style={[styles.legalCardShell, isLast && styles.legalCardShellLast]}>
+                                                <View style={styles.legalCardAccent} />
+                                                <View style={styles.legalCardInner}>
+                                                    <View style={styles.legalCardHeader}>
+                                                        <Text style={styles.legalCode}>{lc.code}</Text>
+                                                    </View>
+                                                    {description ? (
+                                                        <Text style={styles.legalReason}>{truncate(description, 220)}</Text>
+                                                    ) : null}
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                                {rightSections.indexOf('legal') < rightSections.length - 1 && <View style={styles.rightDivider} />}
+                            </>
                         )}
-                        <View style={styles.mediaFooter}>
-                            <View style={styles.inlineBadgeRow}>
-                                {miniBadges.map((b, i) => {
-                                    const p = badgePalette(b.color);
+
+                        <View style={styles.rightSection}>
+                            <Text style={styles.rightSectionLabel}>Content Reasoning</Text>
+                            {(() => {
+                                const sections = parseReasoning(reasoning);
+                                if (sections.length === 0) {
+                                    return <Text style={styles.reasoningContent}>No detailed reasoning provided.</Text>;
+                                }
+                                if (sections.length === 1 && !sections[0].label) {
+                                    return <Text style={styles.reasoningContent}>{truncate(sections[0].content, 700)}</Text>;
+                                }
+                                return sections.map((sec, i) => {
+                                    const isLast = i === sections.length - 1;
                                     return (
-                                        <View key={i} style={[styles.miniBadge, { backgroundColor: p.bg, borderColor: p.line }]}>
-                                            <Text style={[styles.miniBadgeText, { color: p.fg }]}>{b.title}</Text>
+                                        <View key={i} style={[styles.reasoningSection, isLast && styles.reasoningSectionLast]}>
+                                            <Text style={styles.reasoningContent}>
+                                                {sec.label ? <Text style={styles.reasoningLabel}>{sec.label}: </Text> : null}
+                                                {sec.content}
+                                            </Text>
                                         </View>
                                     );
-                                })}
-                            </View>
-                            {sourceUrl !== '#' && (
-                                <Link src={sourceUrl} style={styles.viewSourcePill}>
-                                    <Text style={styles.viewSourceText}>View Source ↗</Text>
-                                </Link>
-                            )}
+                                });
+                            })()}
                         </View>
-                    </View>
+                        {rightSections.indexOf('reasoning') < rightSections.length - 1 && <View style={styles.rightDivider} />}
 
-                    {/* User row — always use the deterministic colored-initials avatar.
-                        Social-CDN profile_pic URLs frequently fail server-side rendering
-                        (CORS / signed-URL expiry), so we skip the image attempt entirely
-                        and match the web UI's ProfilePic fallback look. */}
-                    <View style={styles.userRow}>
-                        <View style={[styles.avatar, { backgroundColor: profilePicColor(username) }]}>
-                            <Text style={styles.avatarLetter}>{profilePicInitials(username)}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.userName}>{truncate(fullName, 50)}</Text>
-                            <Text style={styles.userHandle}>@{truncate(username, 40)} · {platformLabel}</Text>
-                        </View>
-                    </View>
-
-                    {/* Caption */}
-                    <View>
-                        <Text style={styles.sectionLabel}>Post Caption</Text>
-                        {captionBody ? (
-                            <Text style={styles.paragraph}>{truncate(captionBody, 1200)}</Text>
-                        ) : !captionTags ? (
-                            <Text style={[styles.paragraph, { color: Theme.MUTED }]}>Empty content field.</Text>
-                        ) : null}
-                        {captionTags ? (
-                            <Text style={[styles.hashtagText, { marginTop: 6 }]}>{captionTags}</Text>
-                        ) : null}
-                    </View>
-
-                    <View style={styles.sectionDivider} />
-
-                    {/* Stats row 1: Platform / Handle / Followers */}
-                    <View style={styles.kvGrid}>
-                        <KV label="Platform" value={platformLabel} />
-                        <KV label="User Handle" value={`@${username}`} />
-                        <KV label="Followers" value={
-                            post.user?.follower_count != null
-                                ? Number(post.user.follower_count).toLocaleString()
-                                : '—'
-                        } />
-                    </View>
-
-                    {/* Stats row 2: Likes / Comments / Shares (or Views) */}
-                    <View style={styles.kvGrid}>
-                        <KV label="Likes" value={(stats.like_count ?? 0).toLocaleString()} />
-                        <KV label="Comments" value={(stats.comment_count ?? 0).toLocaleString()} />
-                        <KV
-                            label={stats.view_count ? 'Views' : 'Shares'}
-                            value={(stats.view_count ?? stats.share_count ?? 0).toLocaleString()}
-                        />
-                    </View>
-
-                    {/* Stats row 3: Posted / Processed / Case ID */}
-                    <View style={styles.kvGrid}>
-                        <KV label="Posted On" value={formatLongDate(post.posted_date || post.metadata?.posted_date)} />
-                        <KV label="Processed On" value={formatLongDate(post.updated_at || review.reviewed_at)} />
-                        <KV label="Case ID" value={truncate(idStr, 14)} />
-                    </View>
-                </View>
-
-                {/* RIGHT COLUMN */}
-                <View style={styles.rightCol}>
-
-                    {/* Legal Violations */}
-                    {legalCodes.length > 0 && (
-                        <View>
-                            <Text style={styles.sectionLabel}>Legal Violations</Text>
-                            {legalCodes.map((lc, i) => {
-                                const isEven = i % 2 === 0;
-                                const palette = isEven
-                                    ? { bg: Theme.BADGE_ROSE_BG, line: Theme.BADGE_ROSE_LINE }
-                                    : { bg: Theme.BADGE_ORANGE_BG, line: Theme.BADGE_ORANGE_LINE };
-                                const projCode = projectLegalCodes.find(pc => pc.name === lc.code);
-                                return (
-                                    <View key={i} style={[styles.legalCard, { backgroundColor: palette.bg, borderColor: palette.line }]}>
-                                        <View style={styles.legalCardHeader}>
-                                            {isAigc && (
-                                                <View style={styles.legalAigcBadge}>
-                                                    <Text style={styles.legalAigcText}>AIGC</Text>
+                        {(isPoiPresent || isAigc || aiLabels.length > 0) && (
+                            <>
+                                <View style={styles.rightSection}>
+                                    <Text style={styles.rightSectionLabel}>AI Labels Detected</Text>
+                                    <View style={styles.badgeRow}>
+                                        {aiLabels.map((l, i) => {
+                                            const c = getLabelColor(l.color);
+                                            return (
+                                                <View key={`l-${i}`} style={[styles.aiLabelBadge, { backgroundColor: c.bg, borderColor: c.border }]}>
+                                                    <Text style={[styles.aiLabelBadgeText, { color: c.color }]}>{l.title}</Text>
                                                 </View>
-                                            )}
-                                            <Text style={styles.legalCode}>{lc.code}</Text>
-                                        </View>
-                                        {(lc.reasoning || projCode?.description) && (
-                                            <Text style={styles.legalReasoning}>
-                                                {truncate(lc.reasoning || projCode?.description || '', 320)}
-                                            </Text>
+                                            );
+                                        })}
+                                        {isAigc && (
+                                            <View style={[styles.aiLabelBadge, { backgroundColor: labelColorMap.blue.bg, borderColor: labelColorMap.blue.border }]}>
+                                                <Text style={[styles.aiLabelBadgeText, { color: labelColorMap.blue.color }]}>AI Generated</Text>
+                                            </View>
+                                        )}
+                                        {isPoiPresent && (
+                                            <View style={[styles.aiLabelBadge, { backgroundColor: labelColorMap.emerald.bg, borderColor: labelColorMap.emerald.border }]}>
+                                                <Text style={[styles.aiLabelBadgeText, { color: labelColorMap.emerald.color }]}>POI Detected</Text>
+                                            </View>
                                         )}
                                     </View>
-                                );
-                            })}
+                                </View>
+                                {rightSections.indexOf('labels') < rightSections.length - 1 && <View style={styles.rightDivider} />}
+                            </>
+                        )}
+
+                        <View style={styles.rightSection}>
+                            <Text style={styles.rightSectionLabel}>Current AI Generated Risk</Text>
+                            <View style={[styles.riskBadgeSmall, { backgroundColor: riskInfo.bg, borderColor: riskInfo.border }]}>
+                                <Text style={[styles.riskBadgeSmallText, { color: riskInfo.color }]}>{riskInfo.label}</Text>
+                            </View>
                         </View>
-                    )}
+                        {rightSections.indexOf('risk') < rightSections.length - 1 && <View style={styles.rightDivider} />}
 
-                    {/* Content Reasoning */}
-                    <View>
-                        <Text style={styles.sectionLabel}>Content Reasoning</Text>
-                        {(() => {
-                            const sections = parseReasoning(reasoning);
-                            if (sections.length === 0) {
-                                return <Text style={styles.paragraph}>No detailed reasoning provided.</Text>;
-                            }
-                            if (sections.length === 1 && !sections[0].label) {
-                                return <Text style={styles.paragraph}>{truncate(sections[0].content, 1000)}</Text>;
-                            }
-                            return sections.map((sec, i) => {
-                                const isLast = i === sections.length - 1;
-                                return (
-                                    <View key={i} style={[styles.reasoningSection, isLast && styles.reasoningSectionLast]}>
-                                        <Text style={styles.paragraph}>
-                                            {sec.label ? <Text style={styles.reasoningLabel}>{sec.label}: </Text> : null}
-                                            {truncate(sec.content, 320)}
-                                        </Text>
-                                    </View>
-                                );
-                            });
-                        })()}
-                    </View>
-
-                    {/* AI Labels Detected */}
-                    <View>
-                        <Text style={styles.sectionLabel}>AI Labels Detected</Text>
-                        <View style={styles.badgeRow}>
-                            {isPoiPresent && <Badge color="emerald">POI Detected</Badge>}
-                            {isAigc && <Badge color="purple">AI Generated</Badge>}
-                            {activeLabels.map((l, i) => (
-                                <Badge key={i} color={l.color}>{l.title}</Badge>
-                            ))}
-                            {!isPoiPresent && !isAigc && activeLabels.length === 0 && (
-                                <Text style={{ fontSize: 8, color: Theme.MUTED }}>No labels detected.</Text>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* Current AI Generated Risk */}
-                    <View>
-                        <Text style={styles.sectionLabel}>Current AI Generated Risk</Text>
-                        <View style={[styles.riskBadgeOutline, { backgroundColor: riskInfo.bg, borderColor: riskInfo.line }]}>
-                            <Text style={[styles.riskBadgeOutlineText, { color: riskInfo.color }]}>
-                                {riskInfo.label}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Action Logs */}
-                    {auditEntries.length > 0 && (
-                        <View>
-                            <Text style={styles.sectionLabel}>Action Logs</Text>
-                            <View style={styles.auditWrap}>
-                                {auditEntries.length > 1 && <View style={styles.auditLine} />}
-                                {auditEntries.slice(0, 4).map((entry, i) => {
-                                    const summary = entry.changes_summary === 'Manual ingestion from simplified JSON'
-                                        ? 'Content was sourced and ingested into the system.'
-                                        : (entry.changes_summary || '').replace(/client/g, 'user').replace(/Client/g, 'User');
-                                    const isSystem = !/\S+@\S+\.\S+/.test(entry.updated_by || '');
-                                    const who = isSystem ? 'System AI' : entry.updated_by;
+                        {comments.length > 0 && (
+                            <View style={styles.rightSection}>
+                                <Text style={styles.rightSectionLabel}>Comments</Text>
+                                {comments.slice(0, 2).map((c, i, arr) => {
+                                    const isLast = i === arr.length - 1;
                                     return (
-                                        <View key={i} style={styles.auditEntry} wrap={false}>
-                                            <View style={styles.auditDot}>
-                                                {isSystem ? <SystemIcon /> : <UserIcon />}
-                                            </View>
-                                            <View style={styles.auditText}>
-                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                                    <Text style={styles.auditWho}>
-                                                        {truncate(who, 30)}
-                                                    </Text>
-                                                    <Text style={styles.auditWhen}>{formatShortDate(entry.updated_at)}</Text>
+                                        <View key={i} style={[styles.commentItem, isLast && styles.commentItemLast]}>
+                                            {(c.email || c.created_at) && (
+                                                <View style={styles.commentMetaRow}>
+                                                    <Text style={styles.commentMeta}>{c.email || 'Unknown User'}</Text>
+                                                    <Text style={styles.commentMeta}>{c.created_at ? formatShortDateTime(c.created_at) : ''}</Text>
                                                 </View>
-                                                <Text style={styles.auditDetail}>{truncate(summary, 200)}</Text>
-                                            </View>
+                                            )}
+                                            <Text style={styles.commentText}>{truncate(c.text || '', 220)}</Text>
                                         </View>
                                     );
                                 })}
                             </View>
-                            {auditEntries.length > 4 && (
-                                <Text style={{ fontSize: 7, color: Theme.SOFT, marginTop: 2 }}>
-                                    + {auditEntries.length - 4} more log{auditEntries.length - 4 === 1 ? '' : 's'}
-                                </Text>
-                            )}
-                        </View>
-                    )}
+                        )}
 
-                    {/* Comments */}
-                    {comments.length > 0 && (
-                        <View>
-                            <Text style={styles.sectionLabel}>Comments</Text>
-                            {comments.slice(0, 3).map((c, i) => (
-                                <View key={i} style={styles.commentBox} wrap={false}>
-                                    {(c.email || c.created_at) && (
-                                        <View style={styles.commentMeta}>
-                                            <Text style={styles.commentMetaText}>{truncate(c.email || 'Unknown', 30)}</Text>
-                                            {c.created_at && (
-                                                <Text style={styles.commentMetaText}>{formatShortDate(c.created_at)}</Text>
-                                            )}
-                                        </View>
-                                    )}
-                                    <Text style={styles.commentText}>{truncate(c.text || '', 320)}</Text>
-                                </View>
-                            ))}
-                            {comments.length > 3 && (
-                                <Text style={{ fontSize: 7, color: Theme.SOFT, marginTop: 2 }}>
-                                    + {comments.length - 3} more comment{comments.length - 3 === 1 ? '' : 's'}
-                                </Text>
-                            )}
-                        </View>
-                    )}
+                    </View>
                 </View>
             </View>
 

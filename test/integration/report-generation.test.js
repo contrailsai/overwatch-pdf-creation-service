@@ -11,7 +11,7 @@ require('@babel/register')({
 
 const { RiskReportDocument } = require('../../src/components/SummaryReport');
 const { generateSingleCaseDocxBuffer } = require('../../src/components/docx/SingleCaseReportDocx');
-const { makeProject, makeNormalizedPost } = require('../fixtures/report-fixtures');
+const { makeProject, makeNormalizedPost } = require('./smoke-fixtures');
 
 async function streamToBuffer(readable) {
   const chunks = [];

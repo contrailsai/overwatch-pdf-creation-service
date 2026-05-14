@@ -1,3 +1,5 @@
+/** Minimal in-memory shapes for PDF/DOCX smoke tests (not real DB data). */
+
 function makeProject() {
   return {
     project_name: 'Overwatch Test Project',
@@ -6,9 +8,7 @@ function makeProject() {
         { name: 'is_hate_speech', severity: 'high' },
         { name: 'is_fake_news', severity: 'medium' },
       ],
-      legal_codes: [
-        { name: 'IT-66A', description: 'Sample IT Act description' },
-      ],
+      legal_codes: [{ name: 'IT-66A', description: 'Sample IT Act description' }],
     },
   };
 }
