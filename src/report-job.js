@@ -22,6 +22,7 @@ const { RiskReportDocument } = require('./components/SummaryReport');
 const { generateSingleCaseDocxBuffer } = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('./components/docx/ProfileReportDocx');
+const { generateSimpleProfileDocxBuffer } = require('./components/docx/SimpleProfileReportDocx');
 
 const tracer = trace.getTracer('overwatch-pdf-service');
 const meter = metrics.getMeter('overwatch-pdf-service');
@@ -245,6 +246,9 @@ async function runReportJob(client, payload, options = {}) {
         }
         if (reportType === 'Profile') {
           return await generateProfileDocxBuffer(profile, posts, project, compressedImages, compressedProfilePic, clientDetails);
+        }
+        if (reportType === 'SimpleProfile') {
+          return await generateSimpleProfileDocxBuffer(profile, posts, project, compressedImages);
         }
         throw new Error(`DOCX report type '${reportType}' is not supported`);
       });

@@ -15,6 +15,7 @@ const { ProfileReportDocument } = require('../../src/components/ProfileReport');
 const { RiskReportDocument } = require('../../src/components/SummaryReport');
 const { generateDetailedCasesDocxBuffer } = require('../../src/components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('../../src/components/docx/ProfileReportDocx');
+const { generateSimpleProfileDocxBuffer } = require('../../src/components/docx/SimpleProfileReportDocx');
 const { makeProject, makeProfile, makeNormalizedPost } = require('./smoke-fixtures');
 
 async function streamToBuffer(readable) {
@@ -93,6 +94,16 @@ test('Profile DOCX renders with fixture profile and posts', async () => {
   const profile = makeProfile();
   const posts = [makeNormalizedPost(), makeNormalizedPost({ _id: 'post-2', post_id: 'P002' })];
   const docxBuffer = await generateProfileDocxBuffer(profile, posts, project, [null, null], null, { organization: 'Fixture Org' });
+  assert.ok(Buffer.isBuffer(docxBuffer));
+  assert.ok(docxBuffer.length > 100);
+  assert.equal(docxBuffer.slice(0, 2).toString('utf8'), 'PK');
+});
+
+test('SimpleProfile DOCX renders with fixture profile and posts', async () => {
+  const project = makeProject();
+  const profile = makeProfile();
+  const posts = [makeNormalizedPost(), makeNormalizedPost({ _id: 'post-2', post_id: 'P002' })];
+  const docxBuffer = await generateSimpleProfileDocxBuffer(profile, posts, project, [null, null]);
   assert.ok(Buffer.isBuffer(docxBuffer));
   assert.ok(docxBuffer.length > 100);
   assert.equal(docxBuffer.slice(0, 2).toString('utf8'), 'PK');

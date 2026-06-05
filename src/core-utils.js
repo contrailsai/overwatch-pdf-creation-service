@@ -1,8 +1,9 @@
 const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 
-const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'Summary']);
-const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile']);
+const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'Summary']);
+const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile']);
+const DOCX_ONLY_REPORT_TYPES = new Set(['SimpleProfile']);
 
 function generateReportHash(projectId, postIds, reportType, profileId = '', reportFormat = 'pdf') {
   const sortedIds = [...postIds].sort();
@@ -36,6 +37,9 @@ function validatePayload(payload) {
   }
   if (normalizedReportFormat === 'docx' && !DOCX_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`DOCX is only supported for: ${Array.from(DOCX_SUPPORTED_REPORT_TYPES).join(', ')}`);
+  }
+  if (DOCX_ONLY_REPORT_TYPES.has(reportType) && normalizedReportFormat !== 'docx') {
+    errors.push(`${reportType} is only supported with reportFormat docx`);
   }
   if (Array.isArray(postIds)) {
     const invalidIds = postIds.filter((id) => !ObjectId.isValid(id));
@@ -105,4 +109,5 @@ module.exports = {
   normalizePost,
   SUPPORTED_REPORT_TYPES,
   DOCX_SUPPORTED_REPORT_TYPES,
+  DOCX_ONLY_REPORT_TYPES,
 };

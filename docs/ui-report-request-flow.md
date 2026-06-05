@@ -27,13 +27,14 @@ The SQS `body` must be a JSON object with this structure:
 - `projectId`: string
 - `database_name`: string
 - `postIds`: non-empty array of valid Mongo ObjectId strings
-- `reportType`: one of `Detailed | Single | Profile | Summary`
+- `reportType`: one of `Detailed | Single | Profile | SimpleProfile | Summary`
 - `reportFormat`: `pdf` or `docx` (default should be `pdf` if omitted client-side)
 
 ### Important format rules
 
-- `docx` supports only: `Detailed | Single | Profile` (not `Summary`).
-- For `Profile` reports, send a proper `profile` object (including `_id`), because profile ID is part of hash generation.
+- `docx` supports only: `Detailed | Single | Profile | SimpleProfile` (not `Summary`).
+- `SimpleProfile` is DOCX-only — `reportFormat` must be `docx`.
+- For `Profile` and `SimpleProfile` reports, send a proper `profile` object (including `_id`), because profile ID is part of hash generation.
 - `project` should be an object (not array) if you want proper branding/org metadata in report generation.
 
 ## 2) Client-side hash generation (must match backend exactly)
@@ -56,7 +57,7 @@ import { createHash } from "crypto";
 export function generateReportHash(input: {
   projectId: string;
   postIds: string[];
-  reportType: "Detailed" | "Single" | "Profile" | "Summary";
+  reportType: "Detailed" | "Single" | "Profile" | "SimpleProfile" | "Summary";
   reportFormat?: "pdf" | "docx";
   profile?: { _id?: string | null } | null;
 }) {

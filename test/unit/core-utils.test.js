@@ -46,6 +46,32 @@ test('validatePayload rejects unsupported DOCX report type', () => {
   assert.match(result.errors.join(' '), /DOCX is only supported/i);
 });
 
+test('validatePayload accepts SimpleProfile with docx', () => {
+  const payload = {
+    projectId: 'project-1',
+    database_name: 'tenant_db',
+    postIds: [new ObjectId().toString()],
+    reportType: 'SimpleProfile',
+    reportFormat: 'docx',
+  };
+  const result = validatePayload(payload);
+  assert.equal(result.valid, true);
+  assert.equal(result.errors.length, 0);
+});
+
+test('validatePayload rejects SimpleProfile with pdf', () => {
+  const payload = {
+    projectId: 'project-1',
+    database_name: 'tenant_db',
+    postIds: [new ObjectId().toString()],
+    reportType: 'SimpleProfile',
+    reportFormat: 'pdf',
+  };
+  const result = validatePayload(payload);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /SimpleProfile is only supported with reportFormat docx/i);
+});
+
 test('generateReportHash is deterministic regardless of post order', () => {
   const id1 = new ObjectId().toString();
   const id2 = new ObjectId().toString();

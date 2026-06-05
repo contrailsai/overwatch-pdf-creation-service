@@ -431,8 +431,9 @@ const generateSingleCaseDocxBuffer = async (post, project, imagePath, clientDeta
 
 module.exports = {
     generateSingleCaseDocxBuffer,
-    // Shared helpers consumed by DetailedCasesReportDocx & ProfileReportDocx
+    // Shared helpers consumed by DetailedCasesReportDocx, ProfileReportDocx & SimpleProfileReportDocx
     generateCaseSections,
+    getCaseData,
     formatCompleteDate,
     processText,
     readLocalImage,
