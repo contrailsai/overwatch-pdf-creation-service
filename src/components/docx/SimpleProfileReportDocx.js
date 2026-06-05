@@ -2,7 +2,7 @@
  * SimpleProfileReportDocx.js
  *
  * Generates a minimal profile DOCX: plain profile summary + numbered cases
- * (S1, S2, …) with URL, description, and bordered image. No header/footer branding.
+ * (I, II, …) with URL, description, and bordered image. No header/footer branding.
  */
 
 const {
@@ -11,15 +11,16 @@ const {
     WidthType, BorderStyle, AlignmentType,
     ExternalHyperlink,
 } = require('docx');
-const { format, isValid } = require('date-fns');
 
 const {
     getCaseData,
     readLocalImage,
     metaPara,
     sectionDivider,
-    PAGE_WIDTH,
 } = require('./SingleCaseReportDocx');
+
+const CASE_CONTENT_INDENT = 720;
+const IMAGE_CELL_PADDING = 60;
 
 const BLACK_BORDER = {
     style: BorderStyle.SINGLE,
@@ -34,37 +35,59 @@ const formatAccountName = (profile) => {
 };
 
 const formatProfileNote = (profile) => {
-    const parts = [];
-    const joinDate = profile?.metadata?.account_creation_date;
-    if (joinDate) {
-        try {
-            const date = new Date(joinDate);
-            if (isValid(date)) {
-                parts.push(`joining date: ${format(date, 'dd MMM yyyy')}`);
-            }
-        } catch (_) { /* skip invalid date */ }
-    }
-    if (profile?.metadata?.location) {
-        parts.push(profile.metadata.location);
-    }
-    return parts.length > 0 ? parts.join(' | ') : null;
+    const location = profile?.metadata?.location;
+    if (!location) return null;
+    return `This account's said location: ${location}`;
 };
+
+const toRomanNumeral = (num) => {
+    const values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+    const symbols = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I'];
+    let result = '';
+    let n = num;
+    for (let i = 0; i < values.length; i++) {
+        while (n >= values[i]) {
+            result += symbols[i];
+            n -= values[i];
+        }
+    }
+    return result;
+};
+
+const pixelsToDxa = (px) => Math.round((px / 96) * 1440);
 
 const stripDescriptionPrefix = (text) => {
     if (!text) return text;
     return text.replace(/^Description:\s*/i, '').trim();
 };
 
-const buildBorderedImageTable = (imageRun) => {
-    if (!imageRun) return null;
+const indentedPara = (children, spacing = {}) => new Paragraph({
+    children,
+    indent: { left: CASE_CONTENT_INDENT },
+    spacing,
+});
+
+const buildBorderedImageTable = (imageRun, imageWidthPx) => {
+    if (!imageRun || !imageWidthPx) return null;
+
+    const contentWidth = pixelsToDxa(imageWidthPx);
+    const tableWidth = contentWidth + IMAGE_CELL_PADDING * 2;
+
     return new Table({
-        width: { size: PAGE_WIDTH, type: WidthType.DXA },
-        columnWidths: [PAGE_WIDTH],
+        width: { size: tableWidth, type: WidthType.DXA },
+        indent: { size: CASE_CONTENT_INDENT, type: WidthType.DXA },
+        columnWidths: [tableWidth],
         rows: [
             new TableRow({
                 children: [
                     new TableCell({
-                        width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                        width: { size: tableWidth, type: WidthType.DXA },
+                        margins: {
+                            top: IMAGE_CELL_PADDING,
+                            bottom: IMAGE_CELL_PADDING,
+                            left: IMAGE_CELL_PADDING,
+                            right: IMAGE_CELL_PADDING,
+                        },
                         borders: {
                             top: BLACK_BORDER,
                             bottom: BLACK_BORDER,
@@ -92,43 +115,36 @@ const generateSimpleCaseSections = async (post, project, imagePath, caseNumber) 
     const docChildren = [];
 
     docChildren.push(new Paragraph({
-        children: [new TextRun({ text: `S${caseNumber}`, bold: true, size: 24, color: '1E293B' })],
+        children: [new TextRun({ text: toRomanNumeral(caseNumber), bold: true, size: 24, color: '1E293B' })],
         spacing: { before: caseNumber === 1 ? 200 : 0, after: 100 },
     }));
 
     if (fullUrl) {
-        docChildren.push(new Paragraph({
-            children: [
-                new TextRun({ text: '- URL: ', bold: true, color: '1E293B', size: 22 }),
-                new ExternalHyperlink({
-                    children: [new TextRun({ text: fullUrl, color: '2563EB', size: 22, underline: { color: '2563EB' } })],
-                    link: fullUrl,
-                }),
-            ],
-            spacing: { after: 60 },
-        }));
+        docChildren.push(indentedPara([
+            new TextRun({ text: 'URL: ', bold: true, color: '1E293B', size: 22 }),
+            new ExternalHyperlink({
+                children: [new TextRun({ text: fullUrl, color: '2563EB', size: 22, underline: { color: '2563EB' } })],
+                link: fullUrl,
+            }),
+        ], { after: 60 }));
     } else {
-        docChildren.push(new Paragraph({
-            children: [
-                new TextRun({ text: '- URL: ', bold: true, color: '1E293B', size: 22 }),
-                new TextRun({ text: 'N/A', color: '374151', size: 22 }),
-            ],
-            spacing: { after: 60 },
-        }));
+        docChildren.push(indentedPara([
+            new TextRun({ text: 'URL: ', bold: true, color: '1E293B', size: 22 }),
+            new TextRun({ text: 'N/A', color: '374151', size: 22 }),
+        ], { after: 60 }));
     }
 
-    docChildren.push(new Paragraph({
-        children: [
-            new TextRun({ text: '- Description: ', bold: true, color: '1E293B', size: 22 }),
-            new TextRun({ text: description, color: '374151', size: 22 }),
-        ],
-        spacing: { after: 120 },
-    }));
+    docChildren.push(indentedPara([
+        new TextRun({ text: 'Description: ', bold: true, color: '1E293B', size: 22 }),
+        new TextRun({ text: description, color: '374151', size: 22 }),
+    ], { after: 120 }));
 
     let imageRun = null;
+    let imageWidthPx = null;
     const imgInfo = await readLocalImage(imagePath, 400);
     if (imgInfo) {
         try {
+            imageWidthPx = imgInfo.width;
             imageRun = new ImageRun({
                 data: imgInfo.data,
                 transformation: { width: imgInfo.width, height: imgInfo.height },
@@ -138,7 +154,7 @@ const generateSimpleCaseSections = async (post, project, imagePath, caseNumber) 
         }
     }
 
-    const borderedTable = buildBorderedImageTable(imageRun);
+    const borderedTable = buildBorderedImageTable(imageRun, imageWidthPx);
     if (borderedTable) {
         docChildren.push(borderedTable);
     }

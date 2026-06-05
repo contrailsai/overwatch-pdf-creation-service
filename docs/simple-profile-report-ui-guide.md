@@ -7,7 +7,7 @@ Minimal DOCX profile reports for cleaner client-facing output. Same request flow
 | Report type | Format | Use case |
 |-------------|--------|----------|
 | `Profile` | `docx` / `pdf` | Full analysis (overview, stats, violations, legal, reasoning) |
-| `SimpleProfile` | **`docx` only** | Plain summary: account info + numbered cases (S1, S2, …) with URL, description, and image |
+| `SimpleProfile` | **`docx` only** | Plain summary: account info + numbered cases (I, II, …) with URL, description, and image |
 
 ## Request payload
 
@@ -42,7 +42,7 @@ Minimal DOCX profile reports for cleaner client-facing output. Same request flow
 - `reportFormat` must be `"docx"` — PDF is rejected by validation.
 - `profile._id` is **required** (used in report hash deduplication).
 - `postIds` must be a non-empty array of valid Mongo ObjectIds (the cases to include).
-- `postIds` order is preserved in the report (S1 = first ID, S2 = second, etc.).
+- `postIds` order is preserved in the report (I = first ID, II = second, etc.).
 
 ## Profile fields used in the document
 
@@ -51,19 +51,21 @@ Minimal DOCX profile reports for cleaner client-facing output. Same request flow
 | Name of the account | `profile.metadata.full_name`, else `@profile.username` |
 | Link to the account | `profile.profile_url` (hyperlink) |
 | Number of followers | `profile.metadata.follower_count` (line omitted if missing) |
-| Note | `joining date: {account_creation_date}` and/or `location`, joined by ` \| ` (line omitted if both missing) |
+| Note | `This account's said location: {location}` (line omitted if location missing) |
 
 ## Case fields used in the document
 
 Each case is rendered as:
 
 ```
-S1
-- URL: <post.original_url>
-- Description: <review_details.reasoning or analysis_results.categorization_reason>
-<case image with black border>
+I
+    URL: <post.original_url>
+    Description: <review_details.reasoning or analysis_results.categorization_reason>
+    <case image with tight black border, indented with content>
 ```
 
+- Case numbers use Roman numerals (I, II, III, …).
+- URL, description, and image are indented relative to the case number.
 - Description uses the same reasoning source as the full Profile DOCX “Analysis & Complete Reasoning” section.
 - A leading `Description:` prefix in the reasoning text is stripped automatically.
 
