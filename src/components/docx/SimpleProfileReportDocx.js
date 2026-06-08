@@ -2,30 +2,62 @@
  * SimpleProfileReportDocx.js
  *
  * Generates a minimal profile DOCX: plain profile summary + numbered cases
- * (I, II, …) with URL, description, and bordered image. No header/footer branding.
+ * (I., II., …) with URL, description, and bordered image. No header/footer branding.
  */
 
 const {
     Document, Packer, Paragraph, TextRun, ImageRun,
     Table, TableRow, TableCell,
     WidthType, BorderStyle, AlignmentType,
-    ExternalHyperlink,
+    ExternalHyperlink, Tab, TabStopType,
 } = require('docx');
 
 const {
     getCaseData,
     readLocalImage,
-    metaPara,
     sectionDivider,
 } = require('./SingleCaseReportDocx');
 
+const FONT = 'Times New Roman';
 const CASE_CONTENT_INDENT = 720;
 const IMAGE_CELL_PADDING = 60;
+
+const caseContentTabStops = [{ type: TabStopType.LEFT, position: CASE_CONTENT_INDENT }];
+
+const tabRun = () => new TextRun({ children: [new Tab()], font: FONT });
+
+const caseContentIndent = { left: CASE_CONTENT_INDENT, hanging: CASE_CONTENT_INDENT };
 
 const BLACK_BORDER = {
     style: BorderStyle.SINGLE,
     size: 18,
     color: '000000',
+};
+
+const textRun = (text, opts = {}) => new TextRun({
+    text,
+    font: FONT,
+    color: opts.color || '374151',
+    size: opts.size || 22,
+    bold: opts.bold || false,
+    underline: opts.underline,
+});
+
+const simpleMetaPara = (label, value, isUrl = false) => {
+    const children = [textRun(`${label}: `, { bold: true, color: '1E293B' })];
+
+    if (isUrl && value && value !== 'N/A') {
+        children.push(
+            new ExternalHyperlink({
+                children: [textRun(value, { color: '2563EB', underline: { color: '2563EB' } })],
+                link: value,
+            }),
+        );
+    } else {
+        children.push(textRun(value, { color: '374151' }));
+    }
+
+    return new Paragraph({ children, spacing: { after: 60 } });
 };
 
 const formatAccountName = (profile) => {
@@ -60,12 +92,6 @@ const stripDescriptionPrefix = (text) => {
     if (!text) return text;
     return text.replace(/^Description:\s*/i, '').trim();
 };
-
-const indentedPara = (children, spacing = {}) => new Paragraph({
-    children,
-    indent: { left: CASE_CONTENT_INDENT },
-    spacing,
-});
 
 const buildBorderedImageTable = (imageRun, imageWidthPx) => {
     if (!imageRun || !imageWidthPx) return null;
@@ -111,33 +137,42 @@ const generateSimpleCaseSections = async (post, project, imagePath, caseNumber) 
     const { reasoning } = getCaseData(post, project);
     const description = stripDescriptionPrefix(reasoning);
     const fullUrl = post.original_url || post.url;
+    const caseLabel = `${toRomanNumeral(caseNumber)}.   `;
 
     const docChildren = [];
 
-    docChildren.push(new Paragraph({
-        children: [new TextRun({ text: toRomanNumeral(caseNumber), bold: true, size: 24, color: '1E293B' })],
-        spacing: { before: caseNumber === 1 ? 200 : 0, after: 100 },
-    }));
+    const urlLineChildren = [
+        textRun(caseLabel, { bold: true, color: '1E293B' }),
+        tabRun(),
+        textRun('URL: ', { bold: true, color: '1E293B' }),
+    ];
 
     if (fullUrl) {
-        docChildren.push(indentedPara([
-            new TextRun({ text: 'URL: ', bold: true, color: '1E293B', size: 22 }),
+        urlLineChildren.push(
             new ExternalHyperlink({
-                children: [new TextRun({ text: fullUrl, color: '2563EB', size: 22, underline: { color: '2563EB' } })],
+                children: [textRun(fullUrl, { color: '2563EB', underline: { color: '2563EB' } })],
                 link: fullUrl,
             }),
-        ], { after: 60 }));
+        );
     } else {
-        docChildren.push(indentedPara([
-            new TextRun({ text: 'URL: ', bold: true, color: '1E293B', size: 22 }),
-            new TextRun({ text: 'N/A', color: '374151', size: 22 }),
-        ], { after: 60 }));
+        urlLineChildren.push(textRun('N/A', { color: '374151' }));
     }
 
-    docChildren.push(indentedPara([
-        new TextRun({ text: 'Description: ', bold: true, color: '1E293B', size: 22 }),
-        new TextRun({ text: description, color: '374151', size: 22 }),
-    ], { after: 120 }));
+    docChildren.push(new Paragraph({
+        children: urlLineChildren,
+        tabStops: caseContentTabStops,
+        indent: caseContentIndent,
+        spacing: { before: caseNumber === 1 ? 200 : 0, after: 80 },
+    }));
+
+    docChildren.push(new Paragraph({
+        children: [
+            textRun('Description: ', { bold: true, color: '1E293B' }),
+            textRun(description, { color: '374151' }),
+        ],
+        indent: { left: CASE_CONTENT_INDENT },
+        spacing: { after: 120 },
+    }));
 
     let imageRun = null;
     let imageWidthPx = null;
@@ -174,23 +209,26 @@ const generateSimpleCaseSections = async (post, project, imagePath, caseNumber) 
 const generateSimpleProfileDocxBuffer = async (profile, cases, project, imagePaths) => {
     const docChildren = [];
 
-    docChildren.push(metaPara('Name of the account', formatAccountName(profile)));
+    docChildren.push(simpleMetaPara('Name of the account', formatAccountName(profile)));
 
     if (profile?.profile_url) {
-        docChildren.push(metaPara('Link to the account', profile.profile_url, true));
+        docChildren.push(simpleMetaPara('Link to the account', profile.profile_url, true));
     }
 
     const followerCount = profile?.metadata?.follower_count;
     if (typeof followerCount === 'number') {
-        docChildren.push(metaPara('Number of followers', followerCount.toLocaleString()));
+        docChildren.push(simpleMetaPara('Number of followers', followerCount.toLocaleString()));
     }
 
     const note = formatProfileNote(profile);
     if (note) {
-        docChildren.push(metaPara('Note', note));
+        docChildren.push(simpleMetaPara('Note', note));
     }
 
-    docChildren.push(sectionDivider(300));
+    docChildren.push(new Paragraph({
+        children: [textRun('Evidence', { bold: true, color: '1E293B' })],
+        spacing: { before: 200, after: 300 },
+    }));
 
     for (let i = 0; i < cases.length; i++) {
         const caseSections = await generateSimpleCaseSections(cases[i], project, imagePaths[i], i + 1);
@@ -198,7 +236,7 @@ const generateSimpleProfileDocxBuffer = async (profile, cases, project, imagePat
     }
 
     const doc = new Document({
-        styles: { default: { document: { run: { font: 'Calibri' } } } },
+        styles: { default: { document: { run: { font: FONT } } } },
         sections: [
             {
                 properties: {

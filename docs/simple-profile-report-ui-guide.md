@@ -53,20 +53,22 @@ Minimal DOCX profile reports for cleaner client-facing output. Same request flow
 | Number of followers | `profile.metadata.follower_count` (line omitted if missing) |
 | Note | `This account's said location: {location}` (line omitted if location missing) |
 
+Below the profile block, the heading **Evidence** introduces the numbered cases.
+
 ## Case fields used in the document
 
 Each case is rendered as:
 
 ```
-I
-    URL: <post.original_url>
-    Description: <review_details.reasoning or analysis_results.categorization_reason>
-    <case image with tight black border, indented with content>
+I.   URL: <post.original_url>
+     Description: <review reasoning>
+     <case image with tight black border>
 ```
 
-- Case numbers use Roman numerals (I, II, III, …).
-- URL, description, and image are indented relative to the case number.
+- Case markers use Roman numerals with a trailing period (I., II., III., …).
+- URL starts on the same line as the case number; Description is on the next line, indented to align.
 - Description uses the same reasoning source as the full Profile DOCX “Analysis & Complete Reasoning” section.
+- The document uses Times New Roman throughout.
 - A leading `Description:` prefix in the reasoning text is stripped automatically.
 
 ## Hash generation
