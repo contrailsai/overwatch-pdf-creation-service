@@ -72,6 +72,32 @@ test('validatePayload rejects SimpleProfile with pdf', () => {
   assert.match(result.errors.join(' '), /SimpleProfile is only supported with reportFormat docx/i);
 });
 
+test('validatePayload accepts SimpleCase with docx', () => {
+  const payload = {
+    projectId: 'project-1',
+    database_name: 'tenant_db',
+    postIds: [new ObjectId().toString()],
+    reportType: 'SimpleCase',
+    reportFormat: 'docx',
+  };
+  const result = validatePayload(payload);
+  assert.equal(result.valid, true);
+  assert.equal(result.errors.length, 0);
+});
+
+test('validatePayload rejects SimpleCase with pdf', () => {
+  const payload = {
+    projectId: 'project-1',
+    database_name: 'tenant_db',
+    postIds: [new ObjectId().toString()],
+    reportType: 'SimpleCase',
+    reportFormat: 'pdf',
+  };
+  const result = validatePayload(payload);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /SimpleCase is only supported with reportFormat docx/i);
+});
+
 test('generateReportHash is deterministic regardless of post order', () => {
   const id1 = new ObjectId().toString();
   const id2 = new ObjectId().toString();

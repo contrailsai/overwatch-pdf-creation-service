@@ -1,9 +1,9 @@
 const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 
-const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'Summary']);
-const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile']);
-const DOCX_ONLY_REPORT_TYPES = new Set(['SimpleProfile']);
+const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase', 'Summary']);
+const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase']);
+const DOCX_ONLY_REPORT_TYPES = new Set(['SimpleProfile', 'SimpleCase']);
 
 function generateReportHash(projectId, postIds, reportType, profileId = '', reportFormat = 'pdf') {
   const sortedIds = [...postIds].sort();
