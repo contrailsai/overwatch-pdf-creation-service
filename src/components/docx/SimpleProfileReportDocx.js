@@ -13,7 +13,6 @@ const {
 } = require('docx');
 
 const {
-    getCaseData,
     readLocalImage,
     sectionDivider,
 } = require('./SingleCaseReportDocx');
@@ -133,9 +132,21 @@ const buildBorderedImageTable = (imageRun, imageWidthPx) => {
     });
 };
 
+const getSimpleCaseDescription = (post) => {
+    const review = post.review_details || {};
+    const simpleDescription = review.simple_report_description;
+    if (typeof simpleDescription === 'string' && simpleDescription.trim().length > 0) {
+        return simpleDescription;
+    }
+    const reasoning = review.reasoning;
+    if (typeof reasoning === 'string' && reasoning.trim().length > 0) {
+        return reasoning;
+    }
+    return 'No description provided.';
+};
+
 const generateSimpleCaseSections = async (post, project, imagePath, caseNumber) => {
-    const { reasoning } = getCaseData(post, project);
-    const description = stripDescriptionPrefix(reasoning);
+    const description = stripDescriptionPrefix(getSimpleCaseDescription(post));
     const fullUrl = post.original_url || post.url;
     const caseLabel = `${toRomanNumeral(caseNumber)}.   `;
 

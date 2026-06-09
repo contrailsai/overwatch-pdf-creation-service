@@ -61,15 +61,15 @@ Each case is rendered as:
 
 ```
 I.   URL: <post.original_url>
-     Description: <review reasoning>
+     Description: <case description>
      <case image with tight black border>
 ```
 
 - Case markers use Roman numerals with a trailing period (I., II., III., …).
 - URL starts on the same line as the case number; Description is on the next line, indented to align.
-- Description uses the same reasoning source as the full Profile DOCX “Analysis & Complete Reasoning” section.
+- Description uses `review_details.simple_report_description` when present and non-empty; otherwise it falls back to `review_details.reasoning`. Only `review_details` is consulted — `analysis_results` is never used for Simple Profile reports.
 - The document uses Times New Roman throughout.
-- A leading `Description:` prefix in the reasoning text is stripped automatically.
+- A leading `Description:` prefix in the description text is stripped automatically.
 
 ## Hash generation
 
