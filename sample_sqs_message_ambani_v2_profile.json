@@ -1,0 +1,58 @@
+{
+  "projectId": "Ambani",
+  "postIds": ["69d7614e0c0f759055c86d20"],
+  "database_name": "Ambani-Data-v2",
+  "reportType": "Profile",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "Ambani",
+    "project_details": {
+      "description": "Ambani v3 schema test tenant",
+      "labels": [
+        { "name": "Fraud", "severity": "high" },
+        { "name": "Impersonation", "severity": "high" }
+      ],
+      "legal_codes": []
+    }
+  },
+  "profile": {
+    "_id": "69dd29c80c0f7590554172a1",
+    "schema_version": 3,
+    "platform": "instagram",
+    "platform_user_id": null,
+    "username": "tinytoontunes",
+    "display_name": "tinytoontunes",
+    "profile_url": "https://instagram.com/tinytoontunes",
+    "is_verified": false,
+    "workflow": {
+      "review_status": "pending",
+      "client_status": "open",
+      "reviewed_at": null
+    },
+    "list": {
+      "risk": 41,
+      "risk_rank": "low",
+      "post_count": 1,
+      "reviewed_post_count": 1,
+      "max_threat_score": 41,
+      "last_active_at": null,
+      "follower_count": 8263,
+      "location": null
+    },
+    "enrichment": {
+      "biography": "✨ Creating magic with 2D, 3D & AI videos! 🎥 \nWe bring joy & creativity to every frame! 😄\nDM for paid promotion ✉️",
+      "profile_pic_s3": "https://cxo-demo.s3.ap-south-1.amazonaws.com/profiles/instagram/tinytoontunes/0.jpg",
+      "media_count": 30,
+      "account_created_at": null,
+      "following_count": 8,
+      "profile_pic": null
+    },
+    "review_details": {},
+    "client_notes": [],
+    "system": {
+      "created_at": null,
+      "updated_at": "2026-04-27T18:58:44.745Z",
+      "last_synced_from_post_at": null
+    }
+  }
+}

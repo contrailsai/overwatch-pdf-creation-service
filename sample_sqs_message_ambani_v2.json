@@ -1,0 +1,18 @@
+{
+  "projectId": "Ambani",
+  "postIds": [
+    "69810f0b3c24564a2cb28467",
+    "69d7614e0c0f759055c86d20"
+  ],
+  "database_name": "Ambani-Data-v2",
+  "reportType": "Detailed",
+  "reportFormat": "pdf",
+  "project": [
+    {
+      "project_name": "Ambani",
+      "mongo_db_map": "Ambani-Data-v2",
+      "project_details": "{\"description\":\"Ambani v3 schema test tenant\",\"labels\":[{\"name\":\"Fraud\",\"severity\":\"high\"},{\"name\":\"Impersonation\",\"severity\":\"high\"},{\"name\":\"scam\",\"severity\":\"medium\"}],\"legal_codes\":[{\"name\":\"IT ACT 2000 - SECTION 66D\",\"codeName\":\"SECTION 66D\",\"severity\":\"high\"}]}"
+    }
+  ],
+  "profile": null
+}

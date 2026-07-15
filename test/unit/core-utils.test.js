@@ -1,11 +1,22 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const { ObjectId } = require('mongodb');
 const {
   validatePayload,
   generateReportHash,
   orderPostsByRequestedIds,
+  normalizePost,
+  normalizeProfile,
+  resolvePostMediaUrl,
+  mapCaseEventToUpdateHistory,
 } = require('../../src/core-utils');
+
+const fixtureDir = path.join(__dirname, '../fixtures/v3');
+const v3Post = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'post.json'), 'utf8'));
+const v3CaseEvent = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'case_event.json'), 'utf8'));
+const v3Profile = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'profile_tinytoontunes.json'), 'utf8'));
 
 test('validatePayload accepts a valid PDF payload', () => {
   const payload = {
@@ -118,4 +129,103 @@ test('orderPostsByRequestedIds preserves request order', () => {
     ordered.map((post) => post._id.toString()),
     [id3.toString(), id1.toString(), id2.toString()],
   );
+});
+
+test('resolvePostMediaUrl prefers content.media s3_url then original_url', () => {
+  assert.equal(
+    resolvePostMediaUrl(v3Post),
+    'https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/122109709275055636/0.jpg',
+  );
+  assert.equal(
+    resolvePostMediaUrl({
+      content: { media: [{ original_url: 'https://example.com/orig.jpg' }] },
+    }),
+    'https://example.com/orig.jpg',
+  );
+  assert.equal(
+    resolvePostMediaUrl({
+      post_content: { media_urls: [{ s3_url: 'https://example.com/legacy.jpg' }] },
+    }),
+    'https://example.com/legacy.jpg',
+  );
+});
+
+test('mapCaseEventToUpdateHistory maps actor/summary/occurred_at', () => {
+  const mapped = mapCaseEventToUpdateHistory(v3CaseEvent);
+  assert.equal(mapped.updated_by, null);
+  assert.equal(mapped.updated_at, '2026-05-02T09:11:46.148Z');
+  assert.match(mapped.changes_summary, /Takedown initiated/i);
+});
+
+test('normalizePost maps v3 fields into report shape', () => {
+  const joinedProfile = {
+    _id: '69dd135d0c0f759055410743',
+    list: { follower_count: 1500 },
+  };
+  const history = [mapCaseEventToUpdateHistory(v3CaseEvent)];
+  const normalized = normalizePost(v3Post, { joinedProfile, updateHistory: history });
+
+  assert.equal(normalized._id, '69810f0b3c24564a2cb28467');
+  assert.equal(normalized.post_id, '122109709275055636');
+  assert.equal(normalized.platform, 'facebook');
+  assert.equal(normalized.client_status, 'alerted');
+  assert.equal(normalized.processed, true);
+  assert.match(normalized.caption, /Lottery number/);
+  assert.equal(normalized.user.username, 'Nita ambani   India ');
+  assert.equal(normalized.user.follower_count, 1500);
+  assert.equal(normalized.sourcing_date, '2026-02-02T20:54:34.920Z');
+  assert.equal(normalized.created_at, '2026-02-02T20:54:34.920Z');
+  assert.equal(normalized.takedown_info.status, 'under_review');
+  assert.equal(normalized.stats.like_count, 0);
+  assert.equal(normalized.update_history.length, 1);
+  assert.match(normalized.update_history[0].changes_summary, /Takedown initiated/i);
+});
+
+test('normalizePost defaults client_status to open', () => {
+  const normalized = normalizePost({
+    _id: new ObjectId(),
+    content: { caption: 'x' },
+  });
+  assert.equal(normalized.client_status, 'open');
+  assert.equal(normalized.processed, false);
+});
+
+test('normalizeProfile maps enrichment/list into metadata', () => {
+  const normalized = normalizeProfile(v3Profile);
+  assert.equal(normalized.username, 'tinytoontunes');
+  assert.equal(normalized.metadata.biography, 'Creating magic with 2D, 3D & AI videos!');
+  assert.equal(normalized.metadata.follower_count, 8263);
+  assert.equal(normalized.metadata.following_count, 8);
+  assert.equal(normalized.metadata.media_count, 30);
+  assert.equal(normalized.metadata.account_creation_date, '2024-01-11T00:00:00.000Z');
+  assert.equal(
+    normalized.metadata.profile_pic,
+    'https://cxo-demo.s3.ap-south-1.amazonaws.com/profiles/instagram/tinytoontunes/0.jpg',
+  );
+});
+
+test('normalizeProfile preserves existing metadata over enrichment', () => {
+  const legacy = {
+    _id: 'p1',
+    username: 'legacy_user',
+    metadata: {
+      biography: 'Keep me',
+      follower_count: 99,
+      profile_pic: 'https://example.com/keep.jpg',
+      account_creation_date: '2020-01-01T00:00:00.000Z',
+    },
+    enrichment: {
+      biography: 'Ignore me',
+      profile_pic_s3: 'https://example.com/ignore.jpg',
+      account_created_at: '2021-01-01T00:00:00.000Z',
+      following_count: 5,
+    },
+    list: { follower_count: 1 },
+  };
+  const normalized = normalizeProfile(legacy);
+  assert.equal(normalized.metadata.biography, 'Keep me');
+  assert.equal(normalized.metadata.follower_count, 99);
+  assert.equal(normalized.metadata.profile_pic, 'https://example.com/keep.jpg');
+  assert.equal(normalized.metadata.account_creation_date, '2020-01-01T00:00:00.000Z');
+  assert.equal(normalized.metadata.following_count, 5);
 });

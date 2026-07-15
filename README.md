@@ -37,7 +37,7 @@ When an SQS message is received, the Lambda executes the following pipeline:
 1. **Initialization & Parsing:** 
    Extracts `projectId`, `postIds`, `reportType`, `database_name`, and tracing context (`otelCarrier` / `messageAttributes`) from the SQS payload.
 2. **Data Fetching (10%):** 
-   Connects to MongoDB and fetches the full metadata for the requested `postIds` from the `Posts` collection. The array order requested in the SQS payload is strictly maintained.
+   Connects to MongoDB and fetches the full metadata for the requested `postIds` from the `posts` collection (schema v3). Profile enrichment comes from `profiles` via `profile_id`; action logs come from `case_events`. The array order requested in the SQS payload is strictly maintained.
 3. **Image Processing & Caching (30%):** 
    * Iterates through the posts and downloads associated S3 image URLs to Lambda's `/tmp/images` ephemeral storage.
    * Compresses and resizes images to a max width of 800px using `sharp`. 

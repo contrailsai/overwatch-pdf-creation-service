@@ -9,6 +9,9 @@ const { trace, metrics, SpanStatusCode } = require('@opentelemetry/api');
 const {
   generateReportHash,
   normalizePost,
+  normalizeProfile,
+  resolvePostMediaUrl,
+  mapCaseEventToUpdateHistory,
   validatePayload,
   orderPostsByRequestedIds,
 } = require('./core-utils');
@@ -142,20 +145,24 @@ async function processAndCacheImages(posts, concurrency = 5) {
   for (let i = 0; i < posts.length; i += concurrency) {
     const chunk = posts.slice(i, i + concurrency);
     const promises = chunk.map(async (post, index) => {
-      let imageUrl = null;
-      if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-        imageUrl = post.post_content.media_urls[0].s3_url || post.post_content.media_urls[0].url;
-      } else if (post.s3_url) {
-        imageUrl = post.s3_url;
-      } else if (post.image_url) {
-        imageUrl = post.image_url;
-      }
+      const imageUrl = resolvePostMediaUrl(post);
       const localPath = await processImage(imageUrl, post._id);
       results[i + index] = localPath;
     });
     await Promise.all(promises);
   }
   return results;
+}
+
+function groupCaseEventsByEntityId(events) {
+  const byEntityId = new Map();
+  for (const event of events) {
+    const key = event.entity_id?.toString?.() || String(event.entity_id);
+    if (!byEntityId.has(key)) byEntityId.set(key, []);
+    const mapped = mapCaseEventToUpdateHistory(event);
+    if (mapped) byEntityId.get(key).push(mapped);
+  }
+  return byEntityId;
 }
 
 async function withSpan(name, attributes, fn) {
@@ -194,11 +201,20 @@ async function runReportJob(client, payload, options = {}) {
     throw err;
   }
 
-  const { projectId, postIds, reportType, reportFormat, database_name, profile } = payload;
+  const { projectId, postIds, reportType, reportFormat, database_name } = payload;
   const isDocx = validation.normalizedReportFormat === 'docx';
 
+  // Normalize profile before image fetch so v3 enrichment.profile_pic_s3 maps to metadata.profile_pic
+  const normalizedProfile = payload.profile ? normalizeProfile(payload.profile) : null;
+
   const startTime = process.hrtime();
-  const reportHash = generateReportHash(projectId, postIds, reportType, profile?._id, reportFormat || 'pdf');
+  const reportHash = generateReportHash(
+    projectId,
+    postIds,
+    reportType,
+    normalizedProfile?._id,
+    reportFormat || 'pdf',
+  );
 
   console.log(`Created the report Hash as: ${reportHash}`);
 
@@ -206,12 +222,41 @@ async function runReportJob(client, payload, options = {}) {
     const db = client.db(database_name);
     const project = normalizeProjectField(payload.project);
 
-    await updateReportStatus(reportHash, '[10%] Fetching Posts from DB');
+    await updateReportStatus(reportHash, '[10%] Fetching posts from DB');
 
     const objectIds = buildObjectIds(postIds);
-    const postsFromDb = await db.collection('Posts').find({ _id: { $in: objectIds } }).toArray();
+    const postsFromDb = await db.collection('posts').find({ _id: { $in: objectIds } }).toArray();
 
     const orderedPosts = orderPostsByRequestedIds(postIds, postsFromDb);
+
+    const profileIds = [
+      ...new Set(
+        orderedPosts
+          .map((p) => p.profile_id)
+          .filter(Boolean)
+          .map((id) => id.toString()),
+      ),
+    ];
+    const profilesById = new Map();
+    if (profileIds.length > 0) {
+      const joinedProfiles = await db
+        .collection('profiles')
+        .find({ _id: { $in: buildObjectIds(profileIds) } })
+        .toArray();
+      for (const p of joinedProfiles) {
+        profilesById.set(p._id.toString(), p);
+      }
+    }
+
+    const caseEvents = await db
+      .collection('case_events')
+      .find({
+        entity_type: 'post',
+        entity_id: { $in: objectIds },
+      })
+      .sort({ occurred_at: 1 })
+      .toArray();
+    const eventsByPostId = groupCaseEventsByEntityId(caseEvents);
 
     await updateReportStatus(reportHash, '[30%] Processing Images');
 
@@ -221,14 +266,27 @@ async function runReportJob(client, payload, options = {}) {
       async () => {
         const imgs = await processAndCacheImages(orderedPosts, 10);
         let profilePic = null;
-        if (reportType === 'Profile' && profile?.metadata?.profile_pic) {
-          profilePic = await processImage(profile.metadata.profile_pic, profile._id, 'profile');
+        const needsProfilePic =
+          (reportType === 'Profile' || reportType === 'SimpleProfile') &&
+          normalizedProfile?.metadata?.profile_pic;
+        if (needsProfilePic) {
+          profilePic = await processImage(
+            normalizedProfile.metadata.profile_pic,
+            normalizedProfile._id,
+            'profile',
+          );
         }
         return { compressedImages: imgs, compressedProfilePic: profilePic };
       },
     );
 
-    const posts = orderedPosts.map((p) => normalizePost(p));
+    const posts = orderedPosts.map((p) => {
+      const profileKey = p.profile_id?.toString?.() || (p.profile_id ? String(p.profile_id) : null);
+      return normalizePost(p, {
+        joinedProfile: profileKey ? profilesById.get(profileKey) || null : null,
+        updateHistory: eventsByPostId.get(p._id.toString()) || [],
+      });
+    });
 
     const reportLabel = isDocx ? 'DOCX' : 'PDF';
     await updateReportStatus(reportHash, `[60%] Generating ${reportLabel} report`);
@@ -246,10 +304,17 @@ async function runReportJob(client, payload, options = {}) {
           return await generateSingleCaseDocxBuffer(posts[0], project, compressedImages[0], clientDetails);
         }
         if (reportType === 'Profile') {
-          return await generateProfileDocxBuffer(profile, posts, project, compressedImages, compressedProfilePic, clientDetails);
+          return await generateProfileDocxBuffer(
+            normalizedProfile,
+            posts,
+            project,
+            compressedImages,
+            compressedProfilePic,
+            clientDetails,
+          );
         }
         if (reportType === 'SimpleProfile') {
-          return await generateSimpleProfileDocxBuffer(profile, posts, project, compressedImages);
+          return await generateSimpleProfileDocxBuffer(normalizedProfile, posts, project, compressedImages);
         }
         if (reportType === 'SimpleCase') {
           return await generateSimpleCaseDocxBuffer(posts[0], project, compressedImages[0]);
@@ -292,7 +357,7 @@ async function runReportJob(client, payload, options = {}) {
         if (reportType === 'Profile') {
           return await renderToStream(
             React.createElement(ProfileReportDocument, {
-              profile,
+              profile: normalizedProfile,
               cases: posts,
               project,
               compressedImages,
