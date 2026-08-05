@@ -225,7 +225,7 @@ async function runReportJob(client, payload, options = {}) {
     await updateReportStatus(reportHash, '[10%] Fetching posts from DB');
 
     const objectIds = buildObjectIds(postIds);
-    const postsFromDb = await db.collection('posts').find({ _id: { $in: objectIds } }).toArray();
+    const postsFromDb = await db.collection('Posts').find({ _id: { $in: objectIds } }).toArray();
 
     const orderedPosts = orderPostsByRequestedIds(postIds, postsFromDb);
 
