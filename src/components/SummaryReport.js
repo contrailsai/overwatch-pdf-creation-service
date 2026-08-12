@@ -155,11 +155,17 @@ const styles = StyleSheet.create({
   },
 
   // Column Widths
-  colContent: { width: '34%', paddingRight: 8 },
+  colIndex: { width: '4%', paddingRight: 4, alignItems: 'center' },
+  colContent: { width: '30%', paddingRight: 8 },
   colPlatform: { width: '17%', paddingRight: 4 },
   colThreat: { width: '22%', paddingRight: 8 },
   colRisk: { width: '15%', paddingRight: 4 },
   colStatus: { width: '12%', alignItems: 'flex-start' },
+  indexText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: Theme.PRIMARY_BLUE,
+  },
 
   // Cell Specifics
   contentContainer: {
@@ -435,6 +441,7 @@ const MetricsSection = ({ posts }) => {
 
 const TableHeader = () => (
   <View style={styles.tableHeader} fixed>
+    <Text style={[styles.tableHeaderCell, styles.colIndex]}>#</Text>
     <Text style={[styles.tableHeaderCell, styles.colContent]}>Visual & Caption</Text>
     <Text style={[styles.tableHeaderCell, styles.colPlatform]}>Source Details</Text>
     <Text style={[styles.tableHeaderCell, styles.colThreat]}>Violations</Text>
@@ -443,7 +450,7 @@ const TableHeader = () => (
   </View>
 );
 
-const TableRow = ({ post, project, compressedImage }) => {
+const TableRow = ({ post, project, compressedImage, caseNumber }) => {
   const review = post.review_details || {};
   const riskScore = review.threat_score ?? post.analysis_results?.risk_score ?? 0;
   const riskInfo = getRiskLabel(riskScore);
@@ -525,6 +532,11 @@ const TableRow = ({ post, project, compressedImage }) => {
 
   return (
     <View style={styles.tableRow} wrap={false}>
+      {/* Column 0: Local case number */}
+      <View style={styles.colIndex}>
+        <Text style={styles.indexText}>{caseNumber}</Text>
+      </View>
+
       {/* Column 1: Content */}
       <View style={styles.colContent}>
         <View style={styles.contentContainer}>
@@ -634,6 +646,7 @@ export const RiskReportDocument = ({ posts, project, compressedImages }) => (
             post={post}
             project={project}
             compressedImage={compressedImages?.[idx]}
+            caseNumber={idx + 1}
           />
         ))}
       </View>

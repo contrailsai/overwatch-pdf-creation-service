@@ -714,7 +714,7 @@ const PageFooter = () => (
 );
 
 // --- DETAILED CASE PAGE ---
-export const DetailedCasePage = ({ post, project, compressedImage }) => {
+export const DetailedCasePage = ({ post, project, compressedImage, caseNumber }) => {
     const review = post.review_details || {};
     const analysis = post.analysis_results || {};
 
@@ -801,8 +801,7 @@ export const DetailedCasePage = ({ post, project, compressedImage }) => {
     if (review.flags?.is_fake_news === true || review.flags?.misinformation === true) mediaBadges.push({ label: 'MIS', color: '#EA580C' });
     if (isPoiPresent) mediaBadges.push({ label: 'POI', color: '#059669' });
 
-    const caseNumber = post.post_id || (post._id ? `#${String(post._id).slice(-5)}` : '');
-    const caseTitle = caseNumber ? `Case ${typeof caseNumber === 'string' && caseNumber.startsWith('#') ? caseNumber : '#' + caseNumber}` : 'Case Detail';
+    const caseTitle = caseNumber != null ? `Case #${caseNumber}` : 'Case Detail';
 
     // Pre-compute right-column section visibility for divider rendering
     const rightSections = [];
@@ -1144,7 +1143,8 @@ export const DetailedCasesReportDocument = ({ posts, project, compressedImages }
                     key={post._id || index} 
                     post={post} 
                     project={project} 
-                    compressedImage={compressedImages[index]} 
+                    compressedImage={compressedImages[index]}
+                    caseNumber={index + 1}
                 />
             ))}
         </Document>
