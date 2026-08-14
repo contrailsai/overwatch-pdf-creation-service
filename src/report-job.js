@@ -10,7 +10,9 @@ const {
   generateReportHash,
   normalizePost,
   normalizeProfile,
+  normalizeAd,
   resolvePostMediaUrl,
+  resolveAdCardMediaUrls,
   mapCaseEventToUpdateHistory,
   validatePayload,
   orderPostsByRequestedIds,
@@ -22,6 +24,8 @@ const { DetailedCasesReportDocument } = require('./components/DetailedCaseReport
 const { SingleCaseReportDocument } = require('./components/SingleCaseReport');
 const { ProfileReportDocument } = require('./components/ProfileReport');
 const { RiskReportDocument } = require('./components/SummaryReport');
+const { AdsSummaryReportDocument } = require('./components/AdsSummaryReport');
+const { AdsDetailedReportDocument } = require('./components/AdsDetailedReport');
 const { generateSingleCaseDocxBuffer } = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('./components/docx/ProfileReportDocx');
