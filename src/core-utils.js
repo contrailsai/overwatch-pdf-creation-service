@@ -214,12 +214,19 @@ function normalizePost(post, opts = {}) {
     joinedProfile?.follower_count ??
     null;
 
+  // V3: per-metric counts live under content.engagement (e.g. Rajasthan);
+  // Ambani/legacy still use top-level engagement.
+  const engagement = content.engagement || post.engagement || {};
+
   return {
     _id: post._id.toString(),
     created_at: toIsoOrNull(system.created_at ?? post.metadata?.created_at),
     sourcing_date: toIsoOrNull(list.sourced_at ?? post.metadata?.sourcing_date),
     posted_date: toIsoOrNull(
-      list.posted_at ?? post.engagement?.posted_at ?? post.metadata?.posted_date,
+      list.posted_at ??
+        engagement.posted_at ??
+        post.engagement?.posted_at ??
+        post.metadata?.posted_date,
     ),
     taken_at: content.taken_at || post.post_content?.taken_at || post.taken_at || null,
     updated_at: toIsoOrNull(system.updated_at ?? post.metadata?.updated_at),
@@ -260,10 +267,10 @@ function normalizePost(post, opts = {}) {
     analysis_results: post.analysis_results || null,
     client_notes: post.client_notes || [],
     stats: {
-      like_count: post.engagement?.likes || 0,
-      comment_count: post.engagement?.comments || 0,
-      share_count: post.engagement?.shares || 0,
-      view_count: post.engagement?.views || 0,
+      like_count: engagement.likes || 0,
+      comment_count: engagement.comments || 0,
+      share_count: engagement.shares || 0,
+      view_count: engagement.views || 0,
     },
   };
 }

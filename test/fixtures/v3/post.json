@@ -46,7 +46,17 @@
       }
     ],
     "language": null,
-    "post_type": "post"
+    "post_type": "post",
+    "engagement": {
+      "likes": 6421,
+      "comments": 312,
+      "shares": 88,
+      "views": 1197,
+      "retweets": 0,
+      "quotes": 0,
+      "replies": 0,
+      "bookmarks": 0
+    }
   },
   "author_snapshot": {
     "platform_user_id": null,

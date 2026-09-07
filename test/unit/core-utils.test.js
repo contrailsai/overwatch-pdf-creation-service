@@ -176,9 +176,46 @@ test('normalizePost maps v3 fields into report shape', () => {
   assert.equal(normalized.sourcing_date, '2026-02-02T20:54:34.920Z');
   assert.equal(normalized.created_at, '2026-02-02T20:54:34.920Z');
   assert.equal(normalized.takedown_info.status, 'under_review');
-  assert.equal(normalized.stats.like_count, 0);
+  assert.equal(normalized.stats.like_count, 6421);
+  assert.equal(normalized.stats.comment_count, 312);
+  assert.equal(normalized.stats.share_count, 88);
+  assert.equal(normalized.stats.view_count, 1197);
   assert.equal(normalized.update_history.length, 1);
   assert.match(normalized.update_history[0].changes_summary, /Takedown initiated/i);
+});
+
+test('normalizePost maps top-level engagement when content.engagement is absent', () => {
+  const normalized = normalizePost({
+    _id: new ObjectId(),
+    content: { caption: 'x' },
+    engagement: {
+      likes: 349,
+      comments: 0,
+      shares: 0,
+      views: 12194,
+      posted_at: '2026-08-24T08:30:25.000Z',
+    },
+  });
+  assert.equal(normalized.stats.like_count, 349);
+  assert.equal(normalized.stats.comment_count, 0);
+  assert.equal(normalized.stats.share_count, 0);
+  assert.equal(normalized.stats.view_count, 12194);
+  assert.equal(normalized.posted_date, '2026-08-24T08:30:25.000Z');
+});
+
+test('normalizePost prefers content.engagement over top-level engagement', () => {
+  const normalized = normalizePost({
+    _id: new ObjectId(),
+    content: {
+      caption: 'x',
+      engagement: { likes: 10, comments: 2, shares: 1, views: 100 },
+    },
+    engagement: { likes: 999, comments: 999, shares: 999, views: 999 },
+  });
+  assert.equal(normalized.stats.like_count, 10);
+  assert.equal(normalized.stats.comment_count, 2);
+  assert.equal(normalized.stats.share_count, 1);
+  assert.equal(normalized.stats.view_count, 100);
 });
 
 test('normalizePost defaults client_status to open', () => {
