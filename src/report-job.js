@@ -17,6 +17,13 @@ const {
   validatePayload,
   orderPostsByRequestedIds,
 } = require('./core-utils');
+const {
+  attachReportLander,
+  isDomainReviewed,
+  landerImageSrc,
+  screenshotSlicePlan,
+  SCREENSHOT_SUMMARY_RATIO,
+} = require('./domain-display');
 const { uploadStreamToS3, uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
 const { supabase, supabaseEnabled } = require('./supabase');
 
@@ -26,6 +33,8 @@ const { ProfileReportDocument } = require('./components/ProfileReport');
 const { RiskReportDocument } = require('./components/SummaryReport');
 const { AdsSummaryReportDocument } = require('./components/AdsSummaryReport');
 const { AdsDetailedReportDocument } = require('./components/AdsDetailedReport');
+const { DomainsSummaryReportDocument } = require('./components/DomainsSummaryReport');
+const { DomainsDetailedReportDocument } = require('./components/DomainsDetailedReport');
 const { generateSingleCaseDocxBuffer } = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('./components/docx/ProfileReportDocx');
@@ -158,6 +167,138 @@ async function processAndCacheImages(posts, concurrency = 5) {
   return results;
 }
 
+async function processAndCacheAdImages(ads, { includeAllCards = false, concurrency = 5 } = {}) {
+  const compressedImages = new Array(ads.length);
+  const compressedCardImages = new Array(ads.length);
+
+  for (let i = 0; i < ads.length; i += concurrency) {
+    const chunk = ads.slice(i, i + concurrency);
+    const promises = chunk.map(async (ad, index) => {
+      const cardUrls = resolveAdCardMediaUrls(ad);
+      const urlsToFetch = includeAllCards ? cardUrls.slice(0, 6) : cardUrls.slice(0, 1);
+      const cardPaths = await Promise.all(
+        urlsToFetch.map((url, cardIndex) => processImage(url, ad._id, `card_${cardIndex}`)),
+      );
+      compressedImages[i + index] = cardPaths[0] || null;
+      compressedCardImages[i + index] = includeAllCards ? cardPaths : [];
+    });
+    await Promise.all(promises);
+  }
+
+  return { compressedImages, compressedCardImages };
+}
+
+async function writeJpegFromBuffer(buffer, destPath, { width, extract } = {}) {
+  let pipeline = sharp(buffer);
+  if (extract) pipeline = pipeline.extract(extract);
+  if (width) pipeline = pipeline.resize({ width, withoutEnlargement: true });
+  await pipeline.jpeg({ quality: 80 }).toFile(destPath);
+  return destPath;
+}
+
+function landerCacheToken(domain) {
+  const raw = domain?.reportVariantKey || domain?.reportLander?.label || 'default';
+  return String(raw).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48) || 'default';
+}
+
+async function processLanderScreenshot(
+  imageUrl,
+  id,
+  variantToken = 'default',
+  { includeSlices = true, heroRatio, heroWidth = 900, heroSuffix = 'lander_hero' } = {},
+) {
+  ensureImageCacheDir();
+  if (!imageUrl) return { heroPath: null, slicePaths: [] };
+
+  const safeId = `${String(id).replace(/[^a-zA-Z0-9_-]/g, '_')}_${variantToken}`;
+  let buffer;
+  try {
+    buffer = await fetchImageFromS3Url(imageUrl);
+  } catch (error) {
+    console.error(`Failed to fetch lander screenshot ${imageUrl} for ${id}:`, error.message);
+    return { heroPath: null, slicePaths: [] };
+  }
+
+  const heroPath = path.join(IMAGE_CACHE_DIR, `${safeId}_${heroSuffix}.jpg`);
+
+  try {
+    const meta = await sharp(buffer).metadata();
+    const width = meta.width || 0;
+    const height = meta.height || 0;
+    const plan = screenshotSlicePlan(width, height, heroRatio != null ? { heroRatio } : {});
+
+    if (!plan.heroHeight || !width) {
+      if (!fs.existsSync(heroPath)) {
+        await writeJpegFromBuffer(buffer, heroPath, { width: heroWidth });
+      }
+      return { heroPath, slicePaths: includeSlices ? [heroPath] : [] };
+    }
+
+    if (!fs.existsSync(heroPath)) {
+      await writeJpegFromBuffer(buffer, heroPath, {
+        width: heroWidth,
+        extract: { left: 0, top: 0, width, height: plan.heroHeight },
+      });
+    }
+
+    if (!includeSlices) {
+      return { heroPath, slicePaths: [] };
+    }
+
+    const slicePaths = [];
+    for (let i = 0; i < plan.slices.length; i += 1) {
+      const slice = plan.slices[i];
+      const slicePath = path.join(IMAGE_CACHE_DIR, `${safeId}_lander_slice_${String(i).padStart(2, '0')}.jpg`);
+      if (!fs.existsSync(slicePath)) {
+        await writeJpegFromBuffer(buffer, slicePath, {
+          width: 720,
+          extract: { left: 0, top: slice.top, width, height: slice.height },
+        });
+      }
+      slicePaths.push(slicePath);
+    }
+    return { heroPath, slicePaths };
+  } catch (sharpError) {
+    const magicBytes = buffer.toString('hex', 0, 4).toLowerCase();
+    if (magicBytes.startsWith('ffd8') || magicBytes.startsWith('8950')) {
+      console.warn(
+        `[Fallback Triggered] Sharp failed on lander screenshot for ${id}. Saving raw file. Reason: ${sharpError.message}`,
+      );
+      fs.writeFileSync(heroPath, buffer);
+      return { heroPath, slicePaths: includeSlices ? [heroPath] : [] };
+    }
+    console.error(
+      `[Irrecoverable] Failed to slice lander screenshot for ${id}. Magic Bytes: ${magicBytes} - Error:`,
+      sharpError.message,
+    );
+    return { heroPath: null, slicePaths: [] };
+  }
+}
+
+async function processAndCacheDomainImages(domains, { includeSlices = false, concurrency = 5 } = {}) {
+  const compressedImages = new Array(domains.length);
+  const screenshotSlices = new Array(domains.length);
+
+  for (let i = 0; i < domains.length; i += concurrency) {
+    const chunk = domains.slice(i, i + concurrency);
+    const promises = chunk.map(async (domain, index) => {
+      const landerUrl = landerImageSrc(domain);
+      const variantToken = landerCacheToken(domain);
+      const { heroPath, slicePaths } = await processLanderScreenshot(landerUrl, domain._id, variantToken, {
+        includeSlices,
+        ...(includeSlices
+          ? {}
+          : { heroRatio: SCREENSHOT_SUMMARY_RATIO, heroWidth: 800, heroSuffix: 'lander_thumb' }),
+      });
+      compressedImages[i + index] = heroPath;
+      screenshotSlices[i + index] = includeSlices ? slicePaths : [];
+    });
+    await Promise.all(promises);
+  }
+
+  return { compressedImages, screenshotSlices };
+}
+
 function groupCaseEventsByEntityId(events) {
   const byEntityId = new Map();
   for (const event of events) {
@@ -205,8 +346,12 @@ async function runReportJob(client, payload, options = {}) {
     throw err;
   }
 
-  const { projectId, postIds, reportType, reportFormat, database_name } = payload;
+  const { projectId, reportType, reportFormat, database_name } = payload;
+  const entityType = validation.entityType;
+  const entityIds = validation.entityIds;
   const isDocx = validation.normalizedReportFormat === 'docx';
+  const isAds = entityType === 'ads';
+  const isDomains = entityType === 'domains';
 
   // Normalize profile before image fetch so v3 enrichment.profile_pic_s3 maps to metadata.profile_pic
   const normalizedProfile = payload.profile ? normalizeProfile(payload.profile) : null;
@@ -214,10 +359,12 @@ async function runReportJob(client, payload, options = {}) {
   const startTime = process.hrtime();
   const reportHash = generateReportHash(
     projectId,
-    postIds,
+    entityIds,
     reportType,
     normalizedProfile?._id,
     reportFormat || 'pdf',
+    entityType,
+    isDomains ? payload.variantKeysByDomainId : null,
   );
 
   console.log(`Created the report Hash as: ${reportHash}`);
@@ -226,12 +373,181 @@ async function runReportJob(client, payload, options = {}) {
     const db = client.db(database_name);
     const project = normalizeProjectField(payload.project);
 
+    let storageUrl;
+    let localPath;
+
+    if (isDomains) {
+      await updateReportStatus(reportHash, '[10%] Fetching domains from DB');
+
+      const objectIds = buildObjectIds(entityIds);
+      const domainsFromDb = await db.collection('Domains').find({ _id: { $in: objectIds } }).toArray();
+      const orderedDomains = orderPostsByRequestedIds(entityIds, domainsFromDb)
+        .filter(isDomainReviewed)
+        .map((domain) => {
+          const id = domain._id?.toString?.() || String(domain._id);
+          const variantKey = payload.variantKeysByDomainId?.[id] || payload.variantKeysByDomainId?.[domain._id] || '';
+          return attachReportLander(domain, variantKey);
+        });
+
+      if (orderedDomains.length === 0) {
+        throw new Error('No reviewed domains found for the requested IDs');
+      }
+
+      await updateReportStatus(reportHash, '[30%] Processing Images');
+
+      const includeSlices = reportType === 'Detailed';
+      const { compressedImages, screenshotSlices } = await withSpan(
+        'process-images',
+        { 'images.count': orderedDomains.length, 'entity.type': 'domains' },
+        async () => processAndCacheDomainImages(orderedDomains, { includeSlices, concurrency: 10 }),
+      );
+
+      await updateReportStatus(reportHash, '[60%] Generating PDF report');
+
+      const pdfStream = await withSpan(
+        'render-pdf',
+        { 'report.type': reportType, 'domain.count': orderedDomains.length, 'entity.type': 'domains' },
+        async () => {
+          if (reportType === 'Summary') {
+            return await renderToStream(
+              React.createElement(DomainsSummaryReportDocument, {
+                domains: orderedDomains,
+                project,
+                compressedImages,
+              }),
+            );
+          }
+          if (reportType === 'Detailed') {
+            return await renderToStream(
+              React.createElement(DomainsDetailedReportDocument, {
+                domains: orderedDomains,
+                project,
+                compressedImages,
+                screenshotSlices,
+              }),
+            );
+          }
+          throw new Error(`Domain PDF report type '${reportType}' is not supported`);
+        },
+      );
+
+      await updateReportStatus(reportHash, '[80%] Uploading to Storage');
+
+      if (persist === 'local') {
+        if (!localOutputDir) {
+          throw new Error('localOutputDir is required when persist === "local"');
+        }
+        fs.mkdirSync(localOutputDir, { recursive: true });
+        const fileName = `${reportHash}.pdf`;
+        localPath = path.join(localOutputDir, fileName);
+        await pipeline(pdfStream, fs.createWriteStream(localPath));
+        storageUrl = `local://${fileName}`;
+      } else {
+        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
+          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
+        });
+      }
+    } else if (isAds) {
+      await updateReportStatus(reportHash, '[10%] Fetching ads from DB');
+
+      const objectIds = buildObjectIds(entityIds);
+      const adsFromDb = await db.collection('Ads').find({ _id: { $in: objectIds } }).toArray();
+      const orderedAds = orderPostsByRequestedIds(entityIds, adsFromDb);
+
+      const profileIds = [
+        ...new Set(
+          orderedAds
+            .map((ad) => ad.ad_profile_id)
+            .filter(Boolean)
+            .map((id) => id.toString()),
+        ),
+      ];
+      const profilesById = new Map();
+      if (profileIds.length > 0) {
+        const joinedProfiles = await db
+          .collection('ad_profiles')
+          .find({ _id: { $in: buildObjectIds(profileIds) } })
+          .toArray();
+        for (const profile of joinedProfiles) {
+          profilesById.set(profile._id.toString(), profile);
+        }
+      }
+
+      const caseEvents = await db
+        .collection('case_events')
+        .find({
+          entity_type: { $in: ['ad', 'ads'] },
+          entity_id: { $in: objectIds },
+        })
+        .sort({ occurred_at: 1 })
+        .toArray();
+      const eventsByAdId = groupCaseEventsByEntityId(caseEvents);
+
+      await updateReportStatus(reportHash, '[30%] Processing Images');
+
+      const includeAllCards = reportType === 'Detailed';
+      const { compressedImages, compressedCardImages } = await withSpan(
+        'process-images',
+        { 'images.count': orderedAds.length, 'entity.type': 'ads' },
+        async () => processAndCacheAdImages(orderedAds, { includeAllCards, concurrency: 10 }),
+      );
+
+      const ads = orderedAds.map((ad) => {
+        const profileKey = ad.ad_profile_id?.toString?.() || (ad.ad_profile_id ? String(ad.ad_profile_id) : null);
+        return normalizeAd(ad, {
+          joinedProfile: profileKey ? profilesById.get(profileKey) || null : null,
+          updateHistory: eventsByAdId.get(ad._id.toString()) || [],
+        });
+      });
+
+      await updateReportStatus(reportHash, '[60%] Generating PDF report');
+
+      const pdfStream = await withSpan(
+        'render-pdf',
+        { 'report.type': reportType, 'ad.count': ads.length, 'entity.type': 'ads' },
+        async () => {
+          if (reportType === 'Summary') {
+            return await renderToStream(
+              React.createElement(AdsSummaryReportDocument, { ads, project, compressedImages }),
+            );
+          }
+          if (reportType === 'Detailed') {
+            return await renderToStream(
+              React.createElement(AdsDetailedReportDocument, {
+                ads,
+                project,
+                compressedImages,
+                compressedCardImages,
+              }),
+            );
+          }
+          throw new Error(`Ads PDF report type '${reportType}' is not supported`);
+        },
+      );
+
+      await updateReportStatus(reportHash, '[80%] Uploading to Storage');
+
+      if (persist === 'local') {
+        if (!localOutputDir) {
+          throw new Error('localOutputDir is required when persist === "local"');
+        }
+        fs.mkdirSync(localOutputDir, { recursive: true });
+        const fileName = `${reportHash}.pdf`;
+        localPath = path.join(localOutputDir, fileName);
+        await pipeline(pdfStream, fs.createWriteStream(localPath));
+        storageUrl = `local://${fileName}`;
+      } else {
+        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
+          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
+        });
+      }
+    } else {
     await updateReportStatus(reportHash, '[10%] Fetching posts from DB');
 
-    const objectIds = buildObjectIds(postIds);
+    const objectIds = buildObjectIds(entityIds);
     const postsFromDb = await db.collection('Posts').find({ _id: { $in: objectIds } }).toArray();
 
-    const orderedPosts = orderPostsByRequestedIds(postIds, postsFromDb);
+    const orderedPosts = orderPostsByRequestedIds(entityIds, postsFromDb);
 
     const profileIds = [
       ...new Set(
@@ -294,9 +610,6 @@ async function runReportJob(client, payload, options = {}) {
 
     const reportLabel = isDocx ? 'DOCX' : 'PDF';
     await updateReportStatus(reportHash, `[60%] Generating ${reportLabel} report`);
-
-    let storageUrl;
-    let localPath;
 
     if (isDocx) {
       const docxBuffer = await withSpan('render-docx', { 'report.type': reportType, 'post.count': posts.length }, async () => {
@@ -392,6 +705,7 @@ async function runReportJob(client, payload, options = {}) {
         });
       }
     }
+    }
 
     await updateReportStatus(reportHash, '[100%] Complete', {
       s3_path: storageUrl,
@@ -435,4 +749,6 @@ module.exports = {
   IMAGE_CACHE_DIR,
   processImage,
   processAndCacheImages,
+  processAndCacheAdImages,
+  processAndCacheDomainImages,
 };

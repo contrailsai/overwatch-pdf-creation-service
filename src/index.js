@@ -37,7 +37,7 @@ exports.handler = async (event) => {
         continue;
       }
 
-      const { projectId, postIds, reportType, reportFormat, otelCarrier } = payload;
+      const { projectId, reportType, reportFormat, otelCarrier } = payload;
       const validation = validatePayload(payload);
 
       if (!validation.valid) {
@@ -79,7 +79,14 @@ exports.handler = async (event) => {
               try {
                 span.setAttribute('project.id', projectId);
                 span.setAttribute('report.type', reportType);
-                span.setAttribute('post.count', postIds.length);
+                span.setAttribute('entity.type', validation.entityType);
+                if (validation.entityType === 'ads') {
+                  span.setAttribute('ad.count', validation.entityIds.length);
+                } else if (validation.entityType === 'domains') {
+                  span.setAttribute('domain.count', validation.entityIds.length);
+                } else {
+                  span.setAttribute('post.count', validation.entityIds.length);
+                }
 
                 await runReportJob(client, payload, { persist: 's3' });
                 span.end();

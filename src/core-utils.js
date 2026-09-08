@@ -4,29 +4,63 @@ const { ObjectId } = require('mongodb');
 const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase', 'Summary']);
 const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase']);
 const DOCX_ONLY_REPORT_TYPES = new Set(['SimpleProfile', 'SimpleCase']);
-const SUPPORTED_ENTITY_TYPES = new Set(['posts', 'ads']);
+const SUPPORTED_ENTITY_TYPES = new Set(['posts', 'ads', 'domains']);
 const ADS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
+const DOMAINS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
+
+function entityIdFieldName(entityType) {
+  if (entityType === 'ads') return 'adIds';
+  if (entityType === 'domains') return 'domainIds';
+  return 'postIds';
+}
 
 function resolveEntityType(payload) {
   const explicit = payload?.entityType ? String(payload.entityType).toLowerCase() : '';
   if (explicit === 'ads' || explicit === 'ad') return 'ads';
+  if (explicit === 'domains' || explicit === 'domain') return 'domains';
   if (explicit === 'posts' || explicit === 'post') return 'posts';
+  if (Array.isArray(payload?.domainIds) && payload.domainIds.length > 0) return 'domains';
   if (Array.isArray(payload?.adIds) && payload.adIds.length > 0) return 'ads';
   return 'posts';
 }
 
 function resolveEntityIds(payload) {
-  if (resolveEntityType(payload) === 'ads') {
+  const entityType = resolveEntityType(payload);
+  if (entityType === 'ads') {
     if (Array.isArray(payload?.adIds) && payload.adIds.length > 0) return payload.adIds;
+    return payload?.postIds;
+  }
+  if (entityType === 'domains') {
+    if (Array.isArray(payload?.domainIds) && payload.domainIds.length > 0) return payload.domainIds;
     return payload?.postIds;
   }
   return payload?.postIds;
 }
 
-function generateReportHash(projectId, postIds, reportType, profileId = '', reportFormat = 'pdf', entityType = 'posts') {
+function buildDomainHashExtra(domainIds, variantKeysByDomainId) {
+  const map = variantKeysByDomainId && typeof variantKeysByDomainId === 'object' ? variantKeysByDomainId : {};
+  return [...(domainIds || [])]
+    .map((id) => `${id}=${map[id] || ''}`)
+    .sort()
+    .join('|');
+}
+
+function generateReportHash(
+  projectId,
+  postIds,
+  reportType,
+  profileId = '',
+  reportFormat = 'pdf',
+  entityType = 'posts',
+  variantKeysByDomainId = null,
+) {
   const sortedIds = [...postIds].sort();
   const entitySuffix = entityType && entityType !== 'posts' ? `-${entityType}` : '';
   const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}-${reportFormat}${entitySuffix}`;
+  if (entityType === 'domains') {
+    const extra = buildDomainHashExtra(postIds, variantKeysByDomainId);
+    return crypto.createHash('sha256').update(`${rawString}-${extra}`).digest('hex');
+  }
   return crypto.createHash('sha256').update(rawString).digest('hex');
 }
 
@@ -51,7 +85,9 @@ function validatePayload(payload) {
     errors.push(`entityType must be one of: ${Array.from(SUPPORTED_ENTITY_TYPES).join(', ')}`);
   }
   if (!Array.isArray(entityIds) || entityIds.length === 0) {
-    errors.push(entityType === 'ads' ? 'adIds or postIds must be a non-empty array' : 'postIds must be a non-empty array');
+    if (entityType === 'ads') errors.push('adIds or postIds must be a non-empty array');
+    else if (entityType === 'domains') errors.push('domainIds or postIds must be a non-empty array');
+    else errors.push('postIds must be a non-empty array');
   }
   if (!reportType || typeof reportType !== 'string' || !SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`reportType must be one of: ${Array.from(SUPPORTED_REPORT_TYPES).join(', ')}`);
@@ -59,11 +95,17 @@ function validatePayload(payload) {
   if (entityType === 'ads' && reportType && !ADS_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`Ads reports only support: ${Array.from(ADS_SUPPORTED_REPORT_TYPES).join(', ')}`);
   }
+  if (entityType === 'domains' && reportType && !DOMAINS_SUPPORTED_REPORT_TYPES.has(reportType)) {
+    errors.push(`Domain reports only support: ${Array.from(DOMAINS_SUPPORTED_REPORT_TYPES).join(', ')}`);
+  }
   if (!['pdf', 'docx'].includes(normalizedReportFormat)) {
     errors.push('reportFormat must be either pdf or docx');
   }
   if (entityType === 'ads' && normalizedReportFormat === 'docx') {
     errors.push('Ads reports currently support PDF only');
+  }
+  if (entityType === 'domains' && normalizedReportFormat === 'docx') {
+    errors.push('Domain reports currently support PDF only');
   }
   if (normalizedReportFormat === 'docx' && !DOCX_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`DOCX is only supported for: ${Array.from(DOCX_SUPPORTED_REPORT_TYPES).join(', ')}`);
@@ -74,7 +116,7 @@ function validatePayload(payload) {
   if (Array.isArray(entityIds)) {
     const invalidIds = entityIds.filter((id) => !ObjectId.isValid(id));
     if (invalidIds.length > 0) {
-      const fieldName = entityType === 'ads' ? 'adIds' : 'postIds';
+      const fieldName = entityIdFieldName(entityType);
       errors.push(`${fieldName} contains invalid ObjectId values (${invalidIds.slice(0, 5).join(', ')})`);
     }
   }
@@ -492,4 +534,7 @@ module.exports = {
   DOCX_ONLY_REPORT_TYPES,
   SUPPORTED_ENTITY_TYPES,
   ADS_SUPPORTED_REPORT_TYPES,
+  DOMAINS_SUPPORTED_REPORT_TYPES,
+  buildDomainHashExtra,
+  entityIdFieldName,
 };

@@ -1,0 +1,25 @@
+{
+  "projectId": "SEBI",
+  "entityType": "ads",
+  "adIds": [
+    "6a7d79609b3282bb5130f160",
+    "6a7d79869b3282bb5130f164",
+    "6a7d79699b3282bb5130f161",
+    "6a7d86f21f503c02391076e1"
+  ],
+  "database_name": "SEBI-Data-Search",
+  "reportType": "Detailed",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "SEBI",
+    "project_details": {
+      "labels": [
+        { "name": "Fraud", "severity": "high" },
+        { "name": "Impersonation", "severity": "high" },
+        { "name": "scam", "severity": "medium" }
+      ],
+      "legal_codes": []
+    }
+  },
+  "profile": null
+}

@@ -1,0 +1,29 @@
+{
+  "projectId": "SEBI",
+  "entityType": "domains",
+  "domainIds": [
+    "6a8be234abdd8b24b75f1761",
+    "6a8be238abdd8b24b75f1779",
+    "6a8be23babdd8b24b75f1797"
+  ],
+  "variantKeysByDomainId": {
+    "6a8be234abdd8b24b75f1761": "pEl8X=origtupcls",
+    "6a8be238abdd8b24b75f1779": "pEl8X=origtupcls",
+    "6a8be23babdd8b24b75f1797": "pEl8X=tupkapday"
+  },
+  "database_name": "SEBI-Data-Search",
+  "reportType": "Summary",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "SEBI",
+    "project_details": {
+      "labels": [
+        { "name": "Fraud", "severity": "high" },
+        { "name": "Impersonation", "severity": "high" },
+        { "name": "scam", "severity": "medium" }
+      ],
+      "legal_codes": []
+    }
+  },
+  "profile": null
+}

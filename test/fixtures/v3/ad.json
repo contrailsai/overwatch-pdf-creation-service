@@ -1,0 +1,119 @@
+{
+  "_id": "6a7d79609b3282bb5130f160",
+  "schema_version": 3,
+  "platform": "meta",
+  "source": "meta_ads_library",
+  "platform_ad_id": "1061241996416851",
+  "original_url": "https://www.facebook.com/ads/library/?id=1061241996416851",
+  "ad_profile_id": "6a7d79607f82a0c5cc92a7b7",
+  "workflow": {
+    "ai_status": "pending",
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "available",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": null,
+    "review_threat_score": null,
+    "effective_threat_score": null,
+    "risk_rank": null,
+    "threat_types": [],
+    "violation_flags": [],
+    "posted_at": "2026-08-10T07:00:00.000Z",
+    "sourced_at": "2026-08-13T07:59:18.590Z",
+    "reviewed_at": null,
+    "poi_detected": false,
+    "start_date": "2026-08-10T07:00:00.000Z",
+    "end_date": "2026-08-10T07:00:00.000Z",
+    "is_active": true,
+    "display_format": "DPA",
+    "publisher_platforms": ["FACEBOOK", "INSTAGRAM", "MESSENGER", "THREADS"],
+    "impressions_text": "<100",
+    "card_count": 6
+  },
+  "content": {
+    "title": "{{product.description}}",
+    "body": null,
+    "caption": "amazon.in",
+    "cta_text": "Sign up",
+    "cta_type": "SIGN_UP",
+    "display_format": "DPA",
+    "link_url": "https://www.amazon.in/",
+    "cards": [
+      {
+        "title": "Explore New Ways Forward",
+        "body": "",
+        "caption": "amazon.in",
+        "cta_text": "Sign Up",
+        "cta_type": "SIGN_UP",
+        "link_url": "http://ilnkarip.com/?content_id=4",
+        "link_description": "Amazon.in: Online Shopping India",
+        "media": [
+          {
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/meta_ads/1061241996416851/0/0.jpg",
+            "type": "image",
+            "role": "card_image"
+          }
+        ]
+      },
+      {
+        "title": "Explore New Ways Forward",
+        "body": "",
+        "caption": "amazon.in",
+        "cta_text": "Sign Up",
+        "cta_type": "SIGN_UP",
+        "link_url": "http://ilnkarip.com/?content_id=3",
+        "link_description": "Amazon.in: Online Shopping India",
+        "media": [
+          {
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/meta_ads/1061241996416851/1/0.jpg",
+            "type": "image",
+            "role": "card_image"
+          }
+        ]
+      }
+    ],
+    "media": [
+      {
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/meta_ads/1061241996416851/0/0.jpg",
+        "type": "image",
+        "role": "card_image",
+        "card_index": 0
+      }
+    ]
+  },
+  "advertiser_snapshot": {
+    "platform_page_id": "156569610873492",
+    "page_name": "Brooks Hughes Quinn",
+    "profile_url": "https://www.facebook.com/61552965517384/",
+    "page_categories": ["Topic"],
+    "page_like_count": 0
+  },
+  "ad_delivery": {
+    "is_active": true,
+    "start_date": "2026-08-10T07:00:00.000Z",
+    "end_date": "2026-08-10T07:00:00.000Z",
+    "publisher_platforms": ["FACEBOOK", "INSTAGRAM", "MESSENGER", "THREADS"],
+    "impressions_text": "<100",
+    "spend": null,
+    "currency": "",
+    "contains_digital_created_media": false,
+    "contains_sensitive_content": false
+  },
+  "source_payload": {
+    "ad_archive_id": "1061241996416851",
+    "page_name": "Brooks Hughes Quinn"
+  },
+  "analysis_results": {},
+  "review_details": {},
+  "ingestion": {
+    "type": "meta_ads_library",
+    "ingested_at": "2026-08-13T07:59:18.590Z"
+  },
+  "system": {
+    "created_at": "2026-08-13T07:59:18.590Z",
+    "updated_at": "2026-08-13T07:59:18.590Z"
+  }
+}

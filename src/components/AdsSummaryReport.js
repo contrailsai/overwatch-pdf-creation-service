@@ -137,8 +137,8 @@ const styles = StyleSheet.create({
   colContent: { width: '26%', paddingRight: 8 },
   colAdvertiser: { width: '16%', paddingRight: 4 },
   colDest: { width: '22%', paddingRight: 8 },
-  colThreat: { width: '14%', paddingRight: 4 },
-  colRisk: { width: '10%', paddingRight: 4 },
+  colThreat: { width: '12%', paddingRight: 4 },
+  colRisk: { width: '12%', paddingRight: 4 },
   colStatus: { width: '8%', alignItems: 'flex-start' },
   indexText: { fontSize: 8, fontWeight: '700', color: Theme.PRIMARY_BLUE },
   contentContainer: { flexDirection: 'row' },
@@ -343,7 +343,7 @@ const MetricsSection = ({ ads }) => {
           <Text style={[styles.metricValue, { color: Theme.SAFE }]}>{active.toLocaleString()}</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Destination Mismatch</Text>
+          <Text style={[styles.metricLabel, { textAlign: 'center' }]}>Destination{'\n'}Mismatch</Text>
           <Text style={[styles.metricValue, { color: mismatch > 0 ? Theme.RISK_HIGH : Theme.PRIMARY_BLUE }]}>
             {mismatch.toLocaleString()}
           </Text>
@@ -416,7 +416,7 @@ const TableRow = ({ ad, project, compressedImage, caseNumber }) => {
   const imageUrl = compressedImage || ad.signedImageUrl || null;
   const postedDate = formatCompleteDate(ad.posted_date || ad.start_date || ad.created_at);
   const sourcedDate = formatCompleteDate(ad.sourcing_date || ad.created_at);
-  const platforms = (ad.publisher_platforms || []).slice(0, 3).join(' · ') || 'META';
+  const platforms = (ad.publisher_platforms || []).slice(0, 2).join(' · ') || 'META';
   const creativeText = ad.title || ad.caption || ad.cta_text || 'Untitled creative';
 
   return (
@@ -482,7 +482,7 @@ const TableRow = ({ ad, project, compressedImage, caseNumber }) => {
 
       <View style={styles.colRisk}>
         <View style={[styles.riskBadgeTable, { backgroundColor: riskInfo.bg, borderColor: riskInfo.color }]}>
-          <Text style={[styles.riskBadgeTextTable, { color: riskInfo.color }]}>{riskInfo.label}</Text>
+          <Text style={[styles.riskBadgeTextTable, { color: riskInfo.color }]} wrap={false}>{riskInfo.label}</Text>
         </View>
       </View>
 

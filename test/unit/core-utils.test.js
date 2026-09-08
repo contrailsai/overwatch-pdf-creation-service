@@ -9,6 +9,7 @@ const {
   orderPostsByRequestedIds,
   normalizePost,
   normalizeProfile,
+  normalizeAd,
   resolvePostMediaUrl,
   mapCaseEventToUpdateHistory,
 } = require('../../src/core-utils');
@@ -17,6 +18,7 @@ const fixtureDir = path.join(__dirname, '../fixtures/v3');
 const v3Post = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'post.json'), 'utf8'));
 const v3CaseEvent = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'case_event.json'), 'utf8'));
 const v3Profile = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'profile_tinytoontunes.json'), 'utf8'));
+const v3Ad = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'ad.json'), 'utf8'));
 
 test('validatePayload accepts a valid PDF payload', () => {
   const payload = {
@@ -265,4 +267,197 @@ test('normalizeProfile preserves existing metadata over enrichment', () => {
   assert.equal(normalized.metadata.profile_pic, 'https://example.com/keep.jpg');
   assert.equal(normalized.metadata.account_creation_date, '2020-01-01T00:00:00.000Z');
   assert.equal(normalized.metadata.following_count, 5);
+});
+
+test('validatePayload accepts entityType ads with adIds', () => {
+  const payload = {
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ads',
+    adIds: [v3Ad._id],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  };
+  const result = validatePayload(payload);
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'ads');
+  assert.deepEqual(result.entityIds, [v3Ad._id]);
+});
+
+test('validatePayload infers ads when adIds is present without entityType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    adIds: [v3Ad._id],
+    reportType: 'Detailed',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'ads');
+});
+
+test('validatePayload accepts ads IDs sent as postIds when entityType is ads', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ads',
+    postIds: [v3Ad._id],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'ads');
+  assert.deepEqual(result.entityIds, [v3Ad._id]);
+});
+
+test('validatePayload rejects ads with DOCX', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ads',
+    adIds: [v3Ad._id],
+    reportType: 'Summary',
+    reportFormat: 'docx',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /PDF only/i);
+});
+
+test('validatePayload rejects ads with Profile reportType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ads',
+    adIds: [v3Ad._id],
+    reportType: 'Profile',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Ads reports only support/i);
+});
+
+test('generateReportHash ads suffix differs from posts hash for the same IDs', () => {
+  const ids = [v3Ad._id, '6a7d79869b3282bb5130f164'];
+  const postsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf');
+  const postsHashExplicit = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'posts');
+  const adsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'ads');
+  assert.equal(postsHash, postsHashExplicit);
+  assert.notEqual(adsHash, postsHash);
+});
+
+test('validatePayload accepts entityType domains with domainIds', () => {
+  const payload = {
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'domains',
+    domainIds: ['6a8be234abdd8b24b75f1761'],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+    variantKeysByDomainId: { '6a8be234abdd8b24b75f1761': 'bare' },
+  };
+  const result = validatePayload(payload);
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'domains');
+  assert.deepEqual(result.entityIds, ['6a8be234abdd8b24b75f1761']);
+});
+
+test('validatePayload infers domains when domainIds is present without entityType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    domainIds: ['6a8be234abdd8b24b75f1761'],
+    reportType: 'Detailed',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'domains');
+});
+
+test('validatePayload rejects domains with DOCX', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'domains',
+    domainIds: ['6a8be234abdd8b24b75f1761'],
+    reportType: 'Summary',
+    reportFormat: 'docx',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /PDF only/i);
+});
+
+test('validatePayload rejects domains with Single reportType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'domains',
+    domainIds: ['6a8be234abdd8b24b75f1761'],
+    reportType: 'Single',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Domain reports only support/i);
+});
+
+test('generateReportHash domains extra differs by lander key and leaves posts/ads hashes unchanged', () => {
+  const crypto = require('crypto');
+  const ids = ['6a8be238abdd8b24b75f1779', '6a8be234abdd8b24b75f1761'];
+  const postsHash = generateReportHash('SEBI', ids, 'Detailed', '', 'pdf');
+  const adsHash = generateReportHash('SEBI', ids, 'Detailed', '', 'pdf', 'ads');
+  const bareKeys = {
+    '6a8be234abdd8b24b75f1761': 'bare',
+    '6a8be238abdd8b24b75f1779': 'bare',
+  };
+  const scamKeys = {
+    '6a8be234abdd8b24b75f1761': 'pEl8X=origtupcls',
+    '6a8be238abdd8b24b75f1779': 'bare',
+  };
+  const bareHash = generateReportHash('SEBI', ids, 'Detailed', '', 'pdf', 'domains', bareKeys);
+  const scamHash = generateReportHash('SEBI', ids, 'Detailed', '', 'pdf', 'domains', scamKeys);
+  const extra = [...ids].map((id) => `${id}=${bareKeys[id] || ''}`).sort().join('|');
+  const expectedRaw = `SEBI-${[...ids].sort().join(',')}-Detailed--pdf-domains-${extra}`;
+  assert.equal(bareHash, crypto.createHash('sha256').update(expectedRaw).digest('hex'));
+  assert.notEqual(bareHash, scamHash);
+  assert.notEqual(bareHash, postsHash);
+  assert.notEqual(bareHash, adsHash);
+  assert.equal(postsHash, generateReportHash('SEBI', ids, 'Detailed', '', 'pdf', 'posts', scamKeys));
+});
+
+test('normalizeAd maps page name, cards, and destination mismatch', () => {
+  const joinedProfile = {
+    page_name: 'Brooks Hughes Quinn',
+    display_name: 'Brooks Hughes Quinn',
+    profile_url: 'https://www.facebook.com/61552965517384/',
+    is_verified: false,
+    list: { follower_count: 0 },
+    enrichment: { page_like_count: 0, page_categories: ['Topic'] },
+  };
+  const normalized = normalizeAd(v3Ad, { joinedProfile, updateHistory: [] });
+
+  assert.equal(normalized._id, '6a7d79609b3282bb5130f160');
+  assert.equal(normalized.advertiser.page_name, 'Brooks Hughes Quinn');
+  assert.equal(normalized.cta_text, 'Sign up');
+  assert.equal(normalized.display_format, 'DPA');
+  assert.equal(normalized.shown_hostname, 'amazon.in');
+  assert.deepEqual(normalized.card_hostnames, ['ilnkarip.com']);
+  assert.equal(normalized.destination_mismatch, true);
+  assert.equal(normalized.cards.length, 2);
+  assert.equal(normalized.cards[0].link_url, 'http://ilnkarip.com/?content_id=4');
+  assert.equal(normalized.title, 'Explore New Ways Forward');
+  assert.equal(normalized.raw_title, '{{product.description}}');
+});
+
+test('normalizeAd falls back from template title to first real card title', () => {
+  const normalized = normalizeAd({
+    ...v3Ad,
+    content: {
+      ...v3Ad.content,
+      title: '{{product.description}}',
+      cards: [
+        { title: '{{product.name}}', link_url: 'http://ilnkarip.com/' },
+        { title: 'Explore New Ways Forward', link_url: 'http://ilnkarip.com/' },
+      ],
+    },
+  });
+  assert.equal(normalized.title, 'Explore New Ways Forward');
 });

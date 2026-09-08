@@ -158,6 +158,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: { fontSize: 6, fontWeight: 400, color: Theme.INK },
+  platformRow: { paddingHorizontal: 14, paddingVertical: 10 },
+  platformPills: { flexDirection: 'row', flexWrap: 'wrap' },
+  platformPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 3,
+    borderWidth: 0.5,
+    borderColor: Theme.LINE,
+    backgroundColor: Theme.SURFACE_ALT,
+    marginRight: 4,
+    marginBottom: 4,
+  },
+  platformPillText: { fontSize: 6, fontWeight: 600, color: Theme.INK },
   rightCard: {
     borderWidth: 0.5,
     borderColor: Theme.LINE,
@@ -197,18 +210,24 @@ const styles = StyleSheet.create({
   warningBody: { fontSize: 6, color: Theme.INK_SOFT, lineHeight: 1.45 },
   destRow: {
     flexDirection: 'row',
-    marginBottom: 5,
+    marginBottom: 6,
     alignItems: 'flex-start',
-    gap: 6,
   },
   destIndex: {
     fontSize: 6,
     color: Theme.SUBTLE,
-    width: 28,
+    width: 32,
+    marginRight: 6,
     paddingTop: 1,
   },
-  destLink: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none', flex: 1 },
-  destHost: { fontSize: 6, color: Theme.INK, fontWeight: 700, marginBottom: 1 },
+  destBody: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexDirection: 'column',
+  },
+  destLink: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none', marginTop: 2 },
+  destHost: { fontSize: 7, color: Theme.INK, fontWeight: 700, marginBottom: 2 },
+  destCardLinkText: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none' },
   shownBox: {
     backgroundColor: Theme.SURFACE_ALT,
     borderRadius: 3,
@@ -368,6 +387,12 @@ const labelColorMap = {
 };
 const getLabelColor = (key) => labelColorMap[key] || labelColorMap.slate;
 
+const formatPlatformName = (name) => {
+  if (!name) return '';
+  const s = String(name).trim();
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+
 const hostnameOf = (url) => {
   if (!url) return '';
   try {
@@ -453,7 +478,7 @@ export const AdsDetailedCasePage = ({ ad, project, compressedImage, compressedCa
   const startedShort = formatShortDateTime(ad.start_date || ad.posted_date);
   const processedShort = formatShortDateTime(ad.created_at);
   const advertiserName = ad.advertiser?.page_name || 'Unknown advertiser';
-  const platforms = (ad.publisher_platforms || []).join(' · ') || platformLabel;
+  const platformList = (ad.publisher_platforms || []).filter(Boolean);
   const creativeBody = ad.title || ad.body || ad.caption || '';
 
   const rightSections = [];
@@ -569,11 +594,21 @@ export const AdsDetailedCasePage = ({ ad, project, compressedImage, compressedCa
             </View>
 
             <View style={styles.softDivider} />
-            <View style={styles.statsRow}>
-              <View style={styles.statCell}>
-                <Text style={styles.statLabel}>Platforms</Text>
-                <Text style={styles.statValue}>{truncate(platforms, 42)}</Text>
+            <View style={styles.platformRow}>
+              <Text style={styles.statLabel}>Platforms</Text>
+              <View style={styles.platformPills}>
+                {platformList.length > 0 ? platformList.map((name, i) => (
+                  <View key={`${name}-${i}`} style={styles.platformPill}>
+                    <Text style={styles.platformPillText}>{formatPlatformName(name)}</Text>
+                  </View>
+                )) : (
+                  <Text style={styles.statValue}>—</Text>
+                )}
               </View>
+            </View>
+
+            <View style={styles.softDivider} />
+            <View style={styles.statsRow}>
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>Started</Text>
                 <Text style={styles.statValue}>{startedShort}</Text>
@@ -601,15 +636,21 @@ export const AdsDetailedCasePage = ({ ad, project, compressedImage, compressedCa
               <View style={styles.shownBox}>
                 <Text style={styles.shownLabel}>Shown destination</Text>
                 <Text style={styles.shownValue}>{ad.shown_hostname || hostnameOf(ad.link_url) || ad.caption || '—'}</Text>
-                {ad.link_url ? <Link src={ad.link_url} style={styles.destLink}>{truncate(ad.link_url, 70)}</Link> : null}
+                {ad.link_url ? (
+                  <Text style={styles.destCardLinkText}>
+                    <Link src={ad.link_url}>{truncate(ad.link_url, 70)}</Link>
+                  </Text>
+                ) : null}
               </View>
               {cards.length > 0 ? cards.map((card, i) => (
-                <View key={i} style={styles.destRow}>
+                <View key={i} style={styles.destRow} wrap={false}>
                   <Text style={styles.destIndex}>Card {i + 1}</Text>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.destBody}>
                     <Text style={styles.destHost}>{hostnameOf(card.link_url) || '—'}</Text>
                     {card.link_url ? (
-                      <Link src={card.link_url} style={styles.destLink}>{truncate(card.link_url, 70)}</Link>
+                      <Text style={styles.destCardLinkText}>
+                        <Link src={card.link_url}>{truncate(card.link_url, 70)}</Link>
+                      </Text>
                     ) : (
                       <Text style={styles.reasoningContent}>No landing URL</Text>
                     )}

@@ -1,0 +1,22 @@
+{
+  "projectId": "SEBI",
+  "entityType": "domains",
+  "domainIds": ["6a8be234abdd8b24b75f1761"],
+  "variantKeysByDomainId": {
+    "6a8be234abdd8b24b75f1761": "bare"
+  },
+  "database_name": "SEBI-Data-Search",
+  "reportType": "Detailed",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "SEBI",
+    "project_details": {
+      "labels": [
+        { "name": "Fraud", "severity": "high" },
+        { "name": "Impersonation", "severity": "high" }
+      ],
+      "legal_codes": []
+    }
+  },
+  "profile": null
+}
