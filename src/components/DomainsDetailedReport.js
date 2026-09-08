@@ -19,6 +19,10 @@ import {
 registerFonts();
 
 const SLICE_PAGE_SIZE = 12;
+const HERO_FRAME_HEIGHT = 210;
+const HERO_PAD = 8;
+const SLICE_CELL_HEIGHT = 188;
+const SLICE_PAD = 8;
 
 const styles = StyleSheet.create({
   page: {
@@ -86,21 +90,36 @@ const styles = StyleSheet.create({
   rightCol: { width: '54%' },
   heroFrame: {
     width: '100%',
-    height: 210,
+    height: HERO_FRAME_HEIGHT,
     borderRadius: 5,
     borderWidth: 0.5,
     borderColor: Theme.LINE,
     overflow: 'hidden',
     backgroundColor: Theme.SURFACE_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroWellRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: HERO_FRAME_HEIGHT - HERO_PAD * 2,
+  },
+  heroGutter: { width: HERO_PAD, height: HERO_PAD },
+  heroWell: {
+    flexGrow: 1,
+    flexShrink: 1,
+    height: HERO_FRAME_HEIGHT - HERO_PAD * 2,
   },
   hero: {
     width: '100%',
-    height: 210,
-    objectFit: 'cover',
+    height: HERO_FRAME_HEIGHT - HERO_PAD * 2,
+    objectFit: 'contain',
+    objectPosition: 'top',
   },
   heroPlaceholder: {
     width: '100%',
-    height: 210,
+    height: HERO_FRAME_HEIGHT,
     borderRadius: 5,
     borderWidth: 0.5,
     borderColor: Theme.LINE,
@@ -177,14 +196,34 @@ const styles = StyleSheet.create({
   sliceRow: { flexDirection: 'row', gap: 6, marginBottom: 5 },
   sliceCell: {
     width: '32.2%',
-    height: 188,
+    height: SLICE_CELL_HEIGHT,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.LINE,
     backgroundColor: Theme.SURFACE_ALT,
     overflow: 'hidden',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sliceImage: { width: '100%', height: 188, objectFit: 'cover' },
+  sliceWellRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: SLICE_CELL_HEIGHT - SLICE_PAD * 2,
+  },
+  sliceGutter: { width: SLICE_PAD, height: SLICE_PAD },
+  sliceWell: {
+    flexGrow: 1,
+    flexShrink: 1,
+    height: SLICE_CELL_HEIGHT - SLICE_PAD * 2,
+  },
+  sliceImage: {
+    width: '100%',
+    height: SLICE_CELL_HEIGHT - SLICE_PAD * 2,
+    objectFit: 'contain',
+    objectPosition: 'top',
+  },
   sliceBadge: {
     position: 'absolute',
     top: 4,
@@ -308,7 +347,13 @@ const DomainDossierPage = ({ domain, compressedImage, caseNumber }) => {
         <View style={styles.leftCol}>
           {compressedImage ? (
             <View style={styles.heroFrame}>
-              <Image style={styles.hero} src={compressedImage} />
+              <View style={styles.heroWellRow}>
+                <View style={styles.heroGutter} />
+                <View style={styles.heroWell}>
+                  <Image style={styles.hero} src={compressedImage} />
+                </View>
+                <View style={styles.heroGutter} />
+              </View>
             </View>
           ) : (
             <View style={styles.heroPlaceholder}>
@@ -318,7 +363,7 @@ const DomainDossierPage = ({ domain, compressedImage, caseNumber }) => {
         </View>
 
         <View style={styles.rightCol}>
-          <View style={[styles.sectionCard, { marginBottom: 0, minHeight: 210 }]}>
+          <View style={[styles.sectionCard, { marginBottom: 0, minHeight: HERO_FRAME_HEIGHT }]}>
             <Text style={styles.sectionLabel}>Page content</Text>
             {hasPageContent ? (
               <>
@@ -441,7 +486,13 @@ const DomainCaptureGalleryPages = ({ domain, screenshotSlices }) => {
             const number = pageIdx * SLICE_PAGE_SIZE + rowIdx * 3 + idx + 1;
             return (
               <View key={idx} style={styles.sliceCell}>
-                <Image style={styles.sliceImage} src={src} />
+                <View style={styles.sliceWellRow}>
+                  <View style={styles.sliceGutter} />
+                  <View style={styles.sliceWell}>
+                    <Image style={styles.sliceImage} src={src} />
+                  </View>
+                  <View style={styles.sliceGutter} />
+                </View>
                 <View style={styles.sliceBadge}>
                   <Text style={styles.sliceBadgeText}>{number}</Text>
                 </View>
