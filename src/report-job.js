@@ -11,11 +11,15 @@ const {
   normalizePost,
   normalizeProfile,
   normalizeAd,
+  normalizeAdProfile,
   resolvePostMediaUrl,
   resolveAdCardMediaUrls,
   mapCaseEventToUpdateHistory,
   validatePayload,
   orderPostsByRequestedIds,
+  isAdReviewed,
+  isAdProfileReviewed,
+  groupAdsAndDomainsByProfile,
 } = require('./core-utils');
 const {
   attachReportLander,
@@ -35,6 +39,8 @@ const { AdsSummaryReportDocument } = require('./components/AdsSummaryReport');
 const { AdsDetailedReportDocument } = require('./components/AdsDetailedReport');
 const { DomainsSummaryReportDocument } = require('./components/DomainsSummaryReport');
 const { DomainsDetailedReportDocument } = require('./components/DomainsDetailedReport');
+const { AdsProfilesSummaryReportDocument } = require('./components/AdsProfilesSummaryReport');
+const { AdsProfileReportDocument } = require('./components/AdsProfileReport');
 const { generateSingleCaseDocxBuffer } = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('./components/docx/ProfileReportDocx');
@@ -352,6 +358,7 @@ async function runReportJob(client, payload, options = {}) {
   const isDocx = validation.normalizedReportFormat === 'docx';
   const isAds = entityType === 'ads';
   const isDomains = entityType === 'domains';
+  const isAdProfiles = entityType === 'ad_profiles';
 
   // Normalize profile before image fetch so v3 enrichment.profile_pic_s3 maps to metadata.profile_pic
   const normalizedProfile = payload.profile ? normalizeProfile(payload.profile) : null;
@@ -447,6 +454,169 @@ async function runReportJob(client, payload, options = {}) {
           return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
         });
       }
+    } else if (isAdProfiles) {
+      await updateReportStatus(reportHash, '[10%] Fetching ad profiles from DB');
+
+      const objectIds = buildObjectIds(entityIds);
+      const profilesFromDb = await db.collection('Ad_profiles').find({ _id: { $in: objectIds } }).toArray();
+      const orderedProfiles = orderPostsByRequestedIds(entityIds, profilesFromDb).filter(isAdProfileReviewed);
+
+      if (orderedProfiles.length === 0) {
+        throw new Error('No reviewed ad profiles found for the requested IDs');
+      }
+
+      const reviewedProfileIds = orderedProfiles.map((p) => p._id);
+      const adsFromDb = await db
+        .collection('Ads')
+        .find({
+          ad_profile_id: { $in: reviewedProfileIds },
+          'list.reviewed_at': { $ne: null },
+        })
+        .toArray();
+      const reviewedAds = adsFromDb.filter(isAdReviewed);
+
+      const domainIdSet = new Set();
+      for (const ad of reviewedAds) {
+        for (const domainId of ad.linked_domain_ids || []) {
+          domainIdSet.add(domainId.toString());
+        }
+      }
+
+      const domainsById = new Map();
+      if (domainIdSet.size > 0) {
+        const domainsFromDb = await db
+          .collection('Domains')
+          .find({ _id: { $in: buildObjectIds([...domainIdSet]) } })
+          .toArray();
+        for (const domain of domainsFromDb.filter(isDomainReviewed)) {
+          domainsById.set(domain._id.toString(), attachReportLander(domain, ''));
+        }
+      }
+
+      const profilesById = new Map(orderedProfiles.map((p) => [p._id.toString(), p]));
+      const normalizedProfiles = orderedProfiles.map((p) => normalizeAdProfile(p));
+      const normalizedAds = reviewedAds.map((ad) => {
+        const profileKey = ad.ad_profile_id?.toString?.() || (ad.ad_profile_id ? String(ad.ad_profile_id) : null);
+        return normalizeAd(ad, {
+          joinedProfile: profileKey ? profilesById.get(profileKey) || null : null,
+          updateHistory: [],
+        });
+      });
+
+      const profileGroups = groupAdsAndDomainsByProfile(normalizedProfiles, normalizedAds, domainsById);
+
+      await updateReportStatus(reportHash, '[30%] Processing Images');
+
+      const displayAdsFlat = [];
+      const domainsFlat = [];
+      for (let i = 0; i < profileGroups.length; i += 1) {
+        for (const ad of profileGroups[i].displayAds) {
+          displayAdsFlat.push(ad);
+        }
+        for (const domain of profileGroups[i].domains) {
+          domainsFlat.push(domain);
+        }
+      }
+
+      const { compressedImages: compressedAdImages } = await withSpan(
+        'process-ad-images',
+        { 'images.count': displayAdsFlat.length, 'entity.type': 'ad_profiles' },
+        async () => processAndCacheAdImages(displayAdsFlat, { includeAllCards: false, concurrency: 10 }),
+      );
+
+      const { compressedImages: compressedDomainImages } = await withSpan(
+        'process-domain-images',
+        { 'images.count': domainsFlat.length, 'entity.type': 'ad_profiles' },
+        async () => processAndCacheDomainImages(domainsFlat, { includeSlices: false, concurrency: 10 }),
+      );
+
+      const compressedProfilePics = await withSpan(
+        'process-profile-images',
+        { 'images.count': profileGroups.length, 'entity.type': 'ad_profiles' },
+        async () => {
+          const pics = new Array(profileGroups.length);
+          const concurrency = 5;
+          for (let i = 0; i < profileGroups.length; i += concurrency) {
+            const chunk = profileGroups.slice(i, i + concurrency);
+            const paths = await Promise.all(
+              chunk.map((group, idx) =>
+                processImage(group.profile?.profile_pic, group.profile?._id || `profile_${i + idx}`, 'profile'),
+              ),
+            );
+            for (let j = 0; j < paths.length; j += 1) {
+              pics[i + j] = paths[j];
+            }
+          }
+          return pics;
+        },
+      );
+
+      const adImageById = new Map();
+      displayAdsFlat.forEach((ad, idx) => {
+        adImageById.set(ad._id?.toString?.() || String(ad._id), compressedAdImages[idx] || null);
+      });
+      const domainImageById = new Map();
+      domainsFlat.forEach((domain, idx) => {
+        domainImageById.set(domain._id?.toString?.() || String(domain._id), compressedDomainImages[idx] || null);
+      });
+
+      const profilesForReport = profileGroups.map((group, idx) => ({
+        ...group,
+        compressedProfilePic: compressedProfilePics[idx] || null,
+        compressedAdImages: group.displayAds.map(
+          (ad) => adImageById.get(ad._id?.toString?.() || String(ad._id)) || null,
+        ),
+        compressedDomainImages: group.domains.map(
+          (domain) => domainImageById.get(domain._id?.toString?.() || String(domain._id)) || null,
+        ),
+      }));
+
+      await updateReportStatus(reportHash, '[60%] Generating PDF report');
+
+      const pdfStream = await withSpan(
+        'render-pdf',
+        {
+          'report.type': reportType,
+          'ad_profile.count': profilesForReport.length,
+          'entity.type': 'ad_profiles',
+          'ad_profiles.layout': profilesForReport.length > 1 ? 'summary' : 'profile',
+        },
+        async () => {
+          // Layout is driven by reviewed profile count, not reportType.
+          // 1 profile → single dossier; 2+ → combined catalog summary.
+          if (profilesForReport.length > 1) {
+            return await renderToStream(
+              React.createElement(AdsProfilesSummaryReportDocument, {
+                profiles: profilesForReport,
+                project,
+              }),
+            );
+          }
+          return await renderToStream(
+            React.createElement(AdsProfileReportDocument, {
+              profiles: profilesForReport,
+              project,
+            }),
+          );
+        },
+      );
+
+      await updateReportStatus(reportHash, '[80%] Uploading to Storage');
+
+      if (persist === 'local') {
+        if (!localOutputDir) {
+          throw new Error('localOutputDir is required when persist === "local"');
+        }
+        fs.mkdirSync(localOutputDir, { recursive: true });
+        const fileName = `${reportHash}.pdf`;
+        localPath = path.join(localOutputDir, fileName);
+        await pipeline(pdfStream, fs.createWriteStream(localPath));
+        storageUrl = `local://${fileName}`;
+      } else {
+        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
+          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
+        });
+      }
     } else if (isAds) {
       await updateReportStatus(reportHash, '[10%] Fetching ads from DB');
 
@@ -465,7 +635,7 @@ async function runReportJob(client, payload, options = {}) {
       const profilesById = new Map();
       if (profileIds.length > 0) {
         const joinedProfiles = await db
-          .collection('ad_profiles')
+          .collection('Ad_profiles')
           .find({ _id: { $in: buildObjectIds(profileIds) } })
           .toArray();
         for (const profile of joinedProfiles) {

@@ -1,0 +1,825 @@
+import React from 'react';
+import { Text, View, StyleSheet, Image, Link } from '@react-pdf/renderer';
+import { isValid, parseISO } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
+import {
+  DomainTheme,
+  processText,
+  domainRiskInfo,
+  domainLanderCaption,
+  domainAdsCount,
+  domainHasCloaking,
+  domainVisitUrl,
+  collectDomainViolations,
+  clientVisibleCloakVariants,
+} from './domainPdfShared';
+
+export const Theme = {
+  PRIMARY_BLUE: '#1E293B',
+  SECONDARY_GRAY: '#64748B',
+  BORDER_LIGHT: '#E2E8F0',
+  BG_SECTION: '#F8FAFC',
+  RISK_HIGH: '#F43F5E',
+  RISK_MEDIUM: '#F97316',
+  RISK_LOW: '#F59E0B',
+  SAFE: '#10B981',
+  WARN: '#C2410C',
+  WARN_BG: '#FFF7ED',
+  LINK: '#3B82F6',
+  ...DomainTheme,
+};
+
+export const DOMAIN_THUMB_W = 120;
+export const DOMAIN_THUMB_H = 74;
+
+export const sharedStyles = StyleSheet.create({
+  page: {
+    paddingTop: 30,
+    paddingHorizontal: 30,
+    paddingBottom: 40,
+    fontFamily: ['Outfit', 'Mukta'],
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.BORDER_LIGHT,
+    paddingBottom: 12,
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 7,
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  headerRight: { alignItems: 'flex-end' },
+  headerDate: { fontSize: 8, fontWeight: 'bold', color: Theme.PRIMARY_BLUE },
+  footer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 30,
+    right: 30,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: 6.5,
+    color: Theme.SECONDARY_GRAY,
+    borderTopWidth: 0.5,
+    borderTopColor: Theme.BORDER_LIGHT,
+    paddingTop: 8,
+  },
+  footerLeft: { textTransform: 'uppercase', fontWeight: 'bold' },
+  footerCenter: { textTransform: 'uppercase' },
+  footerRight: { textTransform: 'uppercase', fontWeight: 'bold' },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  metricsSection: { marginBottom: 14 },
+  metricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: Theme.BG_SECTION,
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 6,
+    color: Theme.SECONDARY_GRAY,
+    marginBottom: 3,
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  metricValue: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+  },
+  profileBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: Theme.BG_SECTION,
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    marginBottom: 12,
+  },
+  profileBannerLeft: { flexDirection: 'row', gap: 12, width: '68%' },
+  profileImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: Theme.BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+    objectFit: 'cover',
+  },
+  profileImagePlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: Theme.BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInfo: { flex: 1, flexDirection: 'column', gap: 3 },
+  profileName: { fontSize: 13, fontWeight: '900', color: Theme.PRIMARY_BLUE },
+  profileMeta: { fontSize: 8, color: Theme.SECONDARY_GRAY, fontWeight: 'bold' },
+  profileLink: { fontSize: 7, color: Theme.LINK, textDecoration: 'none', marginTop: 2 },
+  profileBannerRight: {
+    width: '30%',
+    flexDirection: 'column',
+    gap: 5,
+    borderLeftWidth: 0.5,
+    borderLeftColor: Theme.BORDER_LIGHT,
+    paddingLeft: 12,
+    justifyContent: 'center',
+  },
+  detailRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  detailLabel: {
+    fontSize: 6.5,
+    fontWeight: 'bold',
+    color: Theme.SECONDARY_GRAY,
+    width: 58,
+    textTransform: 'uppercase',
+  },
+  detailValue: { fontSize: 7.5, color: Theme.PRIMARY_BLUE, fontWeight: 'bold', flex: 1 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  chip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    borderRadius: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  chipText: { fontSize: 6.5, color: Theme.PRIMARY_BLUE, textTransform: 'capitalize' },
+  riskBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  riskBadgeText: { fontSize: 6.5, fontWeight: '900', textTransform: 'uppercase' },
+  noteText: {
+    fontSize: 7,
+    color: Theme.SECONDARY_GRAY,
+    marginBottom: 6,
+  },
+  domainTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: Theme.BG_SECTION,
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  domainTableHeaderCell: {
+    fontSize: 6.5,
+    fontWeight: '900',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  domainRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Theme.BORDER_LIGHT,
+    alignItems: 'flex-start',
+  },
+  colDomIndex: { width: '5%', paddingRight: 3, alignItems: 'center' },
+  colDomain: { width: '42%', paddingRight: 6 },
+  colDomRisk: { width: '14%', paddingRight: 4 },
+  colDomCloak: { width: '14%', paddingRight: 4 },
+  colDomThreat: { width: '17%', paddingRight: 4 },
+  colDomAds: { width: '8%' },
+  domainThumb: {
+    width: DOMAIN_THUMB_W,
+    height: DOMAIN_THUMB_H,
+    borderRadius: 3,
+    marginBottom: 4,
+    objectFit: 'cover',
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+  },
+  domainThumbPlaceholder: {
+    width: DOMAIN_THUMB_W,
+    height: DOMAIN_THUMB_H,
+    borderRadius: 3,
+    marginBottom: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Theme.BG_SECTION,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+  },
+  domainName: { fontSize: 7.5, fontWeight: '900', color: Theme.PRIMARY_BLUE, marginBottom: 1 },
+  visitUrl: { fontSize: 6, color: Theme.LINK, textDecoration: 'none' },
+  cloakText: { fontSize: 7, color: Theme.PRIMARY_BLUE, fontWeight: '700' },
+  cloakMeta: { fontSize: 6, color: Theme.SECONDARY_GRAY, marginTop: 1 },
+  threatContainer: { flexDirection: 'column', gap: 2 },
+  threatBadge: {
+    backgroundColor: Theme.BG_SECTION,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 3,
+    borderWidth: 0.3,
+    borderColor: Theme.BORDER_LIGHT,
+    alignSelf: 'flex-start',
+  },
+  threatText: { fontSize: 6, color: Theme.PRIMARY_BLUE, textTransform: 'capitalize' },
+  adsCount: { fontSize: 7.5, fontWeight: '700', color: Theme.PRIMARY_BLUE },
+  adTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: Theme.BG_SECTION,
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  adTableHeaderCell: {
+    fontSize: 6.5,
+    fontWeight: '900',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  adRow: {
+    flexDirection: 'row',
+    paddingVertical: 7,
+    paddingHorizontal: 5,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Theme.BORDER_LIGHT,
+    alignItems: 'flex-start',
+  },
+  colAdIndex: { width: '4%', paddingRight: 3, alignItems: 'center' },
+  colAdContent: { width: '30%', paddingRight: 6 },
+  colAdDest: { width: '24%', paddingRight: 6 },
+  colAdThreat: { width: '16%', paddingRight: 4 },
+  colAdRisk: { width: '13%', paddingRight: 4 },
+  colAdDates: { width: '13%' },
+  adImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 3,
+    marginRight: 6,
+    objectFit: 'cover',
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+  },
+  contentContainer: { flexDirection: 'row' },
+  contentInfo: { flex: 1, flexDirection: 'column' },
+  captionText: { fontSize: 7, color: Theme.PRIMARY_BLUE, lineHeight: 1.3, marginBottom: 1 },
+  formatText: {
+    fontSize: 5.5,
+    color: Theme.SECONDARY_GRAY,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    marginBottom: 1,
+  },
+  linkText: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none' },
+  destLabel: {
+    fontSize: 5.5,
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    marginBottom: 1,
+  },
+  destValue: { fontSize: 6.5, color: Theme.PRIMARY_BLUE, marginBottom: 2 },
+  mismatchBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: Theme.WARN_BG,
+    borderWidth: 0.5,
+    borderColor: Theme.WARN,
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginTop: 1,
+  },
+  mismatchText: { fontSize: 5.5, fontWeight: '900', color: Theme.WARN, textTransform: 'uppercase' },
+  dateLabel: {
+    fontSize: 5.5,
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+  },
+  dateValue: { fontSize: 6, color: Theme.PRIMARY_BLUE, marginBottom: 3 },
+  indexText: { fontSize: 7.5, fontWeight: '700', color: Theme.PRIMARY_BLUE },
+  profileBlock: { marginBottom: 16 },
+});
+
+export function formatCompleteDate(dateInput) {
+  if (!dateInput) return 'N/A';
+  try {
+    const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
+    if (isValid(dateObj)) {
+      return formatInTimeZone(dateObj, 'Asia/Kolkata', "dd MMM yyyy, hh:mm a 'IST'");
+    }
+  } catch {
+    return 'N/A';
+  }
+  return 'N/A';
+}
+
+export function profileRiskInfo(profile) {
+  const rank = String(profile?.risk_rank || profile?.risk || '').toLowerCase();
+  if (rank === 'high') {
+    return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
+  }
+  if (rank === 'medium') {
+    return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
+  }
+  if (rank === 'low') {
+    return { label: 'Low Risk', color: Theme.RISK_LOW, bg: '#FFFBEB' };
+  }
+  if (rank === 'safe') {
+    return { label: 'Safe', color: Theme.SAFE, bg: '#ECFDF5' };
+  }
+  return { label: 'Reviewed', color: Theme.SECONDARY_GRAY, bg: Theme.BG_SECTION };
+}
+
+export function adRiskInfo(ad) {
+  const score = ad?.review_details?.threat_score ?? ad?.analysis_results?.risk_score ?? null;
+  const hasReview =
+    score != null ||
+    (Array.isArray(ad?.review_details?.threat_types) && ad.review_details.threat_types.length > 0) ||
+    Boolean(ad?.reviewed_at);
+  if (!hasReview) {
+    return { label: 'Unreviewed', color: Theme.SECONDARY_GRAY, bg: Theme.BG_SECTION };
+  }
+  if (score > 95) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
+  if (score > 75) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
+  if (score > 40) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: '#FFFBEB' };
+  return { label: 'Safe', color: Theme.SAFE, bg: '#ECFDF5' };
+}
+
+export function resolveAdThreats(ad, project) {
+  const review = ad?.review_details || {};
+  let projectDetails = project?.project_details;
+  if (typeof projectDetails === 'string') {
+    try {
+      projectDetails = JSON.parse(projectDetails);
+    } catch {
+      projectDetails = {};
+    }
+  }
+  const projectLabels = projectDetails?.labels || [];
+  const resolved = [];
+  const threatTypes = Array.isArray(review.threat_types) ? review.threat_types : [];
+
+  projectLabels.forEach((label) => {
+    const inFlags = review.flags?.[label.name] === true;
+    const inThreatTypes = threatTypes.includes(label.name);
+    if (inFlags || inThreatTypes) {
+      resolved.push(label.name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+    }
+  });
+
+  threatTypes.forEach((type) => {
+    if (!type || type === 'safe') return;
+    const formatted = type.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!resolved.some((t) => t.toLowerCase() === formatted.toLowerCase())) {
+      resolved.push(formatted);
+    }
+  });
+
+  return resolved;
+}
+
+export function isHighRiskAd(ad) {
+  const rank = String(ad?.list?.risk_rank || '').toLowerCase();
+  if (rank === 'high') return true;
+  const score = ad?.review_details?.threat_score ?? ad?.analysis_results?.risk_score ?? null;
+  return typeof score === 'number' && score > 95;
+}
+
+export function profileGroupMetrics(group) {
+  const ads = group?.ads || [];
+  const domains = group?.domains || [];
+  let highAds = 0;
+  let mismatch = 0;
+  let active = 0;
+  ads.forEach((ad) => {
+    if (isHighRiskAd(ad)) highAds += 1;
+    if (ad.destination_mismatch) mismatch += 1;
+    if (ad.is_active) active += 1;
+  });
+  let highDomains = 0;
+  let cloaked = 0;
+  domains.forEach((domain) => {
+    const rank = String(domain?.list?.risk_rank || '').toLowerCase();
+    const score = domain?.review_details?.threat_score ?? domain?.list?.effective_threat_score;
+    if (rank === 'high' || (typeof score === 'number' && score >= 96)) highDomains += 1;
+    if (domainHasCloaking(domain)) cloaked += 1;
+  });
+  return {
+    totalAds: ads.length,
+    highAds,
+    mismatch,
+    active,
+    totalDomains: domains.length,
+    highDomains,
+    cloaked,
+  };
+}
+
+export function catalogMetrics(profiles) {
+  let totalProfiles = profiles.length;
+  let totalAds = 0;
+  let highAds = 0;
+  let totalDomains = 0;
+  let highDomains = 0;
+  let highProfiles = 0;
+  profiles.forEach((group) => {
+    const m = profileGroupMetrics(group);
+    totalAds += m.totalAds;
+    highAds += m.highAds;
+    totalDomains += m.totalDomains;
+    highDomains += m.highDomains;
+    const risk = String(group.profile?.risk_rank || group.profile?.risk || '').toLowerCase();
+    if (risk === 'high') highProfiles += 1;
+  });
+  return { totalProfiles, totalAds, highAds, totalDomains, highDomains, highProfiles };
+}
+
+export const PageHeader = ({ subtitle = 'Ad Profiles Integrity Report' }) => (
+  <View style={sharedStyles.header} fixed>
+    <View>
+      <Text style={sharedStyles.title}>OVERWATCH</Text>
+      <Text style={sharedStyles.subtitle}>{subtitle}</Text>
+    </View>
+    <View style={sharedStyles.headerRight}>
+      <Text style={sharedStyles.headerDate}>{formatCompleteDate(new Date())}</Text>
+    </View>
+  </View>
+);
+
+export const PageFooter = () => (
+  <View style={sharedStyles.footer} fixed>
+    <Text style={sharedStyles.footerLeft}>CONFIDENTIAL DOCUMENT</Text>
+    <Text style={sharedStyles.footerCenter}>POWERED BY CONTRAILS AI</Text>
+    <Text
+      style={sharedStyles.footerRight}
+      render={({ pageNumber, totalPages }) => `PAGE ${pageNumber} OF ${totalPages}`}
+    />
+  </View>
+);
+
+export const CatalogMetricsSection = ({ profiles }) => {
+  const m = catalogMetrics(profiles || []);
+  const cards = [
+    { label: 'Profiles', value: m.totalProfiles, color: Theme.PRIMARY_BLUE },
+    { label: 'High Risk Profiles', value: m.highProfiles, color: Theme.RISK_HIGH },
+    { label: 'Reviewed Ads', value: m.totalAds, color: Theme.PRIMARY_BLUE },
+    { label: 'High Risk Ads', value: m.highAds, color: Theme.RISK_HIGH },
+    { label: 'Domains', value: m.totalDomains, color: Theme.PRIMARY_BLUE },
+    { label: 'High Risk Domains', value: m.highDomains, color: Theme.RISK_HIGH },
+  ];
+  return (
+    <View style={sharedStyles.metricsSection}>
+      <Text style={sharedStyles.sectionTitle}>Executive Summary</Text>
+      <View style={sharedStyles.metricsGrid}>
+        {cards.map((card) => (
+          <View key={card.label} style={sharedStyles.metricCard}>
+            <Text style={sharedStyles.metricLabel}>{card.label}</Text>
+            <Text style={[sharedStyles.metricValue, { color: card.color }]}>
+              {card.value.toLocaleString()}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+export const ProfileMetricsSection = ({ group }) => {
+  const m = profileGroupMetrics(group);
+  const cards = [
+    { label: 'Reviewed Ads', value: m.totalAds, color: Theme.PRIMARY_BLUE },
+    { label: 'High Risk Ads', value: m.highAds, color: Theme.RISK_HIGH },
+    { label: 'Mismatch', value: m.mismatch, color: m.mismatch > 0 ? Theme.RISK_HIGH : Theme.PRIMARY_BLUE },
+    { label: 'Domains', value: m.totalDomains, color: Theme.PRIMARY_BLUE },
+    { label: 'High Domains', value: m.highDomains, color: Theme.RISK_HIGH },
+    { label: 'Cloaked', value: m.cloaked, color: m.cloaked > 0 ? Theme.WARN : Theme.PRIMARY_BLUE },
+  ];
+  return (
+    <View style={sharedStyles.metricsSection}>
+      <Text style={sharedStyles.sectionTitle}>Profile Metrics</Text>
+      <View style={sharedStyles.metricsGrid}>
+        {cards.map((card) => (
+          <View key={card.label} style={sharedStyles.metricCard}>
+            <Text style={sharedStyles.metricLabel}>{card.label}</Text>
+            <Text style={[sharedStyles.metricValue, { color: card.color }]}>
+              {card.value.toLocaleString()}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+export const ProfileBanner = ({ profile, profilePic }) => {
+  const risk = profileRiskInfo(profile);
+  const violations = Array.isArray(profile?.violations) ? profile.violations : [];
+  return (
+    <View style={sharedStyles.profileBanner} wrap={false}>
+      <View style={sharedStyles.profileBannerLeft}>
+        {profilePic ? (
+          <Image style={sharedStyles.profileImage} src={profilePic} />
+        ) : (
+          <View style={sharedStyles.profileImagePlaceholder}>
+            <Text style={{ fontSize: 6, color: Theme.SECONDARY_GRAY }}>No Pic</Text>
+          </View>
+        )}
+        <View style={sharedStyles.profileInfo}>
+          <Text style={sharedStyles.profileName}>{processText(profile?.page_name || 'Unknown', 48)}</Text>
+          <Text style={sharedStyles.profileMeta}>
+            {(profile?.platform || 'meta').toUpperCase()}
+            {profile?.is_verified ? ' · Verified' : ''}
+            {profile?.follower_count != null ? ` · ${Number(profile.follower_count).toLocaleString()} followers` : ''}
+          </Text>
+          {profile?.profile_url ? (
+            <Link src={profile.profile_url} style={sharedStyles.profileLink} target="_blank">
+              {processText(profile.profile_url, 60)}
+            </Link>
+          ) : null}
+          {violations.length > 0 ? (
+            <View style={sharedStyles.chipRow}>
+              {violations.slice(0, 5).map((v, idx) => (
+                <View key={idx} style={sharedStyles.chip}>
+                  <Text style={sharedStyles.chipText}>{processText(String(v).replace(/[-_]/g, ' '), 22)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      </View>
+      <View style={sharedStyles.profileBannerRight}>
+        <View style={sharedStyles.detailRow}>
+          <Text style={sharedStyles.detailLabel}>Risk</Text>
+          <View style={[sharedStyles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
+            <Text style={[sharedStyles.riskBadgeText, { color: risk.color }]}>{risk.label}</Text>
+          </View>
+        </View>
+        <View style={sharedStyles.detailRow}>
+          <Text style={sharedStyles.detailLabel}>Status</Text>
+          <Text style={sharedStyles.detailValue}>{processText(profile?.client_status || 'open', 20)}</Text>
+        </View>
+        <View style={sharedStyles.detailRow}>
+          <Text style={sharedStyles.detailLabel}>Reviewed</Text>
+          <Text style={sharedStyles.detailValue}>{formatCompleteDate(profile?.reviewed_at)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+export const DomainsTable = ({ domains, compressedDomainImages }) => {
+  if (!domains || domains.length === 0) {
+    return (
+      <View style={{ marginBottom: 10 }}>
+        <Text style={sharedStyles.sectionTitle}>Linked Domains</Text>
+        <Text style={sharedStyles.noteText}>No reviewed domains linked to this profile's ads.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={sharedStyles.sectionTitle}>Linked Domains ({domains.length})</Text>
+      <View style={sharedStyles.domainTableHeader} fixed>
+        <Text style={[sharedStyles.domainTableHeaderCell, sharedStyles.colDomIndex]}>#</Text>
+        <Text style={[sharedStyles.domainTableHeaderCell, sharedStyles.colDomain]}>Domain</Text>
+        <Text style={[sharedStyles.domainTableHeaderCell, sharedStyles.colDomRisk]}>Risk</Text>
+        <Text style={[sharedStyles.domainTableHeaderCell, sharedStyles.colDomCloak]}>Cloaked</Text>
+        <Text style={[sharedStyles.domainTableHeaderCell, sharedStyles.colDomThreat]}>Violations</Text>
+        <Text style={[sharedStyles.domainTableHeaderCell, sharedStyles.colDomAds]}>Ads</Text>
+      </View>
+      {domains.map((domain, idx) => {
+        const riskInfo = domainRiskInfo(domain);
+        const visitUrl = domainVisitUrl(domain);
+        const cloaked = domainHasCloaking(domain);
+        const landerCount = clientVisibleCloakVariants(domain).length;
+        const violations = collectDomainViolations(domain).slice(0, 3);
+        const imageUrl = compressedDomainImages?.[idx] || null;
+        return (
+          <View key={domain._id || idx} style={sharedStyles.domainRow} wrap={false}>
+            <View style={sharedStyles.colDomIndex}>
+              <Text style={sharedStyles.indexText}>{idx + 1}</Text>
+            </View>
+            <View style={sharedStyles.colDomain}>
+              {imageUrl ? (
+                <Image style={sharedStyles.domainThumb} src={imageUrl} />
+              ) : (
+                <View style={sharedStyles.domainThumbPlaceholder}>
+                  <Text style={{ fontSize: 5.5, color: Theme.SECONDARY_GRAY }}>No Img</Text>
+                </View>
+              )}
+              <Text style={sharedStyles.domainName}>{processText(domain.domain_name || 'Unknown', 36)}</Text>
+              {visitUrl ? (
+                <Link src={visitUrl} style={sharedStyles.visitUrl} target="_blank">
+                  {processText(visitUrl, 42)}
+                </Link>
+              ) : null}
+            </View>
+            <View style={sharedStyles.colDomRisk}>
+              <View style={[sharedStyles.riskBadge, { backgroundColor: riskInfo.bg, borderColor: riskInfo.color }]}>
+                <Text style={[sharedStyles.riskBadgeText, { color: riskInfo.color }]}>{riskInfo.label}</Text>
+              </View>
+            </View>
+            <View style={sharedStyles.colDomCloak}>
+              <Text style={sharedStyles.cloakText}>{cloaked ? 'Y' : 'N'}</Text>
+              <Text style={sharedStyles.cloakMeta}>
+                {landerCount} lander{landerCount === 1 ? '' : 's'} · {processText(domainLanderCaption(domain), 14)}
+              </Text>
+            </View>
+            <View style={sharedStyles.colDomThreat}>
+              <View style={sharedStyles.threatContainer}>
+                {violations.length === 0 ? (
+                  <Text style={sharedStyles.cloakMeta}>—</Text>
+                ) : (
+                  violations.map((threat, tIdx) => (
+                    <View key={tIdx} style={sharedStyles.threatBadge}>
+                      <Text style={sharedStyles.threatText}>
+                        {processText(threat.replace(/[-_]/g, ' '), 18)}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            </View>
+            <View style={sharedStyles.colDomAds}>
+              <Text style={sharedStyles.adsCount}>{domainAdsCount(domain).toLocaleString()}</Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+export const AdsTable = ({
+  displayAds,
+  compressedAdImages,
+  project,
+  totalAdCount,
+  shownAdCount,
+}) => {
+  const capped = (totalAdCount || 0) > (shownAdCount || 0);
+  return (
+    <View>
+      <Text style={sharedStyles.sectionTitle}>Reviewed Ads</Text>
+      <Text style={sharedStyles.noteText}>
+        {capped
+          ? `Showing ${shownAdCount} of ${totalAdCount} reviewed ads (highest threat, feed placement, then most recent).`
+          : `${totalAdCount || 0} reviewed ad${(totalAdCount || 0) === 1 ? '' : 's'}.`}
+      </Text>
+      {(displayAds || []).length === 0 ? (
+        <Text style={sharedStyles.noteText}>No reviewed ads for this profile.</Text>
+      ) : (
+        <>
+          <View style={sharedStyles.adTableHeader} fixed>
+            <Text style={[sharedStyles.adTableHeaderCell, sharedStyles.colAdIndex]}>#</Text>
+            <Text style={[sharedStyles.adTableHeaderCell, sharedStyles.colAdContent]}>Creative</Text>
+            <Text style={[sharedStyles.adTableHeaderCell, sharedStyles.colAdDest]}>Destinations</Text>
+            <Text style={[sharedStyles.adTableHeaderCell, sharedStyles.colAdThreat]}>Violations</Text>
+            <Text style={[sharedStyles.adTableHeaderCell, sharedStyles.colAdRisk]}>Risk</Text>
+            <Text style={[sharedStyles.adTableHeaderCell, sharedStyles.colAdDates]}>Dates</Text>
+          </View>
+          {displayAds.map((ad, idx) => {
+            const risk = adRiskInfo(ad);
+            const threats = resolveAdThreats(ad, project).slice(0, 3);
+            const imageUrl = compressedAdImages?.[idx] || null;
+            const creative = ad.title || ad.caption || ad.cta_text || 'Untitled creative';
+            return (
+              <View key={ad._id || idx} style={sharedStyles.adRow} wrap={false}>
+                <View style={sharedStyles.colAdIndex}>
+                  <Text style={sharedStyles.indexText}>{idx + 1}</Text>
+                </View>
+                <View style={sharedStyles.colAdContent}>
+                  <View style={sharedStyles.contentContainer}>
+                    {imageUrl ? (
+                      <Image style={sharedStyles.adImage} src={imageUrl} />
+                    ) : (
+                      <View
+                        style={[
+                          sharedStyles.adImage,
+                          { justifyContent: 'center', alignItems: 'center', backgroundColor: Theme.BG_SECTION },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 5, color: Theme.SECONDARY_GRAY }}>No</Text>
+                      </View>
+                    )}
+                    <View style={sharedStyles.contentInfo}>
+                      <Text style={sharedStyles.formatText}>
+                        {processText(ad.display_format || 'Ad')}
+                        {ad.card_count ? ` · ${ad.card_count} cards` : ''}
+                      </Text>
+                      <Text style={sharedStyles.captionText}>{processText(creative, 70, 2)}</Text>
+                      {ad.original_url ? (
+                        <Link src={ad.original_url} style={sharedStyles.linkText} target="_blank">
+                          Ad Library
+                        </Link>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+                <View style={sharedStyles.colAdDest}>
+                  <Text style={sharedStyles.destLabel}>Shown as</Text>
+                  <Text style={sharedStyles.destValue}>
+                    {processText(ad.shown_hostname || ad.caption || '—', 24)}
+                  </Text>
+                  <Text style={sharedStyles.destLabel}>Card destinations</Text>
+                  <Text style={sharedStyles.destValue}>
+                    {processText((ad.card_hostnames || []).slice(0, 3).join(', ') || '—', 32)}
+                  </Text>
+                  {ad.destination_mismatch ? (
+                    <View style={sharedStyles.mismatchBadge}>
+                      <Text style={sharedStyles.mismatchText}>Mismatch</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={sharedStyles.colAdThreat}>
+                  <View style={sharedStyles.threatContainer}>
+                    {threats.length === 0 ? (
+                      <Text style={sharedStyles.cloakMeta}>—</Text>
+                    ) : (
+                      threats.map((threat, tIdx) => (
+                        <View key={tIdx} style={sharedStyles.threatBadge}>
+                          <Text style={sharedStyles.threatText}>{processText(threat, 18)}</Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </View>
+                <View style={sharedStyles.colAdRisk}>
+                  <View style={[sharedStyles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
+                    <Text style={[sharedStyles.riskBadgeText, { color: risk.color }]}>{risk.label}</Text>
+                  </View>
+                </View>
+                <View style={sharedStyles.colAdDates}>
+                  <Text style={sharedStyles.dateLabel}>Started</Text>
+                  <Text style={sharedStyles.dateValue}>
+                    {formatCompleteDate(ad.posted_date || ad.start_date || ad.created_at)}
+                  </Text>
+                  <Text style={sharedStyles.dateLabel}>Sourced</Text>
+                  <Text style={sharedStyles.dateValue}>
+                    {formatCompleteDate(ad.sourcing_date || ad.created_at)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+};
+
+export const ProfileReportBlock = ({ group, project, breakBefore = false }) => (
+  <View style={sharedStyles.profileBlock} break={breakBefore || undefined} wrap>
+    <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
+    <ProfileMetricsSection group={group} />
+    <DomainsTable domains={group.domains} compressedDomainImages={group.compressedDomainImages} />
+    <AdsTable
+      displayAds={group.displayAds}
+      compressedAdImages={group.compressedAdImages}
+      project={project}
+      totalAdCount={group.totalAdCount}
+      shownAdCount={group.shownAdCount}
+    />
+  </View>
+);
+
+export { processText };

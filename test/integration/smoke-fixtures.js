@@ -219,10 +219,80 @@ function makeNormalizedDomain(overrides = {}) {
   return domain;
 }
 
+function makeNormalizedAdProfile(overrides = {}) {
+  return {
+    _id: '6a9fb9abc911dc2962ccf3ef',
+    page_name: 'Fixture Ad Page',
+    display_name: 'Fixture Ad Page',
+    profile_url: 'https://www.facebook.com/61550597862815/',
+    platform: 'meta',
+    platform_page_id: '102893292147872',
+    is_verified: false,
+    profile_pic: null,
+    follower_count: 12,
+    page_categories: ['Topic'],
+    ad_count: 160,
+    last_active_at: '2026-09-01T07:00:00.000Z',
+    risk: 'high',
+    risk_rank: 'high',
+    violations: ['fraud', 'investment-scams'],
+    reasoning: '',
+    reviewer_comments: '',
+    action: 'submit_to_client',
+    reviewed_at: '2026-09-02T12:00:20.850Z',
+    client_status: 'alerted',
+    review_status: 'reviewed',
+    review_details: {
+      risk: 'high',
+      violations: ['fraud', 'investment-scams'],
+      reviewed_at: '2026-09-02T12:00:20.850Z',
+    },
+    list: { ad_count: 160, follower_count: 12, risk_rank: 'high' },
+    enrichment: {},
+    workflow: { review_status: 'reviewed', client_status: 'alerted' },
+    ...overrides,
+  };
+}
+
+function makeAdProfileReportGroup(overrides = {}) {
+  const { profile: profileOverrides, ads: adsOverride, domains: domainsOverride, ...rest } = overrides;
+  const profile = makeNormalizedAdProfile(profileOverrides);
+  const ads = adsOverride || [
+    makeNormalizedAd({
+      _id: 'ad-1',
+      ad_profile_id: profile._id,
+      linked_domain_ids: ['6a8be234abdd8b24b75f1761'],
+      review_details: { threat_score: 99, threat_types: ['fraud'], reviewed_at: '2026-09-01T00:00:00.000Z' },
+    }),
+    makeNormalizedAd({
+      _id: 'ad-2',
+      ad_profile_id: profile._id,
+      linked_domain_ids: ['6a8be234abdd8b24b75f1761'],
+      review_details: { threat_score: 80, threat_types: ['investment-scams'], reviewed_at: '2026-09-01T00:00:00.000Z' },
+    }),
+  ];
+  const domains = domainsOverride || [makeNormalizedDomain()];
+  return {
+    profile,
+    ads,
+    displayAds: ads.slice(0, 20),
+    totalAdCount: ads.length,
+    shownAdCount: Math.min(20, ads.length),
+    adsCapped: ads.length > 20,
+    domains,
+    compressedProfilePic: null,
+    compressedAdImages: ads.map(() => null),
+    compressedDomainImages: domains.map(() => null),
+    ...rest,
+  };
+}
+
 module.exports = {
   makeProject,
   makeProfile,
   makeNormalizedPost,
   makeNormalizedAd,
   makeNormalizedDomain,
+  makeNormalizedAdProfile,
+  makeAdProfileReportGroup,
 };

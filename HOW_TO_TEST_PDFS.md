@@ -11,9 +11,14 @@ curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samp
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_ambani_v2_single.json
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_ambani_v2_profile.json
 
-# SEBI Meta Ads (Ads + ad_profiles in SEBI-Data-Search)
+# SEBI Meta Ads (Ads + Ad_profiles in SEBI-Data-Search)
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_ads_summary.json
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_ads_detailed.json
+
+# SEBI Ad Profiles (Ad_profiles → reviewed Ads → reviewed Domains)
+# Always reportType Summary. 1 id → dossier PDF; 2+ ids → catalog PDF.
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_ad_profiles_detailed.json
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_ad_profiles_summary.json
 
 # SEBI Domains (Domains in SEBI-Data-Search). Detailed bare vs scam hashes must differ.
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_domains_summary.json

@@ -10,8 +10,14 @@ const {
   normalizePost,
   normalizeProfile,
   normalizeAd,
+  normalizeAdProfile,
   resolvePostMediaUrl,
   mapCaseEventToUpdateHistory,
+  isAdReviewed,
+  isAdProfileReviewed,
+  sortAdsForProfileReport,
+  sliceAdsForProfileReport,
+  groupAdsAndDomainsByProfile,
 } = require('../../src/core-utils');
 
 const fixtureDir = path.join(__dirname, '../fixtures/v3');
@@ -460,4 +466,174 @@ test('normalizeAd falls back from template title to first real card title', () =
     },
   });
   assert.equal(normalized.title, 'Explore New Ways Forward');
+});
+
+test('validatePayload accepts entityType ad_profiles with adProfileIds', () => {
+  const profileId = '6a9fb9abc911dc2962ccf3ef';
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ad_profiles',
+    adProfileIds: [profileId],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'ad_profiles');
+  assert.deepEqual(result.entityIds, [profileId]);
+});
+
+test('validatePayload infers ad_profiles when adProfileIds is present without entityType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    adProfileIds: ['6a9fb9abc911dc2962ccf3ef'],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.entityType, 'ad_profiles');
+});
+
+test('validatePayload rejects ad_profiles with DOCX', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ad_profiles',
+    adProfileIds: ['6a9fb9abc911dc2962ccf3ef'],
+    reportType: 'Summary',
+    reportFormat: 'docx',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /PDF only/i);
+});
+
+test('validatePayload rejects ad_profiles with Detailed reportType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'ad_profiles',
+    adProfileIds: ['6a9fb9abc911dc2962ccf3ef'],
+    reportType: 'Detailed',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Ad profile reports only support/i);
+});
+
+test('generateReportHash ad_profiles suffix differs from posts/ads hashes', () => {
+  const crypto = require('crypto');
+  const ids = ['6a9fb9abc911dc2962ccf3ef', '6a9fbb6cc911dc2962ccf400'];
+  const postsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf');
+  const adsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'ads');
+  const profilesHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'ad_profiles');
+  const expectedRaw = `SEBI-${[...ids].sort().join(',')}-Summary--pdf-ad_profiles`;
+  assert.equal(profilesHash, crypto.createHash('sha256').update(expectedRaw).digest('hex'));
+  assert.notEqual(profilesHash, postsHash);
+  assert.notEqual(profilesHash, adsHash);
+});
+
+test('isAdReviewed and isAdProfileReviewed use review timestamps/status', () => {
+  assert.equal(isAdReviewed({ list: { reviewed_at: '2026-09-01T00:00:00.000Z' } }), true);
+  assert.equal(isAdReviewed({ list: { reviewed_at: null } }), false);
+  assert.equal(isAdProfileReviewed({ workflow: { review_status: 'reviewed' } }), true);
+  assert.equal(isAdProfileReviewed({ workflow: { review_status: 'pending' } }), false);
+  assert.equal(
+    isAdProfileReviewed({ workflow: { review_status: 'pending' }, review_details: { reviewed_at: '2026-09-01' } }),
+    true,
+  );
+});
+
+test('sortAdsForProfileReport prefers threat score then feed then recency', () => {
+  const ads = [
+    {
+      _id: 'old-feed-low',
+      review_details: { threat_score: 40 },
+      publisher_platforms: ['FACEBOOK'],
+      posted_date: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      _id: 'new-messenger-high',
+      review_details: { threat_score: 99 },
+      publisher_platforms: ['MESSENGER'],
+      posted_date: '2026-09-01T00:00:00.000Z',
+    },
+    {
+      _id: 'new-feed-high',
+      review_details: { threat_score: 99 },
+      publisher_platforms: ['INSTAGRAM'],
+      posted_date: '2026-09-02T00:00:00.000Z',
+    },
+    {
+      _id: 'older-feed-high',
+      review_details: { threat_score: 99 },
+      publisher_platforms: ['FACEBOOK'],
+      posted_date: '2026-08-01T00:00:00.000Z',
+    },
+  ];
+  const sorted = sortAdsForProfileReport(ads);
+  assert.deepEqual(
+    sorted.map((ad) => ad._id),
+    ['new-feed-high', 'older-feed-high', 'new-messenger-high', 'old-feed-low'],
+  );
+});
+
+test('sliceAdsForProfileReport caps at 20 and reports totals', () => {
+  const ads = Array.from({ length: 25 }, (_, i) => ({
+    _id: `ad-${i}`,
+    review_details: { threat_score: i },
+    publisher_platforms: ['FACEBOOK'],
+    posted_date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+  }));
+  const sliced = sliceAdsForProfileReport(ads);
+  assert.equal(sliced.totalCount, 25);
+  assert.equal(sliced.shownCount, 20);
+  assert.equal(sliced.displayAds.length, 20);
+  assert.equal(sliced.capped, true);
+  assert.equal(sliced.displayAds[0]._id, 'ad-24');
+});
+
+test('normalizeAdProfile maps page identity and review fields', () => {
+  const normalized = normalizeAdProfile({
+    _id: '6a9fb9abc911dc2962ccf3ef',
+    page_name: 'Scam Page',
+    display_name: 'Scam Page',
+    profile_url: 'https://www.facebook.com/123/',
+    is_verified: false,
+    enrichment: { profile_pic_s3: 'https://example.com/pic.jpg', page_like_count: 12 },
+    list: { follower_count: 12, risk_rank: 'high', ad_count: 160 },
+    review_details: {
+      risk: 'high',
+      violations: ['fraud'],
+      reviewed_at: '2026-09-02T12:00:20.850Z',
+    },
+    workflow: { review_status: 'reviewed', client_status: 'alerted' },
+  });
+  assert.equal(normalized._id, '6a9fb9abc911dc2962ccf3ef');
+  assert.equal(normalized.page_name, 'Scam Page');
+  assert.equal(normalized.profile_pic, 'https://example.com/pic.jpg');
+  assert.equal(normalized.risk, 'high');
+  assert.deepEqual(normalized.violations, ['fraud']);
+});
+
+test('groupAdsAndDomainsByProfile attaches domains and caps display ads', () => {
+  const profiles = [{ _id: 'prof-1' }];
+  const ads = Array.from({ length: 22 }, (_, i) => ({
+    _id: `ad-${i}`,
+    ad_profile_id: 'prof-1',
+    linked_domain_ids: i < 2 ? ['dom-1'] : ['dom-2'],
+    review_details: { threat_score: i },
+    publisher_platforms: ['FACEBOOK'],
+    posted_date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+  }));
+  const domainsById = new Map([
+    ['dom-1', { _id: 'dom-1', domain_name: 'a.com' }],
+    ['dom-2', { _id: 'dom-2', domain_name: 'b.com' }],
+  ]);
+  const grouped = groupAdsAndDomainsByProfile(profiles, ads, domainsById);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].totalAdCount, 22);
+  assert.equal(grouped[0].shownAdCount, 20);
+  assert.equal(grouped[0].displayAds.length, 20);
+  assert.equal(grouped[0].domains.length, 2);
 });

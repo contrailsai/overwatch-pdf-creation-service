@@ -17,11 +17,20 @@ const { AdsSummaryReportDocument } = require('../../src/components/AdsSummaryRep
 const { AdsDetailedReportDocument } = require('../../src/components/AdsDetailedReport');
 const { DomainsSummaryReportDocument } = require('../../src/components/DomainsSummaryReport');
 const { DomainsDetailedReportDocument } = require('../../src/components/DomainsDetailedReport');
+const { AdsProfilesSummaryReportDocument } = require('../../src/components/AdsProfilesSummaryReport');
+const { AdsProfileReportDocument } = require('../../src/components/AdsProfileReport');
 const { generateDetailedCasesDocxBuffer } = require('../../src/components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('../../src/components/docx/ProfileReportDocx');
 const { generateSimpleProfileDocxBuffer } = require('../../src/components/docx/SimpleProfileReportDocx');
 const { generateSimpleCaseDocxBuffer } = require('../../src/components/docx/SimpleCaseReportDocx');
-const { makeProject, makeProfile, makeNormalizedPost, makeNormalizedAd, makeNormalizedDomain } = require('./smoke-fixtures');
+const {
+  makeProject,
+  makeProfile,
+  makeNormalizedPost,
+  makeNormalizedAd,
+  makeNormalizedDomain,
+  makeAdProfileReportGroup,
+} = require('./smoke-fixtures');
 
 async function streamToBuffer(readable) {
   const chunks = [];
@@ -189,6 +198,31 @@ test('Domains Detailed PDF renders with fixture domain and posts alias', async (
     screenshotSlices: [[]],
   });
   await assertPdfRenderable(aliased);
+});
+
+test('Ads Profiles Summary PDF renders with fixture profile groups', async () => {
+  const project = makeProject();
+  const profiles = [
+    makeAdProfileReportGroup(),
+    makeAdProfileReportGroup({
+      profile: { _id: '6a7db28d7f82a0c5cc92af3e', page_name: 'Second Page', risk: 'high', risk_rank: 'high' },
+    }),
+  ];
+  const element = React.createElement(AdsProfilesSummaryReportDocument, {
+    profiles,
+    project,
+  });
+  await assertPdfRenderable(element);
+});
+
+test('Ads Profile Report PDF renders with single fixture profile dossier', async () => {
+  const project = makeProject();
+  const profiles = [makeAdProfileReportGroup()];
+  const element = React.createElement(AdsProfileReportDocument, {
+    profiles,
+    project,
+  });
+  await assertPdfRenderable(element);
 });
 
 test('SimpleCase DOCX renders with fixture post', async () => {

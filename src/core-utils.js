@@ -4,13 +4,16 @@ const { ObjectId } = require('mongodb');
 const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase', 'Summary']);
 const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase']);
 const DOCX_ONLY_REPORT_TYPES = new Set(['SimpleProfile', 'SimpleCase']);
-const SUPPORTED_ENTITY_TYPES = new Set(['posts', 'ads', 'domains']);
+const SUPPORTED_ENTITY_TYPES = new Set(['posts', 'ads', 'domains', 'ad_profiles']);
 const ADS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
 const DOMAINS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
+const AD_PROFILES_SUPPORTED_REPORT_TYPES = new Set(['Summary']);
+const MAX_PROFILE_REPORT_ADS = 20;
 
 function entityIdFieldName(entityType) {
   if (entityType === 'ads') return 'adIds';
   if (entityType === 'domains') return 'domainIds';
+  if (entityType === 'ad_profiles') return 'adProfileIds';
   return 'postIds';
 }
 
@@ -18,7 +21,9 @@ function resolveEntityType(payload) {
   const explicit = payload?.entityType ? String(payload.entityType).toLowerCase() : '';
   if (explicit === 'ads' || explicit === 'ad') return 'ads';
   if (explicit === 'domains' || explicit === 'domain') return 'domains';
+  if (explicit === 'ad_profiles' || explicit === 'ad_profile' || explicit === 'adprofiles') return 'ad_profiles';
   if (explicit === 'posts' || explicit === 'post') return 'posts';
+  if (Array.isArray(payload?.adProfileIds) && payload.adProfileIds.length > 0) return 'ad_profiles';
   if (Array.isArray(payload?.domainIds) && payload.domainIds.length > 0) return 'domains';
   if (Array.isArray(payload?.adIds) && payload.adIds.length > 0) return 'ads';
   return 'posts';
@@ -32,6 +37,10 @@ function resolveEntityIds(payload) {
   }
   if (entityType === 'domains') {
     if (Array.isArray(payload?.domainIds) && payload.domainIds.length > 0) return payload.domainIds;
+    return payload?.postIds;
+  }
+  if (entityType === 'ad_profiles') {
+    if (Array.isArray(payload?.adProfileIds) && payload.adProfileIds.length > 0) return payload.adProfileIds;
     return payload?.postIds;
   }
   return payload?.postIds;
@@ -87,6 +96,7 @@ function validatePayload(payload) {
   if (!Array.isArray(entityIds) || entityIds.length === 0) {
     if (entityType === 'ads') errors.push('adIds or postIds must be a non-empty array');
     else if (entityType === 'domains') errors.push('domainIds or postIds must be a non-empty array');
+    else if (entityType === 'ad_profiles') errors.push('adProfileIds or postIds must be a non-empty array');
     else errors.push('postIds must be a non-empty array');
   }
   if (!reportType || typeof reportType !== 'string' || !SUPPORTED_REPORT_TYPES.has(reportType)) {
@@ -98,6 +108,9 @@ function validatePayload(payload) {
   if (entityType === 'domains' && reportType && !DOMAINS_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`Domain reports only support: ${Array.from(DOMAINS_SUPPORTED_REPORT_TYPES).join(', ')}`);
   }
+  if (entityType === 'ad_profiles' && reportType && !AD_PROFILES_SUPPORTED_REPORT_TYPES.has(reportType)) {
+    errors.push(`Ad profile reports only support: ${Array.from(AD_PROFILES_SUPPORTED_REPORT_TYPES).join(', ')}`);
+  }
   if (!['pdf', 'docx'].includes(normalizedReportFormat)) {
     errors.push('reportFormat must be either pdf or docx');
   }
@@ -106,6 +119,9 @@ function validatePayload(payload) {
   }
   if (entityType === 'domains' && normalizedReportFormat === 'docx') {
     errors.push('Domain reports currently support PDF only');
+  }
+  if (entityType === 'ad_profiles' && normalizedReportFormat === 'docx') {
+    errors.push('Ad profile reports currently support PDF only');
   }
   if (normalizedReportFormat === 'docx' && !DOCX_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`DOCX is only supported for: ${Array.from(DOCX_SUPPORTED_REPORT_TYPES).join(', ')}`);
@@ -461,6 +477,10 @@ function normalizeAd(ad, opts = {}) {
 
   return {
     _id: ad._id.toString(),
+    ad_profile_id: ad.ad_profile_id?.toString?.() || (ad.ad_profile_id ? String(ad.ad_profile_id) : null),
+    linked_domain_ids: Array.isArray(ad.linked_domain_ids)
+      ? ad.linked_domain_ids.map((id) => id?.toString?.() || String(id))
+      : [],
     created_at: toIsoOrNull(system.created_at ?? ad.ingestion?.ingested_at),
     sourcing_date: toIsoOrNull(list.sourced_at ?? ad.ingestion?.ingested_at),
     posted_date: toIsoOrNull(list.posted_at ?? list.start_date ?? delivery.start_date),
@@ -514,6 +534,172 @@ function normalizeAd(ad, opts = {}) {
   };
 }
 
+function isAdReviewed(ad) {
+  return Boolean(ad?.list?.reviewed_at || ad?.review_details?.reviewed_at || ad?.reviewed_at);
+}
+
+function isAdProfileReviewed(profile) {
+  if (!profile) return false;
+  if (String(profile?.workflow?.review_status || '').toLowerCase() === 'reviewed') return true;
+  return Boolean(
+    profile?.workflow?.reviewed_at ||
+      profile?.review_details?.reviewed_at ||
+      profile?.list?.reviewed_at,
+  );
+}
+
+function adThreatScore(ad) {
+  const review = ad?.review_details || {};
+  const list = ad?.list || {};
+  const analysis = ad?.analysis_results || {};
+  const score =
+    review.threat_score ??
+    list.review_threat_score ??
+    list.effective_threat_score ??
+    analysis.risk_score ??
+    null;
+  return typeof score === 'number' && Number.isFinite(score) ? score : -1;
+}
+
+function adIsFeedLike(ad) {
+  const platforms = [
+    ...(Array.isArray(ad?.publisher_platforms) ? ad.publisher_platforms : []),
+    ...(Array.isArray(ad?.list?.publisher_platforms) ? ad.list.publisher_platforms : []),
+    ...(Array.isArray(ad?.ad_delivery?.publisher_platforms) ? ad.ad_delivery.publisher_platforms : []),
+  ]
+    .map((p) => String(p || '').toUpperCase())
+    .filter(Boolean);
+  return platforms.includes('FACEBOOK') || platforms.includes('INSTAGRAM');
+}
+
+function adRecencyTs(ad) {
+  const raw =
+    ad?.posted_date ||
+    ad?.start_date ||
+    ad?.list?.posted_at ||
+    ad?.list?.start_date ||
+    ad?.ad_delivery?.start_date ||
+    ad?.created_at ||
+    null;
+  if (!raw) return 0;
+  const date = raw instanceof Date ? raw : new Date(raw);
+  const ts = date.getTime();
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+/**
+ * Sort ads for profile reports: threat score desc → feed-like → most recent.
+ * Mutates a copy; does not mutate input.
+ */
+function sortAdsForProfileReport(ads) {
+  return [...(ads || [])].sort((a, b) => {
+    const scoreDiff = adThreatScore(b) - adThreatScore(a);
+    if (scoreDiff !== 0) return scoreDiff;
+    const feedDiff = Number(adIsFeedLike(b)) - Number(adIsFeedLike(a));
+    if (feedDiff !== 0) return feedDiff;
+    return adRecencyTs(b) - adRecencyTs(a);
+  });
+}
+
+function sliceAdsForProfileReport(ads, maxAds = MAX_PROFILE_REPORT_ADS) {
+  const sorted = sortAdsForProfileReport(ads);
+  const limit = Math.max(0, Number(maxAds) || MAX_PROFILE_REPORT_ADS);
+  return {
+    allAds: sorted,
+    displayAds: sorted.slice(0, limit),
+    totalCount: sorted.length,
+    shownCount: Math.min(limit, sorted.length),
+    capped: sorted.length > limit,
+  };
+}
+
+function normalizeAdProfile(profile) {
+  if (!profile) return null;
+  const enrichment = profile.enrichment && typeof profile.enrichment === 'object' ? profile.enrichment : {};
+  const list = profile.list && typeof profile.list === 'object' ? profile.list : {};
+  const review = profile.review_details && typeof profile.review_details === 'object' ? profile.review_details : {};
+  const workflow = profile.workflow && typeof profile.workflow === 'object' ? profile.workflow : {};
+
+  return {
+    _id: profile._id?.toString?.() || String(profile._id),
+    page_name: profile.page_name || profile.display_name || 'Unknown',
+    display_name: profile.display_name || profile.page_name || 'Unknown',
+    profile_url: profile.profile_url || '',
+    platform: profile.platform ? String(profile.platform).toLowerCase() : 'meta',
+    platform_page_id: profile.platform_page_id || '',
+    is_verified: Boolean(profile.is_verified),
+    profile_pic: enrichment.profile_pic_s3 || enrichment.profile_pic || null,
+    follower_count: list.follower_count ?? enrichment.page_like_count ?? null,
+    page_categories: enrichment.page_categories || [],
+    ad_count: list.ad_count ?? null,
+    last_active_at: toIsoOrNull(list.last_active_at),
+    risk: review.risk || list.risk || list.risk_rank || null,
+    risk_rank: list.risk_rank || review.risk || null,
+    violations: Array.isArray(review.violations) ? review.violations : [],
+    reasoning: review.reasoning || '',
+    reviewer_comments: review.reviewer_comments || '',
+    action: review.action || null,
+    reviewed_at: toIsoOrNull(review.reviewed_at ?? workflow.reviewed_at),
+    client_status: workflow.client_status || 'open',
+    review_status: workflow.review_status || null,
+    review_details: review,
+    list,
+    enrichment,
+    workflow,
+  };
+}
+
+/**
+ * Group reviewed ads and domains under each profile (by profile id string).
+ * @param {Array} profiles Normalized or raw profiles with _id
+ * @param {Array} ads Normalized ads (must include ad_profile_id or advertiser linkage via joined profile)
+ * @param {Map<string, object>} domainsById domain id → domain doc
+ * @param {Map<string, string[]>} adDomainIdsByAdId optional map of adId → linked domain id strings
+ */
+function groupAdsAndDomainsByProfile(profiles, ads, domainsById, adDomainIdsByAdId = null) {
+  const adsByProfile = new Map();
+  for (const ad of ads || []) {
+    const profileKey =
+      ad.ad_profile_id?.toString?.() ||
+      (ad.ad_profile_id ? String(ad.ad_profile_id) : null) ||
+      ad._profileId ||
+      null;
+    if (!profileKey) continue;
+    if (!adsByProfile.has(profileKey)) adsByProfile.set(profileKey, []);
+    adsByProfile.get(profileKey).push(ad);
+  }
+
+  return (profiles || []).map((profile) => {
+    const profileId = profile._id?.toString?.() || String(profile._id);
+    const profileAds = adsByProfile.get(profileId) || [];
+    const domainIdSet = new Set();
+    for (const ad of profileAds) {
+      const linked =
+        adDomainIdsByAdId?.get(ad._id?.toString?.() || String(ad._id)) ||
+        ad.linked_domain_ids ||
+        [];
+      for (const domainId of linked) {
+        const key = domainId?.toString?.() || String(domainId);
+        if (key) domainIdSet.add(key);
+      }
+    }
+    const domains = [...domainIdSet]
+      .map((id) => domainsById?.get?.(id) || null)
+      .filter(Boolean);
+
+    const sliced = sliceAdsForProfileReport(profileAds);
+    return {
+      profile,
+      ads: sliced.allAds,
+      displayAds: sliced.displayAds,
+      totalAdCount: sliced.totalCount,
+      shownAdCount: sliced.shownCount,
+      adsCapped: sliced.capped,
+      domains,
+    };
+  });
+}
+
 module.exports = {
   generateReportHash,
   validatePayload,
@@ -523,18 +709,28 @@ module.exports = {
   normalizePost,
   normalizeProfile,
   normalizeAd,
+  normalizeAdProfile,
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,
   extractHostname,
   mapCaseEventToUpdateHistory,
   toIsoOrNull,
+  isAdReviewed,
+  isAdProfileReviewed,
+  sortAdsForProfileReport,
+  sliceAdsForProfileReport,
+  groupAdsAndDomainsByProfile,
+  adThreatScore,
+  adIsFeedLike,
   SUPPORTED_REPORT_TYPES,
   DOCX_SUPPORTED_REPORT_TYPES,
   DOCX_ONLY_REPORT_TYPES,
   SUPPORTED_ENTITY_TYPES,
   ADS_SUPPORTED_REPORT_TYPES,
   DOMAINS_SUPPORTED_REPORT_TYPES,
+  AD_PROFILES_SUPPORTED_REPORT_TYPES,
+  MAX_PROFILE_REPORT_ADS,
   buildDomainHashExtra,
   entityIdFieldName,
 };
