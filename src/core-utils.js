@@ -350,26 +350,75 @@ function isTemplatePlaceholder(text) {
   return typeof text === 'string' && /\{\{[^}]+\}\}/.test(text);
 }
 
+function mediaItemUrl(item) {
+  if (!item || typeof item !== 'object') return null;
+  return item.s3_url || item.original_url || null;
+}
+
+function isThumbnailMedia(item) {
+  if (!item || typeof item !== 'object') return false;
+  const role = typeof item.role === 'string' ? item.role.toLowerCase() : '';
+  const label = typeof item.label === 'string' ? item.label.toLowerCase() : '';
+  return role === 'thumbnail' || label === 'thumbnail';
+}
+
+function isImageLikeMedia(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.type == null || item.type === '') return true;
+  return String(item.type).toLowerCase() === 'image';
+}
+
+/**
+ * Prefer thumbnail-labeled media, else first image-like item, else first URL.
+ * @param {Array} mediaItems
+ * @returns {string|null}
+ */
+function pickMediaUrl(mediaItems) {
+  if (!Array.isArray(mediaItems) || mediaItems.length === 0) return null;
+
+  for (const item of mediaItems) {
+    if (!isThumbnailMedia(item)) continue;
+    const url = mediaItemUrl(item);
+    if (url) return url;
+  }
+
+  for (const item of mediaItems) {
+    if (!isImageLikeMedia(item)) continue;
+    const url = mediaItemUrl(item);
+    if (url) return url;
+  }
+
+  for (const item of mediaItems) {
+    const url = mediaItemUrl(item);
+    if (url) return url;
+  }
+
+  return null;
+}
+
 /**
  * Resolve the first creative image for an ad (flattened content.media, then first card).
+ * Also supports normalized ads that expose media_url / cards[].media_url.
  */
 function resolveAdMediaUrl(ad) {
   if (!ad) return null;
 
-  const v3Media = ad.content?.media;
-  if (Array.isArray(v3Media) && v3Media.length > 0) {
-    const first = v3Media[0];
-    if (first?.s3_url || first?.original_url) {
-      return first.s3_url || first.original_url;
+  const fromContentMedia = pickMediaUrl(ad.content?.media);
+  if (fromContentMedia) return fromContentMedia;
+
+  const rawCards = ad.content?.cards;
+  if (Array.isArray(rawCards) && rawCards.length > 0) {
+    for (const card of rawCards) {
+      const fromCardMedia = pickMediaUrl(card?.media);
+      if (fromCardMedia) return fromCardMedia;
     }
   }
 
-  const cards = ad.content?.cards;
-  if (Array.isArray(cards) && cards.length > 0) {
-    const firstCardMedia = cards[0]?.media?.[0];
-    if (firstCardMedia?.s3_url || firstCardMedia?.original_url) {
-      return firstCardMedia.s3_url || firstCardMedia.original_url;
-    }
+  if (typeof ad.media_url === 'string' && ad.media_url) return ad.media_url;
+
+  const normalizedCards = Array.isArray(ad.cards) ? ad.cards : [];
+  for (const card of normalizedCards) {
+    if (typeof card?.media_url === 'string' && card.media_url) return card.media_url;
   }
 
   return null;
@@ -379,13 +428,18 @@ function resolveAdMediaUrl(ad) {
  * Resolve one image URL per carousel card (DPA / multi-asset ads).
  */
 function resolveAdCardMediaUrls(ad) {
-  const cards = ad.content?.cards;
-  if (Array.isArray(cards) && cards.length > 0) {
-    return cards.map((card) => {
-      const media = card?.media?.[0];
-      return media?.s3_url || media?.original_url || null;
-    });
+  const rawCards = ad?.content?.cards;
+  if (Array.isArray(rawCards) && rawCards.length > 0) {
+    return rawCards.map((card) => pickMediaUrl(card?.media));
   }
+
+  const normalizedCards = Array.isArray(ad?.cards) ? ad.cards : [];
+  if (normalizedCards.length > 0) {
+    return normalizedCards.map((card) =>
+      typeof card?.media_url === 'string' && card.media_url ? card.media_url : null,
+    );
+  }
+
   const fallback = resolveAdMediaUrl(ad);
   return fallback ? [fallback] : [];
 }
@@ -453,9 +507,11 @@ function normalizeAd(ad, opts = {}) {
         cta_type: card.cta_type || content.cta_type || '',
         link_url: card.link_url || '',
         link_description: card.link_description || '',
-        media_url: card.media?.[0]?.s3_url || card.media?.[0]?.original_url || null,
+        media_url: pickMediaUrl(card.media),
       }))
     : [];
+
+  const mediaUrl = pickMediaUrl(content.media) || cards[0]?.media_url || null;
 
   const cardHostnames = [...new Set(cards.map((card) => extractHostname(card.link_url)).filter(Boolean))];
   const shownHostname = extractHostname(content.link_url) || extractHostname(content.caption);
@@ -507,6 +563,7 @@ function normalizeAd(ad, opts = {}) {
     publisher_platforms: list.publisher_platforms || delivery.publisher_platforms || [],
     card_count: list.card_count ?? cards.length,
     cards,
+    media_url: mediaUrl,
     shown_hostname: shownHostname,
     card_hostnames: cardHostnames,
     destination_mismatch: destinationMismatch,
@@ -713,6 +770,7 @@ module.exports = {
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,
+  pickMediaUrl,
   extractHostname,
   mapCaseEventToUpdateHistory,
   toIsoOrNull,

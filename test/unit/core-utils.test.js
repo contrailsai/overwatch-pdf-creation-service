@@ -12,6 +12,9 @@ const {
   normalizeAd,
   normalizeAdProfile,
   resolvePostMediaUrl,
+  resolveAdMediaUrl,
+  resolveAdCardMediaUrls,
+  pickMediaUrl,
   mapCaseEventToUpdateHistory,
   isAdReviewed,
   isAdProfileReviewed,
@@ -451,6 +454,88 @@ test('normalizeAd maps page name, cards, and destination mismatch', () => {
   assert.equal(normalized.cards[0].link_url, 'http://ilnkarip.com/?content_id=4');
   assert.equal(normalized.title, 'Explore New Ways Forward');
   assert.equal(normalized.raw_title, '{{product.description}}');
+  assert.equal(
+    normalized.media_url,
+    'https://cxo-demo.s3.ap-south-1.amazonaws.com/meta_ads/1061241996416851/0/0.jpg',
+  );
+  assert.equal(
+    normalized.cards[0].media_url,
+    'https://cxo-demo.s3.ap-south-1.amazonaws.com/meta_ads/1061241996416851/0/0.jpg',
+  );
+});
+
+test('pickMediaUrl prefers role thumbnail over earlier non-thumbnail media', () => {
+  const url = pickMediaUrl([
+    { type: 'image', role: 'card_image', s3_url: 'https://example.com/card.jpg' },
+    { type: 'image', role: 'thumbnail', s3_url: 'https://example.com/thumb.jpg' },
+  ]);
+  assert.equal(url, 'https://example.com/thumb.jpg');
+});
+
+test('pickMediaUrl prefers label thumbnail and skips null-URL videos for image fallback', () => {
+  const url = pickMediaUrl([
+    { type: 'video', role: 'primary_video', s3_url: null },
+    { type: 'image', label: 'thumbnail', original_url: 'https://example.com/from-label.jpg' },
+  ]);
+  assert.equal(url, 'https://example.com/from-label.jpg');
+});
+
+test('pickMediaUrl takes first image-like item when no thumbnail is present', () => {
+  const url = pickMediaUrl([
+    { type: 'video', role: 'primary_video', s3_url: 'https://example.com/video.mp4' },
+    { type: 'image', role: 'card_image', s3_url: 'https://example.com/first-image.jpg' },
+    { type: 'image', role: 'card_image', s3_url: 'https://example.com/second-image.jpg' },
+  ]);
+  assert.equal(url, 'https://example.com/first-image.jpg');
+});
+
+test('resolveAdMediaUrl prefers content.media thumbnail then falls back to first image', () => {
+  const ad = {
+    content: {
+      media: [
+        { type: 'video', role: 'primary_video', s3_url: null },
+        { type: 'image', role: 'thumbnail', s3_url: 'https://example.com/thumb.jpg' },
+        { type: 'image', role: 'card_image', s3_url: 'https://example.com/other.jpg' },
+      ],
+    },
+  };
+  assert.equal(resolveAdMediaUrl(ad), 'https://example.com/thumb.jpg');
+});
+
+test('resolveAdMediaUrl and resolveAdCardMediaUrls work on normalized ads without content', () => {
+  const normalized = {
+    media_url: 'https://example.com/top.jpg',
+    cards: [
+      { media_url: 'https://example.com/card-0.jpg' },
+      { media_url: 'https://example.com/card-1.jpg' },
+    ],
+  };
+  assert.equal(resolveAdMediaUrl(normalized), 'https://example.com/top.jpg');
+  assert.deepEqual(resolveAdCardMediaUrls(normalized), [
+    'https://example.com/card-0.jpg',
+    'https://example.com/card-1.jpg',
+  ]);
+});
+
+test('resolveAdMediaUrl falls back to normalized cards[].media_url when media_url missing', () => {
+  const normalized = {
+    cards: [{ media_url: 'https://example.com/only-card.jpg' }],
+  };
+  assert.equal(resolveAdMediaUrl(normalized), 'https://example.com/only-card.jpg');
+});
+
+test('normalizeAd exposes media_url from content.media thumbnail when present', () => {
+  const normalized = normalizeAd({
+    ...v3Ad,
+    content: {
+      ...v3Ad.content,
+      media: [
+        { type: 'image', role: 'card_image', s3_url: 'https://example.com/card.jpg' },
+        { type: 'image', role: 'thumbnail', s3_url: 'https://example.com/thumb.jpg' },
+      ],
+    },
+  });
+  assert.equal(normalized.media_url, 'https://example.com/thumb.jpg');
 });
 
 test('normalizeAd falls back from template title to first real card title', () => {
