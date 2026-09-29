@@ -5,3 +5,4 @@ local-reports/
 .env
 
 running_steps.txt
+public/Watermark.pdf

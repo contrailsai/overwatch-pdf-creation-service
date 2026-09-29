@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { pipeline } = require('node:stream/promises');
 const sharp = require('sharp');
 const { ObjectId } = require('mongodb');
 const { renderToStream } = require('@react-pdf/renderer');
@@ -28,7 +27,8 @@ const {
   screenshotSlicePlan,
   SCREENSHOT_SUMMARY_RATIO,
 } = require('./domain-display');
-const { uploadStreamToS3, uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
+const { uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
+const { watermarkPdfStream } = require('./pdf-watermark');
 const { supabase, supabaseEnabled } = require('./supabase');
 
 const { DetailedCasesReportDocument } = require('./components/DetailedCaseReport');
@@ -331,6 +331,32 @@ async function withSpan(name, attributes, fn) {
 }
 
 /**
+ * Stamp the Contrails watermark on a rendered PDF stream, then persist locally or to S3.
+ * @returns {Promise<{ storageUrl: string, localPath?: string }>}
+ */
+async function persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash }) {
+  const stampedPdf = await withSpan('watermark-pdf', { 'report.hash': reportHash }, async () => {
+    return await watermarkPdfStream(pdfStream);
+  });
+
+  if (persist === 'local') {
+    if (!localOutputDir) {
+      throw new Error('localOutputDir is required when persist === "local"');
+    }
+    fs.mkdirSync(localOutputDir, { recursive: true });
+    const fileName = `${reportHash}.pdf`;
+    const localPath = path.join(localOutputDir, fileName);
+    await fs.promises.writeFile(localPath, stampedPdf);
+    return { storageUrl: `local://${fileName}`, localPath };
+  }
+
+  const storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
+    return await uploadBufferToS3(stampedPdf, `reports/${reportHash}.pdf`, 'application/pdf');
+  });
+  return { storageUrl };
+}
+
+/**
  * Same pipeline as the SQS Lambda: Mongo posts → images → PDF or DOCX → persist.
  *
  * @param {import('mongodb').MongoClient} client
@@ -440,20 +466,9 @@ async function runReportJob(client, payload, options = {}) {
 
       await updateReportStatus(reportHash, '[80%] Uploading to Storage');
 
-      if (persist === 'local') {
-        if (!localOutputDir) {
-          throw new Error('localOutputDir is required when persist === "local"');
-        }
-        fs.mkdirSync(localOutputDir, { recursive: true });
-        const fileName = `${reportHash}.pdf`;
-        localPath = path.join(localOutputDir, fileName);
-        await pipeline(pdfStream, fs.createWriteStream(localPath));
-        storageUrl = `local://${fileName}`;
-      } else {
-        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
-          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
-        });
-      }
+      const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
+      storageUrl = persisted.storageUrl;
+      if (persisted.localPath) localPath = persisted.localPath;
     } else if (isAdProfiles) {
       await updateReportStatus(reportHash, '[10%] Fetching ad profiles from DB');
 
@@ -603,20 +618,9 @@ async function runReportJob(client, payload, options = {}) {
 
       await updateReportStatus(reportHash, '[80%] Uploading to Storage');
 
-      if (persist === 'local') {
-        if (!localOutputDir) {
-          throw new Error('localOutputDir is required when persist === "local"');
-        }
-        fs.mkdirSync(localOutputDir, { recursive: true });
-        const fileName = `${reportHash}.pdf`;
-        localPath = path.join(localOutputDir, fileName);
-        await pipeline(pdfStream, fs.createWriteStream(localPath));
-        storageUrl = `local://${fileName}`;
-      } else {
-        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
-          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
-        });
-      }
+      const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
+      storageUrl = persisted.storageUrl;
+      if (persisted.localPath) localPath = persisted.localPath;
     } else if (isAds) {
       await updateReportStatus(reportHash, '[10%] Fetching ads from DB');
 
@@ -697,20 +701,9 @@ async function runReportJob(client, payload, options = {}) {
 
       await updateReportStatus(reportHash, '[80%] Uploading to Storage');
 
-      if (persist === 'local') {
-        if (!localOutputDir) {
-          throw new Error('localOutputDir is required when persist === "local"');
-        }
-        fs.mkdirSync(localOutputDir, { recursive: true });
-        const fileName = `${reportHash}.pdf`;
-        localPath = path.join(localOutputDir, fileName);
-        await pipeline(pdfStream, fs.createWriteStream(localPath));
-        storageUrl = `local://${fileName}`;
-      } else {
-        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
-          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
-        });
-      }
+      const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
+      storageUrl = persisted.storageUrl;
+      if (persisted.localPath) localPath = persisted.localPath;
     } else {
     await updateReportStatus(reportHash, '[10%] Fetching posts from DB');
 
@@ -860,20 +853,9 @@ async function runReportJob(client, payload, options = {}) {
 
       await updateReportStatus(reportHash, '[80%] Uploading to Storage');
 
-      if (persist === 'local') {
-        if (!localOutputDir) {
-          throw new Error('localOutputDir is required when persist === "local"');
-        }
-        fs.mkdirSync(localOutputDir, { recursive: true });
-        const fileName = `${reportHash}.pdf`;
-        localPath = path.join(localOutputDir, fileName);
-        await pipeline(pdfStream, fs.createWriteStream(localPath));
-        storageUrl = `local://${fileName}`;
-      } else {
-        storageUrl = await withSpan('upload-s3', { 's3.key': `reports/${reportHash}.pdf` }, async () => {
-          return await uploadStreamToS3(pdfStream, `reports/${reportHash}.pdf`);
-        });
-      }
+      const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
+      storageUrl = persisted.storageUrl;
+      if (persisted.localPath) localPath = persisted.localPath;
     }
     }
 
