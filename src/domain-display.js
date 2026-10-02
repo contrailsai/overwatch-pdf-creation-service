@@ -211,8 +211,8 @@ const SCREENSHOT_HERO_RATIO = 0.72;
 const SCREENSHOT_SUMMARY_RATIO = 0.62;
 /** Taller gallery strips — more page per cell; cells use cover-fit to avoid letterboxing. */
 const SCREENSHOT_GALLERY_RATIO = 1.2;
-/** Longer lander preview for ad-profile evidence (~closer to square than 16:9 so more page shows). */
-const SCREENSHOT_EVIDENCE_RATIO = 0.95;
+/** Tall top-of-page crop for ad-profile evidence (height = width × 16/9 ≈ portrait 9:16). */
+const SCREENSHOT_EVIDENCE_RATIO = 16 / 9;
 const MAX_SCREENSHOT_SLICES = 24;
 const MIN_SCREENSHOT_REMAINDER_PX = 32;
 

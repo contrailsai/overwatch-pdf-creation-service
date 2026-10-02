@@ -580,10 +580,10 @@ async function runReportJob(client, payload, options = {}) {
           processAndCacheDomainImages(domainsFlat, {
             includeSlices: true,
             concurrency: 10,
-            // 16:9 evidence preview on page 1; taller strips for gallery pages
+            // Tall (≈9:16) top-of-page crop; PDF scales it down to a fixed card height
             heroRatio: SCREENSHOT_EVIDENCE_RATIO,
             sliceRatio: SCREENSHOT_GALLERY_RATIO,
-            heroSuffix: 'lander_evidence_long',
+            heroSuffix: 'lander_evidence_portrait',
             heroWidth: 900,
           }),
       );
