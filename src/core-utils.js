@@ -511,7 +511,10 @@ function normalizeAd(ad, opts = {}) {
       }))
     : [];
 
-  const mediaUrl = pickMediaUrl(content.media) || cards[0]?.media_url || null;
+  const mediaUrl =
+    pickMediaUrl(content.media) ||
+    cards.find((card) => typeof card.media_url === 'string' && card.media_url)?.media_url ||
+    null;
 
   const cardHostnames = [...new Set(cards.map((card) => extractHostname(card.link_url)).filter(Boolean))];
   const shownHostname = extractHostname(content.link_url) || extractHostname(content.caption);
@@ -677,6 +680,16 @@ function normalizeAdProfile(profile) {
   const review = profile.review_details && typeof profile.review_details === 'object' ? profile.review_details : {};
   const workflow = profile.workflow && typeof profile.workflow === 'object' ? profile.workflow : {};
 
+  const legalCodes = Array.isArray(review.legal_codes)
+    ? review.legal_codes.map((item) => {
+        if (typeof item === 'string') return { code: item, reasoning: '' };
+        return {
+          code: item?.code || item?.name || '',
+          reasoning: item?.reasoning || '',
+        };
+      }).filter((item) => item.code)
+    : [];
+
   return {
     _id: profile._id?.toString?.() || String(profile._id),
     page_name: profile.page_name || profile.display_name || 'Unknown',
@@ -688,11 +701,17 @@ function normalizeAdProfile(profile) {
     profile_pic: enrichment.profile_pic_s3 || enrichment.profile_pic || null,
     follower_count: list.follower_count ?? enrichment.page_like_count ?? null,
     page_categories: enrichment.page_categories || [],
+    biography: enrichment.biography || null,
     ad_count: list.ad_count ?? null,
     last_active_at: toIsoOrNull(list.last_active_at),
     risk: review.risk || list.risk || list.risk_rank || null,
     risk_rank: list.risk_rank || review.risk || null,
     violations: Array.isArray(review.violations) ? review.violations : [],
+    threat_score: review.threat_score ?? list.max_threat_score ?? null,
+    case_summary: review.case_summary || '',
+    legal_codes: legalCodes,
+    verdict: review.verdict || null,
+    recommended_action: review.recommended_action || null,
     reasoning: review.reasoning || '',
     reviewer_comments: review.reviewer_comments || '',
     action: review.action || null,

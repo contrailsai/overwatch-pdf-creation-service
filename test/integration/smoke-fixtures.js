@@ -221,34 +221,83 @@ function makeNormalizedDomain(overrides = {}) {
 
 function makeNormalizedAdProfile(overrides = {}) {
   return {
-    _id: '6a9fb9abc911dc2962ccf3ef',
-    page_name: 'Fixture Ad Page',
-    display_name: 'Fixture Ad Page',
-    profile_url: 'https://www.facebook.com/61550597862815/',
+    _id: '6aa3b1a0f2b0ece71b211562',
+    page_name: 'Sean Lins Tronto',
+    display_name: 'Sean Lins Tronto',
+    profile_url: 'https://www.facebook.com/61550428046545/',
     platform: 'meta',
-    platform_page_id: '102893292147872',
+    platform_page_id: '122093630048016766',
     is_verified: false,
     profile_pic: null,
-    follower_count: 12,
-    page_categories: ['Topic'],
-    ad_count: 160,
-    last_active_at: '2026-09-01T07:00:00.000Z',
+    follower_count: 1,
+    page_categories: ['Business'],
+    biography: null,
+    ad_count: 9,
+    last_active_at: '2026-09-10T07:00:00.000Z',
     risk: 'high',
     risk_rank: 'high',
-    violations: ['fraud', 'investment-scams'],
-    reasoning: '',
+    violations: ['investment-scams', 'fraud'],
+    threat_score: 95,
+    case_summary:
+      'The Facebook page "Sean Lins Tronto" ran 9 cloaked ads, disguised as "amazon.in", which redirected users to an investment scam promoting a "Quantum AI platform" with false government guarantees.',
+    legal_codes: [
+      {
+        code: 'IT ACT 2000 - SECTION 66D',
+        reasoning:
+          "The advertiser's ads were disguised as \"amazon.in\" and used a cloaked landing page to deceive users.",
+      },
+      {
+        code: 'Bharatiya Nyaya Sanhita 2023 - Section 318(4)',
+        reasoning:
+          'The advertiser promoted an investment scam promising unrealistic returns and a "100% government guarantee."',
+      },
+      {
+        code: 'SEBI Act 1992 - Section 12(1B)',
+        reasoning:
+          'The "Quantum AI platform" appears to be an unregistered collective investment scheme.',
+      },
+    ],
+    verdict: 'takedown',
+    recommended_action: 'Page takedown',
+    reasoning:
+      'The Facebook page "Sean Lins Tronto" should be taken down due to its direct involvement in promoting a sophisticated investment scam. All 9 ads were deceptively disguised as "amazon.in" but cloaked to redirect users to quietmoonriver.com.',
     reviewer_comments: '',
     action: 'submit_to_client',
-    reviewed_at: '2026-09-02T12:00:20.850Z',
+    reviewed_at: '2026-09-11T09:20:25.917Z',
     client_status: 'alerted',
     review_status: 'reviewed',
     review_details: {
       risk: 'high',
-      violations: ['fraud', 'investment-scams'],
-      reviewed_at: '2026-09-02T12:00:20.850Z',
+      violations: ['investment-scams', 'fraud'],
+      threat_score: 95,
+      case_summary:
+        'The Facebook page "Sean Lins Tronto" ran 9 cloaked ads, disguised as "amazon.in", which redirected users to an investment scam promoting a "Quantum AI platform" with false government guarantees.',
+      legal_codes: [
+        {
+          code: 'IT ACT 2000 - SECTION 66D',
+          reasoning:
+            "The advertiser's ads were disguised as \"amazon.in\" and used a cloaked landing page to deceive users.",
+        },
+        {
+          code: 'Bharatiya Nyaya Sanhita 2023 - Section 318(4)',
+          reasoning:
+            'The advertiser promoted an investment scam promising unrealistic returns and a "100% government guarantee."',
+        },
+        {
+          code: 'SEBI Act 1992 - Section 12(1B)',
+          reasoning:
+            'The "Quantum AI platform" appears to be an unregistered collective investment scheme.',
+        },
+      ],
+      verdict: 'takedown',
+      recommended_action: 'Page takedown',
+      reasoning:
+        'The Facebook page "Sean Lins Tronto" should be taken down due to its direct involvement in promoting a sophisticated investment scam.',
+      reviewer_comments: '',
+      reviewed_at: '2026-09-11T09:20:25.917Z',
     },
-    list: { ad_count: 160, follower_count: 12, risk_rank: 'high' },
-    enrichment: {},
+    list: { ad_count: 9, follower_count: 1, risk_rank: 'high', last_active_at: '2026-09-10T07:00:00.000Z' },
+    enrichment: { page_categories: ['Business'], biography: null },
     workflow: { review_status: 'reviewed', client_status: 'alerted' },
     ...overrides,
   };

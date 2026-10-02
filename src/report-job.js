@@ -12,6 +12,7 @@ const {
   normalizeAd,
   normalizeAdProfile,
   resolvePostMediaUrl,
+  resolveAdMediaUrl,
   resolveAdCardMediaUrls,
   mapCaseEventToUpdateHistory,
   validatePayload,
@@ -181,12 +182,22 @@ async function processAndCacheAdImages(ads, { includeAllCards = false, concurren
     const chunk = ads.slice(i, i + concurrency);
     const promises = chunk.map(async (ad, index) => {
       const cardUrls = resolveAdCardMediaUrls(ad);
-      const urlsToFetch = includeAllCards ? cardUrls.slice(0, 6) : cardUrls.slice(0, 1);
-      const cardPaths = await Promise.all(
-        urlsToFetch.map((url, cardIndex) => processImage(url, ad._id, `card_${cardIndex}`)),
-      );
-      compressedImages[i + index] = cardPaths[0] || null;
-      compressedCardImages[i + index] = includeAllCards ? cardPaths : [];
+      if (includeAllCards) {
+        const urlsToFetch = cardUrls.slice(0, 6);
+        const cardPaths = await Promise.all(
+          urlsToFetch.map((url, cardIndex) => processImage(url, ad._id, `card_${cardIndex}`)),
+        );
+        compressedImages[i + index] = cardPaths.find(Boolean) || null;
+        compressedCardImages[i + index] = cardPaths;
+      } else {
+        // Prefer resolveAdMediaUrl: content.media usually has durable S3 URLs;
+        // card media often only has ephemeral Facebook CDN originals.
+        const thumbUrl =
+          resolveAdMediaUrl(ad) || cardUrls.find(Boolean) || null;
+        const thumbPath = await processImage(thumbUrl, ad._id, 'card_0');
+        compressedImages[i + index] = thumbPath || null;
+        compressedCardImages[i + index] = [];
+      }
     });
     await Promise.all(promises);
   }

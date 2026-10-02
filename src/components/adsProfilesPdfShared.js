@@ -336,7 +336,168 @@ export const sharedStyles = StyleSheet.create({
   dateValue: { fontSize: 6, color: Theme.PRIMARY_BLUE, marginBottom: 3 },
   indexText: { fontSize: 7.5, fontWeight: '700', color: Theme.PRIMARY_BLUE },
   profileBlock: { marginBottom: 16 },
+  profileBio: {
+    fontSize: 7,
+    color: Theme.PRIMARY_BLUE,
+    lineHeight: 1.35,
+    marginTop: 2,
+  },
+  reviewSection: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    marginBottom: 12,
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  reviewSectionLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  reviewSubLabel: {
+    fontSize: 6.5,
+    fontWeight: '900',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  reviewBody: {
+    fontSize: 7,
+    color: Theme.PRIMARY_BLUE,
+    lineHeight: 1.45,
+  },
+  reviewBodySoft: {
+    fontSize: 7,
+    color: Theme.SECONDARY_GRAY,
+    lineHeight: 1.45,
+  },
+  reasoningLabel: {
+    fontSize: 7,
+    fontWeight: '700',
+    color: Theme.PRIMARY_BLUE,
+  },
+  reasoningSection: { marginBottom: 4 },
+  reasoningSectionLast: { marginBottom: 0 },
+  verdictBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 4,
+    borderWidth: 1,
+    backgroundColor: '#F8FAFC',
+    borderColor: Theme.BORDER_LIGHT,
+    alignSelf: 'flex-start',
+  },
+  verdictBadgeText: {
+    fontSize: 6.5,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+    textTransform: 'uppercase',
+  },
+  violationPill: {
+    backgroundColor: '#FFF1F2',
+    borderWidth: 0.5,
+    borderColor: Theme.RISK_HIGH,
+    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  violationPillText: {
+    fontSize: 6.5,
+    fontWeight: '700',
+    color: Theme.RISK_HIGH,
+    textTransform: 'capitalize',
+  },
+  legalCardShell: {
+    flexDirection: 'row',
+    borderWidth: 0.5,
+    borderColor: '#FECDD3',
+    borderRadius: 4,
+    backgroundColor: '#FFF1F2',
+    overflow: 'hidden',
+    marginBottom: 5,
+  },
+  legalCardShellLast: { marginBottom: 0 },
+  legalCardAccent: {
+    width: 3,
+    backgroundColor: Theme.RISK_HIGH,
+  },
+  legalCardInner: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  legalCode: {
+    fontSize: 7,
+    fontWeight: '900',
+    color: Theme.RISK_HIGH,
+    letterSpacing: 0.15,
+    marginBottom: 2,
+  },
+  legalReason: {
+    fontSize: 6.5,
+    color: Theme.SECONDARY_GRAY,
+    lineHeight: 1.4,
+  },
+  connectedDivider: {
+    marginTop: 8,
+    marginBottom: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Theme.BORDER_LIGHT,
+  },
+  connectedTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
 });
+
+function parseReasoning(text) {
+  if (!text) return [];
+  const cleaned = String(text);
+  const lines = cleaned.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+  return lines.map((line) => {
+    const match = line.match(/^([A-Z][A-Za-z0-9 &/()\-]{2,40}?):\s*(.+)$/);
+    if (match) return { label: match[1].trim(), content: match[2].trim() };
+    return { label: '', content: line };
+  });
+}
+
+function formatVerdictLabel(value) {
+  if (!value) return '';
+  return String(value)
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function resolveProjectLegalCodes(project) {
+  let projectDetails = project?.project_details;
+  if (typeof projectDetails === 'string') {
+    try {
+      projectDetails = JSON.parse(projectDetails);
+    } catch {
+      projectDetails = {};
+    }
+  }
+  return Array.isArray(projectDetails?.legal_codes) ? projectDetails.legal_codes : [];
+}
 
 export function formatCompleteDate(dateInput) {
   if (!dateInput) return 'N/A';
@@ -551,7 +712,9 @@ export const ProfileMetricsSection = ({ group }) => {
 
 export const ProfileBanner = ({ profile, profilePic }) => {
   const risk = profileRiskInfo(profile);
-  const violations = Array.isArray(profile?.violations) ? profile.violations : [];
+  const categories = Array.isArray(profile?.page_categories) ? profile.page_categories : [];
+  const biography = profile?.biography || profile?.enrichment?.biography || null;
+
   return (
     <View style={sharedStyles.profileBanner} wrap={false}>
       <View style={sharedStyles.profileBannerLeft}>
@@ -568,20 +731,15 @@ export const ProfileBanner = ({ profile, profilePic }) => {
             {(profile?.platform || 'meta').toUpperCase()}
             {profile?.is_verified ? ' · Verified' : ''}
             {profile?.follower_count != null ? ` · ${Number(profile.follower_count).toLocaleString()} followers` : ''}
+            {profile?.ad_count != null ? ` · ${Number(profile.ad_count).toLocaleString()} ads` : ''}
           </Text>
+          {biography ? (
+            <Text style={sharedStyles.profileBio}>{processText(String(biography), 180, 3)}</Text>
+          ) : null}
           {profile?.profile_url ? (
             <Link src={profile.profile_url} style={sharedStyles.profileLink} target="_blank">
               {processText(profile.profile_url, 60)}
             </Link>
-          ) : null}
-          {violations.length > 0 ? (
-            <View style={sharedStyles.chipRow}>
-              {violations.slice(0, 5).map((v, idx) => (
-                <View key={idx} style={sharedStyles.chip}>
-                  <Text style={sharedStyles.chipText}>{processText(String(v).replace(/[-_]/g, ' '), 22)}</Text>
-                </View>
-              ))}
-            </View>
           ) : null}
         </View>
       </View>
@@ -592,6 +750,14 @@ export const ProfileBanner = ({ profile, profilePic }) => {
             <Text style={[sharedStyles.riskBadgeText, { color: risk.color }]}>{risk.label}</Text>
           </View>
         </View>
+        {categories.length > 0 ? (
+          <View style={sharedStyles.detailRow}>
+            <Text style={sharedStyles.detailLabel}>Category</Text>
+            <Text style={sharedStyles.detailValue}>
+              {processText(categories.slice(0, 3).join(', '), 28)}
+            </Text>
+          </View>
+        ) : null}
         <View style={sharedStyles.detailRow}>
           <Text style={sharedStyles.detailLabel}>Status</Text>
           <Text style={sharedStyles.detailValue}>{processText(profile?.client_status || 'open', 20)}</Text>
@@ -604,6 +770,157 @@ export const ProfileBanner = ({ profile, profilePic }) => {
     </View>
   );
 };
+
+export const ProfileReviewSection = ({ profile, project }) => {
+  const review = profile?.review_details || {};
+  const risk = profileRiskInfo(profile);
+  const caseSummary = profile?.case_summary || review.case_summary || '';
+  const reasoning = profile?.reasoning || review.reasoning || '';
+  const reviewerComments = (profile?.reviewer_comments || review.reviewer_comments || '').trim();
+  const violations = Array.isArray(profile?.violations)
+    ? profile.violations
+    : Array.isArray(review.violations)
+      ? review.violations
+      : [];
+  const verdictRaw =
+    profile?.recommended_action ||
+    review.recommended_action ||
+    profile?.verdict ||
+    review.verdict ||
+    null;
+  const verdictLabel = formatVerdictLabel(verdictRaw);
+  const projectLegalCodes = resolveProjectLegalCodes(project);
+  const legalCodesRaw = Array.isArray(profile?.legal_codes)
+    ? profile.legal_codes
+    : Array.isArray(review.legal_codes)
+      ? review.legal_codes
+      : [];
+  const legalCodes = legalCodesRaw
+    .map((item) => {
+      if (typeof item === 'string') return { code: item, reasoning: '' };
+      return { code: item?.code || item?.name || '', reasoning: item?.reasoning || '' };
+    })
+    .filter((item) => item.code)
+    .map((item) => {
+      if (item.reasoning) return item;
+      const projCode = projectLegalCodes.find(
+        (pc) => pc.name === item.code || pc.codeName === item.code || pc.code === item.code,
+      );
+      return { ...item, reasoning: projCode?.description || '' };
+    });
+
+  const hasContent = Boolean(
+    caseSummary || legalCodes.length || reasoning || reviewerComments || violations.length || verdictLabel,
+  );
+  if (!hasContent) return null;
+
+  const reasoningSections = parseReasoning(reasoning);
+
+  return (
+    <View style={sharedStyles.reviewSection}>
+      <Text style={sharedStyles.reviewSectionLabel}>Review Details</Text>
+      <View style={sharedStyles.reviewHeaderRow} wrap={false}>
+        <View style={[sharedStyles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
+          <Text style={[sharedStyles.riskBadgeText, { color: risk.color }]}>{risk.label}</Text>
+        </View>
+        {verdictLabel ? (
+          <View style={sharedStyles.verdictBadge}>
+            <Text style={sharedStyles.verdictBadgeText}>{processText(verdictLabel, 28)}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {caseSummary ? (
+        <>
+          <Text style={[sharedStyles.reviewSubLabel, { marginTop: 0 }]}>Case Summary</Text>
+          <Text style={sharedStyles.reviewBody}>{processText(caseSummary, 420, 6)}</Text>
+        </>
+      ) : null}
+
+      {violations.length > 0 ? (
+        <>
+          <Text style={sharedStyles.reviewSubLabel}>Detected Violations</Text>
+          <View style={sharedStyles.chipRow}>
+            {violations.slice(0, 8).map((v, idx) => (
+              <View key={idx} style={sharedStyles.violationPill}>
+                <Text style={sharedStyles.violationPillText}>
+                  {processText(String(v).replace(/[-_]/g, ' '), 28)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {legalCodes.length > 0 ? (
+        <>
+          <Text style={sharedStyles.reviewSubLabel}>Legal Violations</Text>
+          {legalCodes.map((item, idx) => (
+            <View
+              key={idx}
+              style={[
+                sharedStyles.legalCardShell,
+                idx === legalCodes.length - 1 && sharedStyles.legalCardShellLast,
+              ]}
+              wrap={false}
+            >
+              <View style={sharedStyles.legalCardAccent} />
+              <View style={sharedStyles.legalCardInner}>
+                <Text style={sharedStyles.legalCode}>{processText(item.code, 72)}</Text>
+                {item.reasoning ? (
+                  <Text style={sharedStyles.legalReason}>{processText(item.reasoning, 240, 4)}</Text>
+                ) : null}
+              </View>
+            </View>
+          ))}
+        </>
+      ) : null}
+
+      {reasoning ? (
+        <>
+          <Text style={sharedStyles.reviewSubLabel}>Reasoning</Text>
+          {reasoningSections.length === 0 ? (
+            <Text style={sharedStyles.reviewBodySoft}>No reviewer reasoning.</Text>
+          ) : reasoningSections.length === 1 && !reasoningSections[0].label ? (
+            <Text style={sharedStyles.reviewBodySoft}>
+              {processText(reasoningSections[0].content, 900, 12)}
+            </Text>
+          ) : (
+            reasoningSections.map((sec, i) => (
+              <View
+                key={i}
+                style={[
+                  sharedStyles.reasoningSection,
+                  i === reasoningSections.length - 1 && sharedStyles.reasoningSectionLast,
+                ]}
+              >
+                <Text style={sharedStyles.reviewBodySoft}>
+                  {sec.label ? <Text style={sharedStyles.reasoningLabel}>{sec.label}: </Text> : null}
+                  {processText(sec.content, 280, 4)}
+                </Text>
+              </View>
+            ))
+          )}
+        </>
+      ) : !caseSummary && legalCodes.length === 0 ? (
+        <Text style={sharedStyles.reviewBodySoft}>No reviewer reasoning.</Text>
+      ) : null}
+
+      {reviewerComments ? (
+        <>
+          <Text style={sharedStyles.reviewSubLabel}>Reviewer Comments</Text>
+          <Text style={sharedStyles.reviewBody}>{processText(reviewerComments, 360, 5)}</Text>
+        </>
+      ) : null}
+    </View>
+  );
+};
+
+export const ConnectedContentDivider = () => (
+  <View style={sharedStyles.connectedDivider} wrap={false}>
+    <Text style={sharedStyles.connectedTitle}>Connected Content</Text>
+  </View>
+);
 
 export const DomainsTable = ({ domains, compressedDomainImages }) => {
   if (!domains || domains.length === 0) {
@@ -810,6 +1127,8 @@ export const AdsTable = ({
 export const ProfileReportBlock = ({ group, project, breakBefore = false }) => (
   <View style={sharedStyles.profileBlock} break={breakBefore || undefined} wrap>
     <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
+    <ProfileReviewSection profile={group.profile} project={project} />
+    <ConnectedContentDivider />
     <ProfileMetricsSection group={group} />
     <DomainsTable domains={group.domains} compressedDomainImages={group.compressedDomainImages} />
     <AdsTable

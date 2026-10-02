@@ -524,6 +524,34 @@ test('resolveAdMediaUrl falls back to normalized cards[].media_url when media_ur
   assert.equal(resolveAdMediaUrl(normalized), 'https://example.com/only-card.jpg');
 });
 
+test('resolveAdMediaUrl and normalizeAd skip null first carousel card', () => {
+  const ad = {
+    _id: 'carousel-null-first',
+    content: {
+      title: 'Carousel ad',
+      media: [],
+      cards: [
+        { title: 'Card 1', media: [{ type: 'video', s3_url: null }], link_url: 'http://a.com/' },
+        {
+          title: 'Card 2',
+          media: [{ type: 'image', s3_url: 'https://example.com/second-card.jpg' }],
+          link_url: 'http://a.com/',
+        },
+      ],
+    },
+    list: {},
+    review_details: {},
+  };
+  assert.equal(resolveAdMediaUrl(ad), 'https://example.com/second-card.jpg');
+  assert.deepEqual(resolveAdCardMediaUrls(ad), [null, 'https://example.com/second-card.jpg']);
+
+  const normalized = normalizeAd(ad);
+  assert.equal(normalized.media_url, 'https://example.com/second-card.jpg');
+  assert.equal(normalized.cards[0].media_url, null);
+  assert.equal(normalized.cards[1].media_url, 'https://example.com/second-card.jpg');
+  assert.equal(resolveAdMediaUrl(normalized), 'https://example.com/second-card.jpg');
+});
+
 test('normalizeAd exposes media_url from content.media thumbnail when present', () => {
   const normalized = normalizeAd({
     ...v3Ad,
@@ -685,11 +713,25 @@ test('normalizeAdProfile maps page identity and review fields', () => {
     display_name: 'Scam Page',
     profile_url: 'https://www.facebook.com/123/',
     is_verified: false,
-    enrichment: { profile_pic_s3: 'https://example.com/pic.jpg', page_like_count: 12 },
-    list: { follower_count: 12, risk_rank: 'high', ad_count: 160 },
+    enrichment: {
+      profile_pic_s3: 'https://example.com/pic.jpg',
+      page_like_count: 12,
+      page_categories: ['Business'],
+      biography: 'Sample bio',
+    },
+    list: { follower_count: 12, risk_rank: 'high', ad_count: 160, last_active_at: '2026-09-01T07:00:00.000Z' },
     review_details: {
       risk: 'high',
       violations: ['fraud'],
+      threat_score: 95,
+      case_summary: 'Page ran cloaked investment scam ads.',
+      legal_codes: [
+        { code: 'IT ACT 2000 - SECTION 66D', reasoning: 'Personation via computer resource.' },
+      ],
+      verdict: 'takedown',
+      recommended_action: 'Page takedown',
+      reasoning: 'Detailed reviewer reasoning.',
+      reviewer_comments: 'Escalate',
       reviewed_at: '2026-09-02T12:00:20.850Z',
     },
     workflow: { review_status: 'reviewed', client_status: 'alerted' },
@@ -699,6 +741,16 @@ test('normalizeAdProfile maps page identity and review fields', () => {
   assert.equal(normalized.profile_pic, 'https://example.com/pic.jpg');
   assert.equal(normalized.risk, 'high');
   assert.deepEqual(normalized.violations, ['fraud']);
+  assert.equal(normalized.threat_score, 95);
+  assert.equal(normalized.case_summary, 'Page ran cloaked investment scam ads.');
+  assert.equal(normalized.recommended_action, 'Page takedown');
+  assert.equal(normalized.verdict, 'takedown');
+  assert.equal(normalized.biography, 'Sample bio');
+  assert.deepEqual(normalized.page_categories, ['Business']);
+  assert.equal(normalized.legal_codes.length, 1);
+  assert.equal(normalized.legal_codes[0].code, 'IT ACT 2000 - SECTION 66D');
+  assert.equal(normalized.reasoning, 'Detailed reviewer reasoning.');
+  assert.equal(normalized.reviewer_comments, 'Escalate');
 });
 
 test('groupAdsAndDomainsByProfile attaches domains and caps display ads', () => {
