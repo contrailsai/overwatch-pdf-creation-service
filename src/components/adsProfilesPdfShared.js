@@ -119,44 +119,71 @@ export const sharedStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: Theme.BG_SECTION,
-    padding: 12,
+    padding: 8,
     borderRadius: 6,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
-    marginBottom: 12,
+    marginBottom: 0,
+    flexGrow: 1,
   },
-  profileBannerLeft: { flexDirection: 'row', gap: 12, width: '68%' },
+  profileBannerLeft: { flexDirection: 'row', gap: 8, width: '64%' },
   profileImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Theme.BORDER_LIGHT,
     backgroundColor: '#FFFFFF',
     objectFit: 'cover',
   },
   profileImagePlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Theme.BORDER_LIGHT,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  profileInfo: { flex: 1, flexDirection: 'column', gap: 3 },
-  profileName: { fontSize: 13, fontWeight: '900', color: Theme.PRIMARY_BLUE },
-  profileMeta: { fontSize: 8, color: Theme.SECONDARY_GRAY, fontWeight: 'bold' },
-  profileLink: { fontSize: 7, color: Theme.LINK, textDecoration: 'none', marginTop: 2 },
+  profileInfo: { flex: 1, flexDirection: 'column', gap: 2 },
+  profileName: { fontSize: 11, fontWeight: '900', color: Theme.PRIMARY_BLUE },
+  profileMeta: { fontSize: 7, color: Theme.SECONDARY_GRAY, fontWeight: 'bold' },
+  profileLink: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none', marginTop: 1 },
   profileBannerRight: {
-    width: '30%',
+    width: '34%',
     flexDirection: 'column',
-    gap: 5,
+    gap: 4,
     borderLeftWidth: 0.5,
     borderLeftColor: Theme.BORDER_LIGHT,
-    paddingLeft: 12,
+    paddingLeft: 8,
     justifyContent: 'center',
+  },
+  profileHeroRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    alignItems: 'stretch',
+  },
+  profileHeroLeft: {
+    width: '58%',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  profileHeroLeftFull: {
+    width: '100%',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  profileHeroRight: {
+    width: '40%',
+    flexDirection: 'column',
+    backgroundColor: Theme.BG_SECTION,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    borderRadius: 6,
+    padding: 8,
+    justifyContent: 'flex-start',
   },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start' },
   detailLabel: {
@@ -454,8 +481,8 @@ export const sharedStyles = StyleSheet.create({
   },
   highlightStrip: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 0,
   },
   highlightCard: {
     flex: 1,
@@ -463,75 +490,81 @@ export const sharedStyles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
     borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   highlightCardAccent: {
     backgroundColor: '#FFF1F2',
     borderColor: '#FECDD3',
   },
   highlightLabel: {
-    fontSize: 6,
+    fontSize: 5.5,
     fontWeight: 'bold',
     color: Theme.SECONDARY_GRAY,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   highlightValue: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
     color: Theme.PRIMARY_BLUE,
   },
   highlightValueDanger: {
-    fontSize: 11,
+    fontSize: 9.5,
     fontWeight: '900',
     color: Theme.RISK_HIGH,
     textTransform: 'capitalize',
   },
   highlightMeta: {
-    fontSize: 6.5,
+    fontSize: 6,
     color: Theme.SECONDARY_GRAY,
     marginTop: 2,
   },
   evidenceSection: {
-    marginBottom: 12,
-  },
-  evidenceRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 8,
+    flexGrow: 1,
   },
-  evidenceCol: {
-    flex: 1,
+  evidenceTitle: {
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  evidenceBlock: {
+    flexDirection: 'column',
+    gap: 4,
   },
   evidenceSubLabel: {
-    fontSize: 6.5,
+    fontSize: 6,
     fontWeight: 'bold',
     color: Theme.SECONDARY_GRAY,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
   evidenceThumbs: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 5,
   },
   evidenceThumb: {
-    width: '48%',
-    height: 78,
+    flex: 1,
+    height: 72,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
     objectFit: 'cover',
-    backgroundColor: Theme.BG_SECTION,
+    backgroundColor: '#FFFFFF',
   },
   evidenceThumbPlaceholder: {
-    width: '48%',
-    height: 78,
+    flex: 1,
+    height: 72,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
-    backgroundColor: Theme.BG_SECTION,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -854,7 +887,7 @@ export const ProfileBanner = ({ profile, profilePic }) => {
             {profile?.ad_count != null ? ` · ${Number(profile.ad_count).toLocaleString()} ads` : ''}
           </Text>
           {biography ? (
-            <Text style={sharedStyles.profileBio}>{processText(String(biography), 180, 3)}</Text>
+            <Text style={sharedStyles.profileBio}>{processText(String(biography), 120, 2)}</Text>
           ) : null}
           {profile?.profile_url ? (
             <Link src={profile.profile_url} style={sharedStyles.profileLink} target="_blank">
@@ -933,25 +966,21 @@ export const ProfileHighlightStrip = ({ group }) => {
           </Text>
         ) : null}
       </View>
-      <View style={sharedStyles.highlightCard}>
-        <Text style={sharedStyles.highlightLabel}>POIs</Text>
-        {pois.hasSignal ? (
-          <>
-            <Text style={sharedStyles.highlightValue}>
-              {pois.names.length > 0 ? processText(pois.names[0], 22) : `${pois.detectedCount} detected`}
+      {pois.hasSignal ? (
+        <View style={sharedStyles.highlightCard}>
+          <Text style={sharedStyles.highlightLabel}>POIs</Text>
+          <Text style={sharedStyles.highlightValue}>
+            {pois.names.length > 0 ? processText(pois.names[0], 22) : `${pois.detectedCount} detected`}
+          </Text>
+          {pois.names.length > 1 ? (
+            <Text style={sharedStyles.highlightMeta}>
+              {processText(pois.names.slice(1, 3).join(' · '), 40)}
             </Text>
-            {pois.names.length > 1 ? (
-              <Text style={sharedStyles.highlightMeta}>
-                {processText(pois.names.slice(1, 3).join(' · '), 40)}
-              </Text>
-            ) : pois.names.length === 1 && pois.detectedCount > 1 ? (
-              <Text style={sharedStyles.highlightMeta}>{pois.detectedCount} ads flagged</Text>
-            ) : null}
-          </>
-        ) : (
-          <Text style={sharedStyles.highlightValue}>None</Text>
-        )}
-      </View>
+          ) : pois.names.length === 1 && pois.detectedCount > 1 ? (
+            <Text style={sharedStyles.highlightMeta}>{pois.detectedCount} ads flagged</Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -981,18 +1010,40 @@ export const EvidencePreview = ({ group }) => {
   };
 
   return (
-    <View style={sharedStyles.evidenceSection} wrap={false}>
-      <Text style={sharedStyles.sectionTitle}>Evidence Preview</Text>
-      <View style={sharedStyles.evidenceRow}>
-        <View style={sharedStyles.evidenceCol}>
-          <Text style={sharedStyles.evidenceSubLabel}>Top Ad Creatives</Text>
+    <View style={sharedStyles.evidenceSection}>
+      <Text style={sharedStyles.evidenceTitle}>Evidence</Text>
+      {adImages.length > 0 ? (
+        <View style={sharedStyles.evidenceBlock}>
+          <Text style={sharedStyles.evidenceSubLabel}>Ad Creatives</Text>
           {renderThumbs(adImages, 'No ad image')}
         </View>
-        <View style={sharedStyles.evidenceCol}>
-          <Text style={sharedStyles.evidenceSubLabel}>Top Domain Screenshots</Text>
+      ) : null}
+      {domainImages.length > 0 ? (
+        <View style={sharedStyles.evidenceBlock}>
+          <Text style={sharedStyles.evidenceSubLabel}>Domain Screenshots</Text>
           {renderThumbs(domainImages, 'No domain image')}
         </View>
+      ) : null}
+    </View>
+  );
+};
+
+export const ProfileHeroSection = ({ group }) => {
+  const hasEvidence =
+    (group?.compressedAdImages || []).some(Boolean) ||
+    (group?.compressedDomainImages || []).some(Boolean);
+
+  return (
+    <View style={sharedStyles.profileHeroRow} wrap={false}>
+      <View style={hasEvidence ? sharedStyles.profileHeroLeft : sharedStyles.profileHeroLeftFull}>
+        <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
+        <ProfileHighlightStrip group={group} />
       </View>
+      {hasEvidence ? (
+        <View style={sharedStyles.profileHeroRight}>
+          <EvidencePreview group={group} />
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -1351,10 +1402,8 @@ export const AdsTable = ({
 
 export const ProfileReportBlock = ({ group, project, breakBefore = false }) => (
   <View style={sharedStyles.profileBlock} break={breakBefore || undefined} wrap>
-    <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
-    <ProfileHighlightStrip group={group} />
+    <ProfileHeroSection group={group} />
     <ProfileReviewSection profile={group.profile} project={project} />
-    <EvidencePreview group={group} />
     <ConnectedContentDivider />
     <ProfileMetricsSection group={group} />
     <DomainsTable domains={group.domains} compressedDomainImages={group.compressedDomainImages} />

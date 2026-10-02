@@ -19,6 +19,8 @@ import {
 registerFonts();
 
 const SLICE_PAGE_SIZE = 12;
+const SLICE_COLS = 3;
+const SLICE_ROWS = 4; // fill column top→bottom, then next column (still 12/page)
 const HERO_FRAME_HEIGHT = 210;
 const HERO_PAD = 8;
 const SLICE_CELL_HEIGHT = 188;
@@ -193,9 +195,10 @@ const styles = StyleSheet.create({
   legalReason: { fontSize: 7.5, color: Theme.INK_SOFT, lineHeight: 1.35, marginBottom: 5 },
   reasoningText: { fontSize: 8, color: Theme.INK_SOFT, lineHeight: 1.42 },
   galleryCaption: { fontSize: 8, color: Theme.MUTED, marginBottom: 6 },
-  sliceRow: { flexDirection: 'row', gap: 6, marginBottom: 5 },
+  sliceGrid: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
+  sliceCol: { width: '32.2%', flexDirection: 'column', gap: 5 },
   sliceCell: {
-    width: '32.2%',
+    width: '100%',
     height: SLICE_CELL_HEIGHT,
     borderRadius: 4,
     borderWidth: 0.5,
@@ -480,27 +483,33 @@ const DomainCaptureGalleryPages = ({ domain, screenshotSlices }) => {
         Full-page capture · {processText(domain.domain_name, 40)} · {domainLanderCaption(domain)}
         {images.length > SLICE_PAGE_SIZE ? ` · ${pageIdx + 1} of ${Math.ceil(images.length / SLICE_PAGE_SIZE)}` : ''}
       </Text>
-      {chunk(pageImages, 3).map((row, rowIdx) => (
-        <View key={rowIdx} style={styles.sliceRow} wrap={false}>
-          {row.map((src, idx) => {
-            const number = pageIdx * SLICE_PAGE_SIZE + rowIdx * 3 + idx + 1;
-            return (
-              <View key={idx} style={styles.sliceCell}>
-                <View style={styles.sliceWellRow}>
-                  <View style={styles.sliceGutter} />
-                  <View style={styles.sliceWell}>
-                    <Image style={styles.sliceImage} src={src} />
+      <View style={styles.sliceGrid} wrap={false}>
+        {Array.from({ length: SLICE_COLS }, (_, colIdx) => {
+          const colImages = pageImages.slice(colIdx * SLICE_ROWS, (colIdx + 1) * SLICE_ROWS);
+          if (colImages.length === 0) return null;
+          return (
+            <View key={colIdx} style={styles.sliceCol}>
+              {colImages.map((src, rowIdx) => {
+                const number = pageIdx * SLICE_PAGE_SIZE + colIdx * SLICE_ROWS + rowIdx + 1;
+                return (
+                  <View key={rowIdx} style={styles.sliceCell}>
+                    <View style={styles.sliceWellRow}>
+                      <View style={styles.sliceGutter} />
+                      <View style={styles.sliceWell}>
+                        <Image style={styles.sliceImage} src={src} />
+                      </View>
+                      <View style={styles.sliceGutter} />
+                    </View>
+                    <View style={styles.sliceBadge}>
+                      <Text style={styles.sliceBadgeText}>{number}</Text>
+                    </View>
                   </View>
-                  <View style={styles.sliceGutter} />
-                </View>
-                <View style={styles.sliceBadge}>
-                  <Text style={styles.sliceBadgeText}>{number}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ))}
+                );
+              })}
+            </View>
+          );
+        })}
+      </View>
       <PageFooter />
     </Page>
   ));
