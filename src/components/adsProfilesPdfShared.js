@@ -568,7 +568,8 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceDomainHero: {
     width: '100%',
-    height: 168,
+    // Longer (~16:10) frame so more lander content shows in the evidence column
+    height: 178,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -578,7 +579,7 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceDomainHeroPlaceholder: {
     width: '100%',
-    height: 168,
+    height: 178,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -997,12 +998,12 @@ export const ProfileHighlightStrip = ({ group }) => {
 
 export const EvidencePreview = ({ group }) => {
   const adImages = (group?.compressedAdImages || []).filter(Boolean).slice(0, 2);
-  const firstDomainSlice = (group?.domainScreenshotSlices || [])
-    .map((slices) => (Array.isArray(slices) ? slices.find(Boolean) : null))
-    .find(Boolean);
+  // Prefer the dedicated 16:9 evidence hero; fall back to first gallery slice.
   const domainHero =
-    firstDomainSlice ||
     (group?.compressedDomainImages || []).find(Boolean) ||
+    (group?.domainScreenshotSlices || [])
+      .map((slices) => (Array.isArray(slices) ? slices.find(Boolean) : null))
+      .find(Boolean) ||
     null;
   if (adImages.length === 0 && !domainHero) return null;
 

@@ -27,6 +27,8 @@ const {
   landerImageSrc,
   screenshotSlicePlan,
   SCREENSHOT_SUMMARY_RATIO,
+  SCREENSHOT_GALLERY_RATIO,
+  SCREENSHOT_EVIDENCE_RATIO,
 } = require('./domain-display');
 const { uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
 const { watermarkPdfStream } = require('./pdf-watermark');
@@ -222,7 +224,13 @@ async function processLanderScreenshot(
   imageUrl,
   id,
   variantToken = 'default',
-  { includeSlices = true, heroRatio, heroWidth = 900, heroSuffix = 'lander_hero' } = {},
+  {
+    includeSlices = true,
+    heroRatio,
+    sliceRatio,
+    heroWidth = 900,
+    heroSuffix = 'lander_hero',
+  } = {},
 ) {
   ensureImageCacheDir();
   if (!imageUrl) return { heroPath: null, slicePaths: [] };
@@ -242,9 +250,12 @@ async function processLanderScreenshot(
     const meta = await sharp(buffer).metadata();
     const width = meta.width || 0;
     const height = meta.height || 0;
-    const plan = screenshotSlicePlan(width, height, heroRatio != null ? { heroRatio } : {});
+    const heroPlan = screenshotSlicePlan(width, height, heroRatio != null ? { heroRatio } : {});
+    const galleryPlan = screenshotSlicePlan(width, height, {
+      heroRatio: sliceRatio != null ? sliceRatio : heroRatio,
+    });
 
-    if (!plan.heroHeight || !width) {
+    if (!heroPlan.heroHeight || !width) {
       if (!fs.existsSync(heroPath)) {
         await writeJpegFromBuffer(buffer, heroPath, { width: heroWidth });
       }
@@ -254,7 +265,7 @@ async function processLanderScreenshot(
     if (!fs.existsSync(heroPath)) {
       await writeJpegFromBuffer(buffer, heroPath, {
         width: heroWidth,
-        extract: { left: 0, top: 0, width, height: plan.heroHeight },
+        extract: { left: 0, top: 0, width, height: heroPlan.heroHeight },
       });
     }
 
@@ -262,10 +273,17 @@ async function processLanderScreenshot(
       return { heroPath, slicePaths: [] };
     }
 
+    const slicePlan = galleryPlan.slices.length > 0 ? galleryPlan : heroPlan;
+    const ratioToken = width
+      ? Math.round(((slicePlan.heroHeight || slicePlan.slices[0]?.height || 0) / width) * 100)
+      : 72;
     const slicePaths = [];
-    for (let i = 0; i < plan.slices.length; i += 1) {
-      const slice = plan.slices[i];
-      const slicePath = path.join(IMAGE_CACHE_DIR, `${safeId}_lander_slice_${String(i).padStart(2, '0')}.jpg`);
+    for (let i = 0; i < slicePlan.slices.length; i += 1) {
+      const slice = slicePlan.slices[i];
+      const slicePath = path.join(
+        IMAGE_CACHE_DIR,
+        `${safeId}_lander_slice_r${ratioToken}_${String(i).padStart(2, '0')}.jpg`,
+      );
       if (!fs.existsSync(slicePath)) {
         await writeJpegFromBuffer(buffer, slicePath, {
           width: 720,
@@ -292,7 +310,10 @@ async function processLanderScreenshot(
   }
 }
 
-async function processAndCacheDomainImages(domains, { includeSlices = false, concurrency = 5 } = {}) {
+async function processAndCacheDomainImages(
+  domains,
+  { includeSlices = false, concurrency = 5, heroRatio, sliceRatio, heroWidth, heroSuffix } = {},
+) {
   const compressedImages = new Array(domains.length);
   const screenshotSlices = new Array(domains.length);
 
@@ -301,11 +322,13 @@ async function processAndCacheDomainImages(domains, { includeSlices = false, con
     const promises = chunk.map(async (domain, index) => {
       const landerUrl = landerImageSrc(domain);
       const variantToken = landerCacheToken(domain);
+      const useSummaryThumb = !includeSlices && heroRatio == null;
       const { heroPath, slicePaths } = await processLanderScreenshot(landerUrl, domain._id, variantToken, {
         includeSlices,
-        ...(includeSlices
-          ? {}
-          : { heroRatio: SCREENSHOT_SUMMARY_RATIO, heroWidth: 800, heroSuffix: 'lander_thumb' }),
+        heroRatio: heroRatio != null ? heroRatio : useSummaryThumb ? SCREENSHOT_SUMMARY_RATIO : undefined,
+        sliceRatio,
+        heroWidth: heroWidth != null ? heroWidth : useSummaryThumb ? 800 : 900,
+        heroSuffix: heroSuffix || (useSummaryThumb ? 'lander_thumb' : 'lander_hero'),
       });
       compressedImages[i + index] = heroPath;
       screenshotSlices[i + index] = includeSlices ? slicePaths : [];
@@ -553,7 +576,16 @@ async function runReportJob(client, payload, options = {}) {
       const { compressedImages: compressedDomainImages, screenshotSlices: domainScreenshotSlices } = await withSpan(
         'process-domain-images',
         { 'images.count': domainsFlat.length, 'entity.type': 'ad_profiles' },
-        async () => processAndCacheDomainImages(domainsFlat, { includeSlices: true, concurrency: 10 }),
+        async () =>
+          processAndCacheDomainImages(domainsFlat, {
+            includeSlices: true,
+            concurrency: 10,
+            // 16:9 evidence preview on page 1; taller strips for gallery pages
+            heroRatio: SCREENSHOT_EVIDENCE_RATIO,
+            sliceRatio: SCREENSHOT_GALLERY_RATIO,
+            heroSuffix: 'lander_evidence_tall',
+            heroWidth: 900,
+          }),
       );
 
       const compressedProfilePics = await withSpan(

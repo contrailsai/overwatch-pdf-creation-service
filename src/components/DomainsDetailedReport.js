@@ -23,8 +23,9 @@ const SLICE_COLS = 3;
 const SLICE_ROWS = 4; // fill column top→bottom, then next column (still 12/page)
 const HERO_FRAME_HEIGHT = 210;
 const HERO_PAD = 8;
-const SLICE_CELL_HEIGHT = 188;
-const SLICE_PAD = 8;
+// Tall enough to fill page with 4 rows; images use cover so no letterbox waste
+const SLICE_CELL_HEIGHT = 198;
+const SLICE_PAD = 4;
 
 const styles = StyleSheet.create({
   page: {
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
   reasoningText: { fontSize: 8, color: Theme.INK_SOFT, lineHeight: 1.42 },
   galleryCaption: { fontSize: 8, color: Theme.MUTED, marginBottom: 6 },
   sliceGrid: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
-  sliceCol: { width: '32.2%', flexDirection: 'column', gap: 5 },
+  sliceCol: { width: '32.2%', flexDirection: 'column', gap: 4 },
   sliceCell: {
     width: '100%',
     height: SLICE_CELL_HEIGHT,
@@ -206,25 +207,22 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.SURFACE_ALT,
     overflow: 'hidden',
     position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sliceWellRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: SLICE_CELL_HEIGHT - SLICE_PAD * 2,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  sliceGutter: { width: SLICE_PAD, height: SLICE_PAD },
   sliceWell: {
-    flexGrow: 1,
-    flexShrink: 1,
-    height: SLICE_CELL_HEIGHT - SLICE_PAD * 2,
+    width: '100%',
+    height: '100%',
   },
   sliceImage: {
     width: '100%',
-    height: SLICE_CELL_HEIGHT - SLICE_PAD * 2,
-    objectFit: 'contain',
+    height: '100%',
+    objectFit: 'cover',
     objectPosition: 'top',
   },
   sliceBadge: {
@@ -494,11 +492,9 @@ const DomainCaptureGalleryPages = ({ domain, screenshotSlices }) => {
                 return (
                   <View key={rowIdx} style={styles.sliceCell}>
                     <View style={styles.sliceWellRow}>
-                      <View style={styles.sliceGutter} />
                       <View style={styles.sliceWell}>
                         <Image style={styles.sliceImage} src={src} />
                       </View>
-                      <View style={styles.sliceGutter} />
                     </View>
                     <View style={styles.sliceBadge}>
                       <Text style={styles.sliceBadgeText}>{number}</Text>
