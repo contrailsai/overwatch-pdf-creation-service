@@ -116,8 +116,8 @@ export const sharedStyles = StyleSheet.create({
     color: Theme.PRIMARY_BLUE,
   },
   profileBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    gap: 8,
     backgroundColor: Theme.BG_SECTION,
     padding: 8,
     borderRadius: 6,
@@ -126,7 +126,7 @@ export const sharedStyles = StyleSheet.create({
     marginBottom: 0,
     flexGrow: 1,
   },
-  profileBannerLeft: { flexDirection: 'row', gap: 8, width: '64%' },
+  profileBannerIdentity: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   profileImage: {
     width: 40,
     height: 40,
@@ -150,14 +150,12 @@ export const sharedStyles = StyleSheet.create({
   profileName: { fontSize: 11, fontWeight: '900', color: Theme.PRIMARY_BLUE },
   profileMeta: { fontSize: 7, color: Theme.SECONDARY_GRAY, fontWeight: 'bold' },
   profileLink: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none', marginTop: 1 },
-  profileBannerRight: {
-    width: '34%',
+  profileBannerDetails: {
     flexDirection: 'column',
     gap: 4,
-    borderLeftWidth: 0.5,
-    borderLeftColor: Theme.BORDER_LIGHT,
-    paddingLeft: 8,
-    justifyContent: 'center',
+    borderTopWidth: 0.5,
+    borderTopColor: Theme.BORDER_LIGHT,
+    paddingTop: 8,
   },
   profileHeroRow: {
     flexDirection: 'row',
@@ -166,7 +164,7 @@ export const sharedStyles = StyleSheet.create({
     alignItems: 'stretch',
   },
   profileHeroLeft: {
-    width: '58%',
+    width: '52%',
     flexDirection: 'column',
     gap: 6,
   },
@@ -176,7 +174,7 @@ export const sharedStyles = StyleSheet.create({
     gap: 6,
   },
   profileHeroRight: {
-    width: '40%',
+    width: '46%',
     flexDirection: 'column',
     backgroundColor: Theme.BG_SECTION,
     borderWidth: 0.5,
@@ -551,7 +549,7 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceThumb: {
     flex: 1,
-    height: 72,
+    height: 58,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -560,13 +558,36 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceThumbPlaceholder: {
     flex: 1,
-    height: 72,
+    height: 58,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  evidenceDomainHero: {
+    width: '100%',
+    height: 168,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    objectFit: 'cover',
+    objectPosition: 'top',
+    backgroundColor: '#FFFFFF',
+  },
+  evidenceDomainHeroPlaceholder: {
+    width: '100%',
+    height: 168,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  connectedSection: {
+    paddingTop: 4,
   },
   connectedDivider: {
     marginTop: 8,
@@ -584,12 +605,6 @@ export const sharedStyles = StyleSheet.create({
     marginBottom: 10,
   },
 });
-
-function formatViolationLabel(value) {
-  return String(value || '')
-    .replace(/[-_]/g, ' ')
-    .trim();
-}
 
 function collectProfilePois(ads) {
   const names = new Set();
@@ -870,7 +885,7 @@ export const ProfileBanner = ({ profile, profilePic }) => {
 
   return (
     <View style={sharedStyles.profileBanner} wrap={false}>
-      <View style={sharedStyles.profileBannerLeft}>
+      <View style={sharedStyles.profileBannerIdentity}>
         {profilePic ? (
           <Image style={sharedStyles.profileImage} src={profilePic} />
         ) : (
@@ -896,7 +911,7 @@ export const ProfileBanner = ({ profile, profilePic }) => {
           ) : null}
         </View>
       </View>
-      <View style={sharedStyles.profileBannerRight}>
+      <View style={sharedStyles.profileBannerDetails}>
         <View style={sharedStyles.detailRow}>
           <Text style={sharedStyles.detailLabel}>Risk</Text>
           <View style={[sharedStyles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
@@ -907,13 +922,13 @@ export const ProfileBanner = ({ profile, profilePic }) => {
           <View style={sharedStyles.detailRow}>
             <Text style={sharedStyles.detailLabel}>Category</Text>
             <Text style={sharedStyles.detailValue}>
-              {processText(categories.slice(0, 3).join(', '), 28)}
+              {processText(categories.slice(0, 3).join(', '), 40)}
             </Text>
           </View>
         ) : null}
         <View style={sharedStyles.detailRow}>
           <Text style={sharedStyles.detailLabel}>Status</Text>
-          <Text style={sharedStyles.detailValue}>{processText(profile?.client_status || 'open', 20)}</Text>
+          <Text style={sharedStyles.detailValue}>{processText(profile?.client_status || 'open', 28)}</Text>
         </View>
         <View style={sharedStyles.detailRow}>
           <Text style={sharedStyles.detailLabel}>Reviewed</Text>
@@ -926,22 +941,13 @@ export const ProfileBanner = ({ profile, profilePic }) => {
 
 export const ProfileHighlightStrip = ({ group }) => {
   const profile = group?.profile || {};
-  const review = profile.review_details || {};
-  const violations = Array.isArray(profile.violations)
-    ? profile.violations
-    : Array.isArray(review.violations)
-      ? review.violations
-      : Array.isArray(review.threat_types)
-        ? review.threat_types
-        : [];
   const adCount =
     profile.ad_count != null
       ? Number(profile.ad_count)
       : group?.totalAdCount != null
         ? Number(group.totalAdCount)
         : (group?.ads || []).length;
-  const primaryViolation = violations[0] ? formatViolationLabel(violations[0]) : '';
-  const extraViolations = violations.slice(1).map(formatViolationLabel).filter(Boolean);
+  const domainCount = Array.isArray(group?.domains) ? group.domains.length : 0;
   const pois = collectProfilePois(group?.ads || group?.displayAds || []);
 
   return (
@@ -955,14 +961,18 @@ export const ProfileHighlightStrip = ({ group }) => {
           </Text>
         ) : null}
       </View>
-      <View style={[sharedStyles.highlightCard, primaryViolation ? sharedStyles.highlightCardAccent : null]}>
-        <Text style={sharedStyles.highlightLabel}>Scam / Violations</Text>
-        <Text style={primaryViolation ? sharedStyles.highlightValueDanger : sharedStyles.highlightValue}>
-          {primaryViolation || 'None flagged'}
-        </Text>
-        {extraViolations.length > 0 ? (
+      <View style={sharedStyles.highlightCard}>
+        <Text style={sharedStyles.highlightLabel}>Domains Used</Text>
+        <Text style={sharedStyles.highlightValue}>{domainCount.toLocaleString()}</Text>
+        {domainCount > 0 ? (
           <Text style={sharedStyles.highlightMeta}>
-            {processText(extraViolations.slice(0, 3).join(' · '), 48)}
+            {processText(
+              group.domains
+                .slice(0, 2)
+                .map((d) => d.domain_name || 'domain')
+                .join(' · '),
+              42,
+            )}
           </Text>
         ) : null}
       </View>
@@ -987,27 +997,14 @@ export const ProfileHighlightStrip = ({ group }) => {
 
 export const EvidencePreview = ({ group }) => {
   const adImages = (group?.compressedAdImages || []).filter(Boolean).slice(0, 2);
-  const domainImages = (group?.compressedDomainImages || []).filter(Boolean).slice(0, 2);
-  if (adImages.length === 0 && domainImages.length === 0) return null;
-
-  const renderThumbs = (images, emptyLabel) => {
-    if (images.length === 0) {
-      return (
-        <View style={sharedStyles.evidenceThumbs}>
-          <View style={sharedStyles.evidenceThumbPlaceholder}>
-            <Text style={{ fontSize: 6, color: Theme.SECONDARY_GRAY }}>{emptyLabel}</Text>
-          </View>
-        </View>
-      );
-    }
-    return (
-      <View style={sharedStyles.evidenceThumbs}>
-        {images.map((src, idx) => (
-          <Image key={idx} style={sharedStyles.evidenceThumb} src={src} />
-        ))}
-      </View>
-    );
-  };
+  const firstDomainSlice = (group?.domainScreenshotSlices || [])
+    .map((slices) => (Array.isArray(slices) ? slices.find(Boolean) : null))
+    .find(Boolean);
+  const domainHero =
+    firstDomainSlice ||
+    (group?.compressedDomainImages || []).find(Boolean) ||
+    null;
+  if (adImages.length === 0 && !domainHero) return null;
 
   return (
     <View style={sharedStyles.evidenceSection}>
@@ -1015,13 +1012,17 @@ export const EvidencePreview = ({ group }) => {
       {adImages.length > 0 ? (
         <View style={sharedStyles.evidenceBlock}>
           <Text style={sharedStyles.evidenceSubLabel}>Ad Creatives</Text>
-          {renderThumbs(adImages, 'No ad image')}
+          <View style={sharedStyles.evidenceThumbs}>
+            {adImages.map((src, idx) => (
+              <Image key={idx} style={sharedStyles.evidenceThumb} src={src} />
+            ))}
+          </View>
         </View>
       ) : null}
-      {domainImages.length > 0 ? (
+      {domainHero ? (
         <View style={sharedStyles.evidenceBlock}>
-          <Text style={sharedStyles.evidenceSubLabel}>Domain Screenshots</Text>
-          {renderThumbs(domainImages, 'No domain image')}
+          <Text style={sharedStyles.evidenceSubLabel}>Domain Screenshot</Text>
+          <Image style={sharedStyles.evidenceDomainHero} src={domainHero} />
         </View>
       ) : null}
     </View>
@@ -1031,7 +1032,8 @@ export const EvidencePreview = ({ group }) => {
 export const ProfileHeroSection = ({ group }) => {
   const hasEvidence =
     (group?.compressedAdImages || []).some(Boolean) ||
-    (group?.compressedDomainImages || []).some(Boolean);
+    (group?.compressedDomainImages || []).some(Boolean) ||
+    (group?.domainScreenshotSlices || []).some((slices) => Array.isArray(slices) && slices.some(Boolean));
 
   return (
     <View style={sharedStyles.profileHeroRow} wrap={false}>
@@ -1404,16 +1406,18 @@ export const ProfileReportBlock = ({ group, project, breakBefore = false }) => (
   <View style={sharedStyles.profileBlock} break={breakBefore || undefined} wrap>
     <ProfileHeroSection group={group} />
     <ProfileReviewSection profile={group.profile} project={project} />
-    <ConnectedContentDivider />
-    <ProfileMetricsSection group={group} />
-    <DomainsTable domains={group.domains} compressedDomainImages={group.compressedDomainImages} />
-    <AdsTable
-      displayAds={group.displayAds}
-      compressedAdImages={group.compressedAdImages}
-      project={project}
-      totalAdCount={group.totalAdCount}
-      shownAdCount={group.shownAdCount}
-    />
+    <View style={sharedStyles.connectedSection} break>
+      <ConnectedContentDivider />
+      <ProfileMetricsSection group={group} />
+      <DomainsTable domains={group.domains} compressedDomainImages={group.compressedDomainImages} />
+      <AdsTable
+        displayAds={group.displayAds}
+        compressedAdImages={group.compressedAdImages}
+        project={project}
+        totalAdCount={group.totalAdCount}
+        shownAdCount={group.shownAdCount}
+      />
+    </View>
   </View>
 );
 
