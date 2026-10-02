@@ -209,10 +209,10 @@ function domainPageContent(domain) {
 const SCREENSHOT_HERO_RATIO = 0.72;
 /** Tighter above-the-fold crop for summary table thumbs (≈16:10). */
 const SCREENSHOT_SUMMARY_RATIO = 0.62;
-/** Taller gallery strips so each cell shows more page and fills better (~closer to square). */
-const SCREENSHOT_GALLERY_RATIO = 1.05;
-/** Longer lander preview for ad-profile evidence (~16:10, more page than strict 16:9). */
-const SCREENSHOT_EVIDENCE_RATIO = 0.85;
+/** Taller gallery strips — more page per cell; cells use cover-fit to avoid letterboxing. */
+const SCREENSHOT_GALLERY_RATIO = 1.2;
+/** Longer lander preview for ad-profile evidence (~closer to square than 16:9 so more page shows). */
+const SCREENSHOT_EVIDENCE_RATIO = 0.95;
 const MAX_SCREENSHOT_SLICES = 24;
 const MIN_SCREENSHOT_REMAINDER_PX = 32;
 

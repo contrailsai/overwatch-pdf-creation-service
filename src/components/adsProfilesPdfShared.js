@@ -521,7 +521,7 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceSection: {
     flexDirection: 'column',
-    gap: 8,
+    gap: 6,
     flexGrow: 1,
   },
   evidenceTitle: {
@@ -536,6 +536,11 @@ export const sharedStyles = StyleSheet.create({
     flexDirection: 'column',
     gap: 4,
   },
+  evidenceBlockDomain: {
+    flexDirection: 'column',
+    gap: 4,
+    flexGrow: 1,
+  },
   evidenceSubLabel: {
     fontSize: 6,
     fontWeight: 'bold',
@@ -549,7 +554,7 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceThumb: {
     flex: 1,
-    height: 58,
+    height: 48,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -558,7 +563,7 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceThumbPlaceholder: {
     flex: 1,
-    height: 58,
+    height: 48,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -568,8 +573,8 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceDomainHero: {
     width: '100%',
-    // Longer (~16:10) frame so more lander content shows in the evidence column
-    height: 178,
+    // Longer crop filling most of the evidence column (~16:10 source)
+    height: 220,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -579,7 +584,7 @@ export const sharedStyles = StyleSheet.create({
   },
   evidenceDomainHeroPlaceholder: {
     width: '100%',
-    height: 178,
+    height: 220,
     borderRadius: 4,
     borderWidth: 0.5,
     borderColor: Theme.BORDER_LIGHT,
@@ -1021,7 +1026,7 @@ export const EvidencePreview = ({ group }) => {
         </View>
       ) : null}
       {domainHero ? (
-        <View style={sharedStyles.evidenceBlock}>
+        <View style={sharedStyles.evidenceBlockDomain}>
           <Text style={sharedStyles.evidenceSubLabel}>Domain Screenshot</Text>
           <Image style={sharedStyles.evidenceDomainHero} src={domainHero} />
         </View>

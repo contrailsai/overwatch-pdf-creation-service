@@ -23,9 +23,9 @@ const SLICE_COLS = 3;
 const SLICE_ROWS = 4; // fill column top→bottom, then next column (still 12/page)
 const HERO_FRAME_HEIGHT = 210;
 const HERO_PAD = 8;
-// Tall enough to fill page with 4 rows; images use cover so no letterbox waste
-const SLICE_CELL_HEIGHT = 198;
-const SLICE_PAD = 4;
+// Fits 4 rows on A4 with caption/footer; cover-fit removes letterboxing inside cells
+const SLICE_CELL_HEIGHT = 186;
+const SLICE_PAD = 2;
 
 const styles = StyleSheet.create({
   page: {
@@ -196,8 +196,8 @@ const styles = StyleSheet.create({
   legalReason: { fontSize: 7.5, color: Theme.INK_SOFT, lineHeight: 1.35, marginBottom: 5 },
   reasoningText: { fontSize: 8, color: Theme.INK_SOFT, lineHeight: 1.42 },
   galleryCaption: { fontSize: 8, color: Theme.MUTED, marginBottom: 6 },
-  sliceGrid: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
-  sliceCol: { width: '32.2%', flexDirection: 'column', gap: 4 },
+  sliceGrid: { flexDirection: 'row', gap: 5, alignItems: 'flex-start' },
+  sliceCol: { width: '32.5%', flexDirection: 'column', gap: 3 },
   sliceCell: {
     width: '100%',
     height: SLICE_CELL_HEIGHT,

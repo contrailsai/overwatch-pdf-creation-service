@@ -583,7 +583,7 @@ async function runReportJob(client, payload, options = {}) {
             // 16:9 evidence preview on page 1; taller strips for gallery pages
             heroRatio: SCREENSHOT_EVIDENCE_RATIO,
             sliceRatio: SCREENSHOT_GALLERY_RATIO,
-            heroSuffix: 'lander_evidence_tall',
+            heroSuffix: 'lander_evidence_long',
             heroWidth: 900,
           }),
       );
