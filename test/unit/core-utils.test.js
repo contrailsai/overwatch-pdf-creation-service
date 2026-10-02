@@ -11,6 +11,7 @@ const {
   normalizeProfile,
   normalizeAd,
   normalizeAdProfile,
+  adSourceLinkLabel,
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,
@@ -579,6 +580,51 @@ test('normalizeAd falls back from template title to first real card title', () =
     },
   });
   assert.equal(normalized.title, 'Explore New Ways Forward');
+});
+
+test('normalizeAd passes source and poi_names through', () => {
+  const normalized = normalizeAd({
+    ...v3Ad,
+    source: 'meta_feed_link',
+    original_url: 'https://www.facebook.com/123/posts/456/',
+    list: { ...v3Ad.list, poi_detected: true },
+    review_details: {
+      poi_names: ['Mukesh Ambani', '', 'Nirmala Sitharaman'],
+      threat_types: ['investment-scams'],
+    },
+  });
+  assert.equal(normalized.source, 'meta_feed_link');
+  assert.equal(normalized.poi_detected, true);
+  assert.deepEqual(normalized.review_details.poi_names, ['Mukesh Ambani', 'Nirmala Sitharaman']);
+});
+
+test('adSourceLinkLabel distinguishes feed posts from ad library', () => {
+  assert.equal(
+    adSourceLinkLabel({
+      source: 'meta_feed_link',
+      original_url: 'https://www.facebook.com/100091616053265/posts/28316860154601634/',
+    }),
+    'View Post',
+  );
+  assert.equal(
+    adSourceLinkLabel({
+      source: 'meta_ads_library',
+      original_url: 'https://www.facebook.com/ads/library/?id=1837313944110654',
+    }),
+    'Ad Library',
+  );
+  assert.equal(
+    adSourceLinkLabel({
+      original_url: 'https://www.facebook.com/ads/library/?id=1',
+    }),
+    'Ad Library',
+  );
+  assert.equal(
+    adSourceLinkLabel({
+      original_url: 'https://example.com/other',
+    }),
+    'View Source',
+  );
 });
 
 test('validatePayload accepts entityType ad_profiles with adProfileIds', () => {

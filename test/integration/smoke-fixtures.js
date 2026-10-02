@@ -106,6 +106,7 @@ function makeNormalizedAd(overrides = {}) {
     display_format: 'DPA',
     link_url: 'https://www.amazon.in/',
     original_url: 'https://www.facebook.com/ads/library/?id=1061241996416851',
+    source: 'meta_ads_library',
     ad_id: '1061241996416851',
     is_active: true,
     impressions_text: '<100',

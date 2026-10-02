@@ -550,10 +550,10 @@ async function runReportJob(client, payload, options = {}) {
         async () => processAndCacheAdImages(displayAdsFlat, { includeAllCards: false, concurrency: 10 }),
       );
 
-      const { compressedImages: compressedDomainImages } = await withSpan(
+      const { compressedImages: compressedDomainImages, screenshotSlices: domainScreenshotSlices } = await withSpan(
         'process-domain-images',
         { 'images.count': domainsFlat.length, 'entity.type': 'ad_profiles' },
-        async () => processAndCacheDomainImages(domainsFlat, { includeSlices: false, concurrency: 10 }),
+        async () => processAndCacheDomainImages(domainsFlat, { includeSlices: true, concurrency: 10 }),
       );
 
       const compressedProfilePics = await withSpan(
@@ -582,8 +582,11 @@ async function runReportJob(client, payload, options = {}) {
         adImageById.set(ad._id?.toString?.() || String(ad._id), compressedAdImages[idx] || null);
       });
       const domainImageById = new Map();
+      const domainSlicesById = new Map();
       domainsFlat.forEach((domain, idx) => {
-        domainImageById.set(domain._id?.toString?.() || String(domain._id), compressedDomainImages[idx] || null);
+        const key = domain._id?.toString?.() || String(domain._id);
+        domainImageById.set(key, compressedDomainImages[idx] || null);
+        domainSlicesById.set(key, domainScreenshotSlices?.[idx] || []);
       });
 
       const profilesForReport = profileGroups.map((group, idx) => ({
@@ -594,6 +597,9 @@ async function runReportJob(client, payload, options = {}) {
         ),
         compressedDomainImages: group.domains.map(
           (domain) => domainImageById.get(domain._id?.toString?.() || String(domain._id)) || null,
+        ),
+        domainScreenshotSlices: group.domains.map(
+          (domain) => domainSlicesById.get(domain._id?.toString?.() || String(domain._id)) || [],
         ),
       }));
 

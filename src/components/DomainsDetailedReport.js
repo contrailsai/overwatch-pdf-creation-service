@@ -506,6 +506,8 @@ const DomainCaptureGalleryPages = ({ domain, screenshotSlices }) => {
   ));
 };
 
+export { DomainCaptureGalleryPages };
+
 export const DomainDetailedBlock = ({ domain, compressedImage, screenshotSlices, caseNumber }) => (
   <>
     <DomainDossierPage domain={domain} compressedImage={compressedImage} caseNumber={caseNumber} />

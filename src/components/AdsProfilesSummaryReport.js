@@ -8,11 +8,13 @@ import {
   CatalogMetricsSection,
   ProfileReportBlock,
 } from './adsProfilesPdfShared';
+import { DomainCaptureGalleryPages } from './DomainsDetailedReport';
 
 registerFonts();
 
 /**
  * Multi ad-profile catalog (used when the request has 2+ reviewed profiles).
+ * Full lander capture pages follow the catalog page when slices exist.
  */
 export const AdsProfilesSummaryReportDocument = ({ profiles, project }) => (
   <Document title="Ads_Profiles_Summary_Report">
@@ -29,6 +31,15 @@ export const AdsProfilesSummaryReportDocument = ({ profiles, project }) => (
       ))}
       <PageFooter />
     </Page>
+    {(profiles || []).flatMap((group, groupIdx) =>
+      (group.domains || []).map((domain, domainIdx) => (
+        <DomainCaptureGalleryPages
+          key={`${group.profile?._id || groupIdx}-${domain._id || domainIdx}-slices`}
+          domain={domain}
+          screenshotSlices={group.domainScreenshotSlices?.[domainIdx] || []}
+        />
+      )),
+    )}
   </Document>
 );
 

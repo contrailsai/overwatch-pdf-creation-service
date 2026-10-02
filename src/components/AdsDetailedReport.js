@@ -295,6 +295,14 @@ const styles = StyleSheet.create({
   footerText: { textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 'bold' },
 });
 
+const adSourceLinkLabel = (ad) => {
+  const source = String(ad?.source || '').toLowerCase();
+  const url = String(ad?.original_url || '');
+  if (source === 'meta_feed_link' || /\/posts\//i.test(url)) return 'View Post';
+  if (source === 'meta_ads_library' || /ads\/library/i.test(url)) return 'Ad Library';
+  return url ? 'View Source' : '';
+};
+
 const sanitize = (text) => {
   if (!text) return '';
   return Array.from(String(text)).filter((char) => {
@@ -514,7 +522,7 @@ export const AdsDetailedCasePage = ({ ad, project, compressedImage, compressedCa
           <Text style={styles.infoValue}>{platformLabel} · {ad.display_format || 'Ad'}</Text>
         </View>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Ad Library</Text>
+          <Text style={styles.infoLabel}>{adSourceLinkLabel(ad) || 'Source'}</Text>
           {sourceUrl ? (
             <Link src={sourceUrl} style={styles.infoLink}>{truncate(sourceUrl, 80)}</Link>
           ) : (

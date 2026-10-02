@@ -450,6 +450,90 @@ export const sharedStyles = StyleSheet.create({
     fontSize: 6.5,
     color: Theme.SECONDARY_GRAY,
     lineHeight: 1.4,
+    width: '100%',
+  },
+  highlightStrip: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  highlightCard: {
+    flex: 1,
+    backgroundColor: Theme.BG_SECTION,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  highlightCardAccent: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FECDD3',
+  },
+  highlightLabel: {
+    fontSize: 6,
+    fontWeight: 'bold',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  highlightValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+  },
+  highlightValueDanger: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Theme.RISK_HIGH,
+    textTransform: 'capitalize',
+  },
+  highlightMeta: {
+    fontSize: 6.5,
+    color: Theme.SECONDARY_GRAY,
+    marginTop: 2,
+  },
+  evidenceSection: {
+    marginBottom: 12,
+  },
+  evidenceRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  evidenceCol: {
+    flex: 1,
+  },
+  evidenceSubLabel: {
+    fontSize: 6.5,
+    fontWeight: 'bold',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  evidenceThumbs: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  evidenceThumb: {
+    width: '48%',
+    height: 78,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    objectFit: 'cover',
+    backgroundColor: Theme.BG_SECTION,
+  },
+  evidenceThumbPlaceholder: {
+    width: '48%',
+    height: 78,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: Theme.BORDER_LIGHT,
+    backgroundColor: Theme.BG_SECTION,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   connectedDivider: {
     marginTop: 8,
@@ -467,6 +551,42 @@ export const sharedStyles = StyleSheet.create({
     marginBottom: 10,
   },
 });
+
+function formatViolationLabel(value) {
+  return String(value || '')
+    .replace(/[-_]/g, ' ')
+    .trim();
+}
+
+function collectProfilePois(ads) {
+  const names = new Set();
+  let detectedCount = 0;
+  for (const ad of ads || []) {
+    const review = ad?.review_details || {};
+    const flagged =
+      Boolean(ad?.poi_detected) ||
+      Boolean(review.face_present) ||
+      Boolean(review.flags?.poi_confirmed);
+    if (flagged) detectedCount += 1;
+    for (const name of review.poi_names || []) {
+      const text = String(name || '').trim();
+      if (text) names.add(text);
+    }
+  }
+  return {
+    detectedCount,
+    names: [...names],
+    hasSignal: detectedCount > 0 || names.size > 0,
+  };
+}
+
+export function adSourceLinkLabel(ad) {
+  const source = String(ad?.source || '').toLowerCase();
+  const url = String(ad?.original_url || '');
+  if (source === 'meta_feed_link' || /\/posts\//i.test(url)) return 'View Post';
+  if (source === 'meta_ads_library' || /ads\/library/i.test(url)) return 'Ad Library';
+  return url ? 'View Source' : '';
+}
 
 function parseReasoning(text) {
   if (!text) return [];
@@ -771,6 +891,112 @@ export const ProfileBanner = ({ profile, profilePic }) => {
   );
 };
 
+export const ProfileHighlightStrip = ({ group }) => {
+  const profile = group?.profile || {};
+  const review = profile.review_details || {};
+  const violations = Array.isArray(profile.violations)
+    ? profile.violations
+    : Array.isArray(review.violations)
+      ? review.violations
+      : Array.isArray(review.threat_types)
+        ? review.threat_types
+        : [];
+  const adCount =
+    profile.ad_count != null
+      ? Number(profile.ad_count)
+      : group?.totalAdCount != null
+        ? Number(group.totalAdCount)
+        : (group?.ads || []).length;
+  const primaryViolation = violations[0] ? formatViolationLabel(violations[0]) : '';
+  const extraViolations = violations.slice(1).map(formatViolationLabel).filter(Boolean);
+  const pois = collectProfilePois(group?.ads || group?.displayAds || []);
+
+  return (
+    <View style={sharedStyles.highlightStrip} wrap={false}>
+      <View style={sharedStyles.highlightCard}>
+        <Text style={sharedStyles.highlightLabel}>Ads Ran</Text>
+        <Text style={sharedStyles.highlightValue}>{Number.isFinite(adCount) ? adCount.toLocaleString() : '—'}</Text>
+        {group?.shownAdCount != null && group?.totalAdCount != null && group.totalAdCount !== group.shownAdCount ? (
+          <Text style={sharedStyles.highlightMeta}>
+            {group.shownAdCount} shown in report
+          </Text>
+        ) : null}
+      </View>
+      <View style={[sharedStyles.highlightCard, primaryViolation ? sharedStyles.highlightCardAccent : null]}>
+        <Text style={sharedStyles.highlightLabel}>Scam / Violations</Text>
+        <Text style={primaryViolation ? sharedStyles.highlightValueDanger : sharedStyles.highlightValue}>
+          {primaryViolation || 'None flagged'}
+        </Text>
+        {extraViolations.length > 0 ? (
+          <Text style={sharedStyles.highlightMeta}>
+            {processText(extraViolations.slice(0, 3).join(' · '), 48)}
+          </Text>
+        ) : null}
+      </View>
+      <View style={sharedStyles.highlightCard}>
+        <Text style={sharedStyles.highlightLabel}>POIs</Text>
+        {pois.hasSignal ? (
+          <>
+            <Text style={sharedStyles.highlightValue}>
+              {pois.names.length > 0 ? processText(pois.names[0], 22) : `${pois.detectedCount} detected`}
+            </Text>
+            {pois.names.length > 1 ? (
+              <Text style={sharedStyles.highlightMeta}>
+                {processText(pois.names.slice(1, 3).join(' · '), 40)}
+              </Text>
+            ) : pois.names.length === 1 && pois.detectedCount > 1 ? (
+              <Text style={sharedStyles.highlightMeta}>{pois.detectedCount} ads flagged</Text>
+            ) : null}
+          </>
+        ) : (
+          <Text style={sharedStyles.highlightValue}>None</Text>
+        )}
+      </View>
+    </View>
+  );
+};
+
+export const EvidencePreview = ({ group }) => {
+  const adImages = (group?.compressedAdImages || []).filter(Boolean).slice(0, 2);
+  const domainImages = (group?.compressedDomainImages || []).filter(Boolean).slice(0, 2);
+  if (adImages.length === 0 && domainImages.length === 0) return null;
+
+  const renderThumbs = (images, emptyLabel) => {
+    if (images.length === 0) {
+      return (
+        <View style={sharedStyles.evidenceThumbs}>
+          <View style={sharedStyles.evidenceThumbPlaceholder}>
+            <Text style={{ fontSize: 6, color: Theme.SECONDARY_GRAY }}>{emptyLabel}</Text>
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={sharedStyles.evidenceThumbs}>
+        {images.map((src, idx) => (
+          <Image key={idx} style={sharedStyles.evidenceThumb} src={src} />
+        ))}
+      </View>
+    );
+  };
+
+  return (
+    <View style={sharedStyles.evidenceSection} wrap={false}>
+      <Text style={sharedStyles.sectionTitle}>Evidence Preview</Text>
+      <View style={sharedStyles.evidenceRow}>
+        <View style={sharedStyles.evidenceCol}>
+          <Text style={sharedStyles.evidenceSubLabel}>Top Ad Creatives</Text>
+          {renderThumbs(adImages, 'No ad image')}
+        </View>
+        <View style={sharedStyles.evidenceCol}>
+          <Text style={sharedStyles.evidenceSubLabel}>Top Domain Screenshots</Text>
+          {renderThumbs(domainImages, 'No domain image')}
+        </View>
+      </View>
+    </View>
+  );
+};
+
 export const ProfileReviewSection = ({ profile, project }) => {
   const review = profile?.review_details || {};
   const risk = profileRiskInfo(profile);
@@ -862,13 +1088,12 @@ export const ProfileReviewSection = ({ profile, project }) => {
                 sharedStyles.legalCardShell,
                 idx === legalCodes.length - 1 && sharedStyles.legalCardShellLast,
               ]}
-              wrap={false}
             >
               <View style={sharedStyles.legalCardAccent} />
               <View style={sharedStyles.legalCardInner}>
-                <Text style={sharedStyles.legalCode}>{processText(item.code, 72)}</Text>
+                <Text style={sharedStyles.legalCode}>{processText(item.code, 120)}</Text>
                 {item.reasoning ? (
-                  <Text style={sharedStyles.legalReason}>{processText(item.reasoning, 240, 4)}</Text>
+                  <Text style={sharedStyles.legalReason}>{processText(item.reasoning, 900, 12)}</Text>
                 ) : null}
               </View>
             </View>
@@ -883,7 +1108,7 @@ export const ProfileReviewSection = ({ profile, project }) => {
             <Text style={sharedStyles.reviewBodySoft}>No reviewer reasoning.</Text>
           ) : reasoningSections.length === 1 && !reasoningSections[0].label ? (
             <Text style={sharedStyles.reviewBodySoft}>
-              {processText(reasoningSections[0].content, 900, 12)}
+              {processText(reasoningSections[0].content, 1600, 20)}
             </Text>
           ) : (
             reasoningSections.map((sec, i) => (
@@ -896,7 +1121,7 @@ export const ProfileReviewSection = ({ profile, project }) => {
               >
                 <Text style={sharedStyles.reviewBodySoft}>
                   {sec.label ? <Text style={sharedStyles.reasoningLabel}>{sec.label}: </Text> : null}
-                  {processText(sec.content, 280, 4)}
+                  {processText(sec.content, 900, 12)}
                 </Text>
               </View>
             ))
@@ -1066,7 +1291,7 @@ export const AdsTable = ({
                       <Text style={sharedStyles.captionText}>{processText(creative, 70, 2)}</Text>
                       {ad.original_url ? (
                         <Link src={ad.original_url} style={sharedStyles.linkText} target="_blank">
-                          Ad Library
+                          {adSourceLinkLabel(ad)}
                         </Link>
                       ) : null}
                     </View>
@@ -1127,7 +1352,9 @@ export const AdsTable = ({
 export const ProfileReportBlock = ({ group, project, breakBefore = false }) => (
   <View style={sharedStyles.profileBlock} break={breakBefore || undefined} wrap>
     <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
+    <ProfileHighlightStrip group={group} />
     <ProfileReviewSection profile={group.profile} project={project} />
+    <EvidencePreview group={group} />
     <ConnectedContentDivider />
     <ProfileMetricsSection group={group} />
     <DomainsTable domains={group.domains} compressedDomainImages={group.compressedDomainImages} />

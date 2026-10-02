@@ -461,8 +461,22 @@ function normalizeAdReviewDetails(ad) {
       null,
     threat_types: reviewThreatTypes.length > 0 ? reviewThreatTypes : listThreatTypes,
     flags: review.flags && typeof review.flags === 'object' ? review.flags : {},
+    poi_names: Array.isArray(review.poi_names)
+      ? review.poi_names.map((name) => String(name || '').trim()).filter(Boolean)
+      : [],
     reviewed_at: review.reviewed_at ?? list.reviewed_at ?? null,
   };
+}
+
+/**
+ * Human label for an ad's original_url link (Ad Library vs feed post vs generic).
+ */
+function adSourceLinkLabel(ad) {
+  const source = String(ad?.source || '').toLowerCase();
+  const url = String(ad?.original_url || '');
+  if (source === 'meta_feed_link' || /\/posts\//i.test(url)) return 'View Post';
+  if (source === 'meta_ads_library' || /ads\/library/i.test(url)) return 'Ad Library';
+  return url ? 'View Source' : '';
 }
 
 /**
@@ -560,6 +574,7 @@ function normalizeAd(ad, opts = {}) {
     display_format: list.display_format || content.display_format || '',
     link_url: content.link_url || '',
     original_url: ad.original_url,
+    source: ad.source || '',
     ad_id: ad.platform_ad_id || ad.source_payload?.ad_archive_id || '',
     is_active: list.is_active ?? delivery.is_active ?? false,
     impressions_text: list.impressions_text ?? delivery.impressions_text ?? null,
@@ -786,6 +801,7 @@ module.exports = {
   normalizeProfile,
   normalizeAd,
   normalizeAdProfile,
+  adSourceLinkLabel,
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,

@@ -232,6 +232,14 @@ const styles = StyleSheet.create({
   dateValue: { fontSize: 6 },
 });
 
+const adSourceLinkLabel = (ad) => {
+  const source = String(ad?.source || '').toLowerCase();
+  const url = String(ad?.original_url || '');
+  if (source === 'meta_feed_link' || /\/posts\//i.test(url)) return 'View Post';
+  if (source === 'meta_ads_library' || /ads\/library/i.test(url)) return 'Ad Library';
+  return url ? 'View Source' : '';
+};
+
 const processText = (text, maxLength = 500, maxLines = null) => {
   if (!text) return '';
   let sanitized = Array.from(String(text)).filter((char) => {
@@ -442,7 +450,7 @@ const TableRow = ({ ad, project, compressedImage, caseNumber }) => {
             <Text style={styles.captionText}>{processText(creativeText, 80, 3)}</Text>
             {ad.original_url ? (
               <Link src={ad.original_url} style={styles.linkText} target="_blank">
-                Ad Library
+                {adSourceLinkLabel(ad)}
               </Link>
             ) : null}
           </View>
