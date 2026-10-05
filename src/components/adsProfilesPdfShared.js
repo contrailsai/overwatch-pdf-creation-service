@@ -147,17 +147,24 @@ export const sharedStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  profileInfo: { flex: 1, flexDirection: 'column', gap: 3 },
-  profileName: { fontSize: 11.5, fontWeight: '900', color: Theme.PRIMARY_BLUE },
-  profileMeta: { fontSize: 7.5, color: Theme.SECONDARY_GRAY, fontWeight: 'bold' },
-  profileLink: { fontSize: 6.5, color: Theme.LINK, textDecoration: 'none', marginTop: 1 },
+  profileInfo: { flex: 1, flexDirection: 'column', gap: 4 },
+  profileName: { fontSize: 13, fontWeight: '900', color: Theme.PRIMARY_BLUE },
+  profileMeta: { fontSize: 8.5, color: Theme.SECONDARY_GRAY, fontWeight: 'bold' },
+  profileLink: {
+    fontSize: 7.5,
+    color: Theme.LINK,
+    textDecoration: 'underline',
+    marginTop: 1,
+  },
+  profileLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  profileLinkSep: { fontSize: 7.5, color: Theme.SECONDARY_GRAY },
   profileBannerDetails: {
     flexDirection: 'column',
-    gap: 5,
+    gap: 7,
     borderTopWidth: 0.5,
     borderTopColor: Theme.BORDER_LIGHT,
-    paddingTop: 8,
-    marginTop: 2,
+    paddingTop: 10,
+    marginTop: 3,
   },
   // Page-1 hero: left = profile + meta + stats; right = vertical evidence.
   // Fixed height keeps Review Details starting at the same place.
@@ -277,15 +284,26 @@ export const sharedStyles = StyleSheet.create({
     paddingHorizontal: 6,
     justifyContent: 'center',
   },
-  detailRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 1 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   detailLabel: {
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: 'bold',
     color: Theme.SECONDARY_GRAY,
-    width: 56,
+    width: 78,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  detailValue: { fontSize: 8, color: Theme.PRIMARY_BLUE, fontWeight: 'bold', flex: 1 },
+  detailValue: { fontSize: 10.5, color: Theme.PRIMARY_BLUE, fontWeight: 'bold', flex: 1 },
+  detailValueMuted: { color: Theme.SECONDARY_GRAY, fontWeight: 'normal' },
+  // Banner-scoped badges sized to match the enlarged detail rows (page-2 tables keep the compact base).
+  detailBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  detailBadgeText: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.3, textTransform: 'uppercase' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   chip: {
     backgroundColor: '#FFFFFF',
@@ -508,6 +526,21 @@ export const sharedStyles = StyleSheet.create({
     color: Theme.PRIMARY_BLUE,
     lineHeight: 1.38,
   },
+  // Case summary is the headline read of the dossier — deliberately large.
+  reviewSubLabelLead: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Theme.SECONDARY_GRAY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 3,
+    marginTop: 6,
+  },
+  reviewBodyLead: {
+    fontSize: 13.5,
+    color: Theme.PRIMARY_BLUE,
+    lineHeight: 1.3,
+  },
   reviewBodySoft: {
     fontSize: 8.5,
     color: Theme.SECONDARY_GRAY,
@@ -722,12 +755,12 @@ export const sharedStyles = StyleSheet.create({
     alignItems: 'center',
   },
   connectedSection: {
-    paddingTop: 4,
+    paddingTop: 0,
   },
   connectedDivider: {
-    marginTop: 8,
-    marginBottom: 12,
-    paddingTop: 10,
+    marginTop: 0,
+    marginBottom: 10,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: Theme.BORDER_LIGHT,
   },
@@ -737,7 +770,7 @@ export const sharedStyles = StyleSheet.create({
     color: Theme.PRIMARY_BLUE,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 10,
+    marginBottom: 6,
   },
 });
 
@@ -788,6 +821,40 @@ function formatVerdictLabel(value) {
   return String(value)
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Return a clean absolute http(s) URL, or null if missing/malformed. */
+export function normalizeExternalUrl(value) {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withScheme);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ads count for a profile group: explicit count, else report total, else raw list length. */
+export function resolveProfileAdCount(group) {
+  const profile = group?.profile || {};
+  const raw =
+    profile.ad_count != null
+      ? Number(profile.ad_count)
+      : group?.totalAdCount != null
+        ? Number(group.totalAdCount)
+        : (group?.ads || []).length;
+  return Number.isFinite(raw) ? raw : null;
+}
+
+/** Recommended action / verdict label, matching buildProfileReviewModel's resolution order. */
+export function resolveProfileVerdictLabel(profile) {
+  const review = profile?.review_details || {};
+  return formatVerdictLabel(
+    profile?.recommended_action || review.recommended_action || profile?.verdict || review.verdict || null,
+  );
 }
 
 function resolveProjectLegalCodes(project) {
@@ -964,7 +1031,7 @@ export const CatalogMetricsSection = ({ profiles }) => {
   const cards = [
     { label: 'Profiles', value: m.totalProfiles, color: Theme.PRIMARY_BLUE },
     { label: 'High Risk Profiles', value: m.highProfiles, color: Theme.RISK_HIGH },
-    { label: 'Reviewed Ads', value: m.totalAds, color: Theme.PRIMARY_BLUE },
+    { label: 'Ads', value: m.totalAds, color: Theme.PRIMARY_BLUE },
     { label: 'High Risk Ads', value: m.highAds, color: Theme.RISK_HIGH },
     { label: 'Domains', value: m.totalDomains, color: Theme.PRIMARY_BLUE },
     { label: 'High Risk Domains', value: m.highDomains, color: Theme.RISK_HIGH },
@@ -989,11 +1056,10 @@ export const CatalogMetricsSection = ({ profiles }) => {
 export const ProfileMetricsSection = ({ group }) => {
   const m = profileGroupMetrics(group);
   const cards = [
-    { label: 'Reviewed Ads', value: m.totalAds, color: Theme.PRIMARY_BLUE },
+    { label: 'Ads', value: m.totalAds, color: Theme.PRIMARY_BLUE },
     { label: 'High Risk Ads', value: m.highAds, color: Theme.RISK_HIGH },
-    { label: 'Mismatch', value: m.mismatch, color: m.mismatch > 0 ? Theme.RISK_HIGH : Theme.PRIMARY_BLUE },
     { label: 'Domains', value: m.totalDomains, color: Theme.PRIMARY_BLUE },
-    { label: 'High Domains', value: m.highDomains, color: Theme.RISK_HIGH },
+    { label: 'High Risk Domains', value: m.highDomains, color: Theme.RISK_HIGH },
     { label: 'Cloaked', value: m.cloaked, color: m.cloaked > 0 ? Theme.WARN : Theme.PRIMARY_BLUE },
   ];
   return (
@@ -1013,10 +1079,21 @@ export const ProfileMetricsSection = ({ group }) => {
   );
 };
 
-export const ProfileBanner = ({ profile, profilePic }) => {
+export const ProfileBanner = ({ profile, profilePic, group }) => {
   const risk = profileRiskInfo(profile);
   const categories = Array.isArray(profile?.page_categories) ? profile.page_categories : [];
   const biography = profile?.biography || profile?.enrichment?.biography || null;
+  const adCount = resolveProfileAdCount(group || { profile });
+  const domains = Array.isArray(group?.domains) ? group.domains : [];
+  const verdictLabel = resolveProfileVerdictLabel(profile);
+  const profileUrl = normalizeExternalUrl(profile?.profile_url);
+  // New field: may sit at the top level or inside list/enrichment/review_details depending on ingest.
+  const metaAdsLibraryUrl = normalizeExternalUrl(
+    profile?.meta_ads_library_url ??
+      profile?.list?.meta_ads_library_url ??
+      profile?.enrichment?.meta_ads_library_url ??
+      profile?.review_details?.meta_ads_library_url,
+  );
 
   return (
     <View style={sharedStyles.profileBanner} wrap={false}>
@@ -1039,18 +1116,30 @@ export const ProfileBanner = ({ profile, profilePic }) => {
           {biography ? (
             <Text style={sharedStyles.profileBio}>{processText(String(biography), 120, 2)}</Text>
           ) : null}
-          {profile?.profile_url ? (
-            <Link src={profile.profile_url} style={sharedStyles.profileLink} target="_blank">
-              {processText(profile.profile_url, 42)}
-            </Link>
+          {(profileUrl || metaAdsLibraryUrl) ? (
+            <View style={sharedStyles.profileLinkRow}>
+              {profileUrl ? (
+                <Link src={profileUrl} style={sharedStyles.profileLink} target="_blank">
+                  facebook profile
+                </Link>
+              ) : null}
+              {profileUrl && metaAdsLibraryUrl ? (
+                <Text style={sharedStyles.profileLinkSep}>·</Text>
+              ) : null}
+              {metaAdsLibraryUrl ? (
+                <Link src={metaAdsLibraryUrl} style={sharedStyles.profileLink} target="_blank">
+                  meta ads profile
+                </Link>
+              ) : null}
+            </View>
           ) : null}
         </View>
       </View>
       <View style={sharedStyles.profileBannerDetails}>
         <View style={sharedStyles.detailRow}>
           <Text style={sharedStyles.detailLabel}>Risk</Text>
-          <View style={[sharedStyles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
-            <Text style={[sharedStyles.riskBadgeText, { color: risk.color }]}>{risk.label}</Text>
+          <View style={[sharedStyles.detailBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
+            <Text style={[sharedStyles.detailBadgeText, { color: risk.color }]}>{risk.label}</Text>
           </View>
         </View>
         {categories.length > 0 ? (
@@ -1069,68 +1158,56 @@ export const ProfileBanner = ({ profile, profilePic }) => {
           <Text style={sharedStyles.detailLabel}>Reviewed</Text>
           <Text style={sharedStyles.detailValue}>{formatCompleteDate(profile?.reviewed_at)}</Text>
         </View>
+        {adCount != null ? (
+          <View style={sharedStyles.detailRow}>
+            <Text style={sharedStyles.detailLabel}>Ads</Text>
+            <Text style={sharedStyles.detailValue}>{adCount.toLocaleString()}</Text>
+          </View>
+        ) : null}
+        {domains.length > 0 ? (
+          <View style={sharedStyles.detailRow}>
+            <Text style={sharedStyles.detailLabel}>Domains</Text>
+            <Text style={sharedStyles.detailValue}>{domains.length.toLocaleString()}</Text>
+          </View>
+        ) : null}
+        {verdictLabel ? (
+          <View style={sharedStyles.detailRow}>
+            <Text style={sharedStyles.detailLabel}>Recommended action</Text>
+            <View style={sharedStyles.detailBadge}>
+              <Text style={sharedStyles.detailBadgeText}>{processText(verdictLabel, 28)}</Text>
+            </View>
+          </View>
+        ) : null}
       </View>
     </View>
   );
 };
 
+/** POI signal card. Ads/Domains counts now live as key-value rows in ProfileBanner. */
 export const ProfileHighlightStrip = ({ group, vertical = false }) => {
-  const profile = group?.profile || {};
-  const adCount =
-    profile.ad_count != null
-      ? Number(profile.ad_count)
-      : group?.totalAdCount != null
-        ? Number(group.totalAdCount)
-        : (group?.ads || []).length;
-  const domainCount = Array.isArray(group?.domains) ? group.domains.length : 0;
   const pois = collectProfilePois(group?.ads || group?.displayAds || []);
   const cardStyle = vertical ? sharedStyles.highlightCardVertical : sharedStyles.highlightCard;
   const labelStyle = vertical ? sharedStyles.highlightLabelCompact : sharedStyles.highlightLabel;
   const valueStyle = vertical ? sharedStyles.highlightValueCompact : sharedStyles.highlightValue;
   const metaStyle = vertical ? sharedStyles.highlightMetaCompact : sharedStyles.highlightMeta;
-  const metaLimit = vertical ? 22 : 28;
+
+  if (!pois.hasSignal) return null;
 
   return (
     <View style={vertical ? sharedStyles.highlightStripVertical : sharedStyles.highlightStrip} wrap={false}>
       <View style={cardStyle}>
-        <Text style={labelStyle}>Ads Ran</Text>
-        <Text style={valueStyle}>{Number.isFinite(adCount) ? adCount.toLocaleString() : '—'}</Text>
-        {group?.shownAdCount != null && group?.totalAdCount != null && group.totalAdCount !== group.shownAdCount ? (
+        <Text style={labelStyle}>POIs</Text>
+        <Text style={valueStyle}>
+          {pois.names.length > 0 ? processText(pois.names[0], 18) : `${pois.detectedCount} detected`}
+        </Text>
+        {pois.names.length > 1 ? (
           <Text style={metaStyle}>
-            {group.shownAdCount} shown in report
+            {processText(pois.names.slice(1, 3).join(' · '), 32)}
           </Text>
+        ) : pois.names.length === 1 && pois.detectedCount > 1 ? (
+          <Text style={metaStyle}>{pois.detectedCount} ads flagged</Text>
         ) : null}
       </View>
-      <View style={cardStyle}>
-        <Text style={labelStyle}>Domains Used</Text>
-        <Text style={valueStyle}>{domainCount.toLocaleString()}</Text>
-        {domainCount > 0 ? (
-          <Text style={metaStyle}>
-            {processText(
-              group.domains
-                .slice(0, 1)
-                .map((d) => d.domain_name || 'domain')
-                .join(' · '),
-              metaLimit,
-            )}
-          </Text>
-        ) : null}
-      </View>
-      {pois.hasSignal ? (
-        <View style={cardStyle}>
-          <Text style={labelStyle}>POIs</Text>
-          <Text style={valueStyle}>
-            {pois.names.length > 0 ? processText(pois.names[0], 18) : `${pois.detectedCount} detected`}
-          </Text>
-          {pois.names.length > 1 ? (
-            <Text style={metaStyle}>
-              {processText(pois.names.slice(1, 3).join(' · '), 32)}
-            </Text>
-          ) : pois.names.length === 1 && pois.detectedCount > 1 ? (
-            <Text style={metaStyle}>{pois.detectedCount} ads flagged</Text>
-          ) : null}
-        </View>
-      ) : null}
     </View>
   );
 };
@@ -1152,7 +1229,7 @@ export const EvidencePreview = ({ group }) => {
 
   return (
     <View style={sharedStyles.evidenceSection}>
-      <Text style={sharedStyles.evidenceTitle}>Evidence</Text>
+      <Text style={sharedStyles.evidenceTitle}>Sample Evidence</Text>
       <View style={sharedStyles.evidenceRow}>
         {hasAds ? (
           <View style={sharedStyles.evidenceBlock}>
@@ -1235,7 +1312,6 @@ function buildProfileReviewModel(profile, project) {
 /** Compact review block for the left column (no reasoning — that is full-width below). */
 export const ProfileReviewMain = ({ profile, project }) => {
   const {
-    risk,
     caseSummary,
     reviewerComments,
     violations,
@@ -1252,21 +1328,11 @@ export const ProfileReviewMain = ({ profile, project }) => {
   return (
     <View style={sharedStyles.reviewSection} wrap={false}>
       <Text style={sharedStyles.reviewSectionLabel}>Review Details</Text>
-      <View style={sharedStyles.reviewHeaderRow} wrap={false}>
-        <View style={[sharedStyles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.color }]}>
-          <Text style={[sharedStyles.riskBadgeText, { color: risk.color }]}>{risk.label}</Text>
-        </View>
-        {verdictLabel ? (
-          <View style={sharedStyles.verdictBadge}>
-            <Text style={sharedStyles.verdictBadgeText}>{processText(verdictLabel, 28)}</Text>
-          </View>
-        ) : null}
-      </View>
 
       {caseSummary ? (
         <>
-          <Text style={[sharedStyles.reviewSubLabel, { marginTop: 0 }]}>Case Summary</Text>
-          <Text style={sharedStyles.reviewBody}>{processText(caseSummary, 480, 4)}</Text>
+          <Text style={[sharedStyles.reviewSubLabelLead, { marginTop: 0 }]}>Case Summary</Text>
+          <Text style={sharedStyles.reviewBodyLead}>{processText(caseSummary, 700, 4)}</Text>
         </>
       ) : null}
 
@@ -1325,7 +1391,7 @@ export const ProfileReviewReasoning = ({ profile, project }) => {
     if (!caseSummary && legalCodes.length === 0) {
       return (
         <View style={sharedStyles.reviewSectionFull}>
-          <Text style={sharedStyles.reviewSubLabel}>Reasoning</Text>
+          <Text style={sharedStyles.reviewSubLabel}>Detailed Reasoning</Text>
           <Text style={sharedStyles.reviewBodySoft}>No reviewer reasoning.</Text>
         </View>
       );
@@ -1335,7 +1401,7 @@ export const ProfileReviewReasoning = ({ profile, project }) => {
 
   return (
     <View style={sharedStyles.reviewSectionFull} wrap={false}>
-      <Text style={[sharedStyles.reviewSubLabel, { marginTop: 0 }]}>Reasoning</Text>
+      <Text style={[sharedStyles.reviewSubLabel, { marginTop: 0 }]}>Detailed Reasoning</Text>
       {reasoningSections.length === 0 ? (
         <Text style={sharedStyles.reviewBodySoft}>No reviewer reasoning.</Text>
       ) : reasoningSections.length === 1 && !reasoningSections[0].label ? (
@@ -1382,7 +1448,7 @@ export const ProfilePageOne = ({ group, project }) => {
           Fixed height preserves Review Details start position. */}
       <View style={sharedStyles.pageOneHero} wrap={false}>
         <View style={sharedStyles.pageOneHeroLeft}>
-          <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
+          <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} group={group} />
           <ProfileHighlightStrip group={group} vertical />
         </View>
         {hasEvidence ? (
@@ -1408,7 +1474,7 @@ export const ProfileHeroSection = ({ group }) => {
   return (
     <View style={sharedStyles.pageOneHero} wrap={false}>
       <View style={sharedStyles.pageOneHeroLeft}>
-        <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} />
+        <ProfileBanner profile={group.profile} profilePic={group.compressedProfilePic} group={group} />
         <ProfileHighlightStrip group={group} vertical />
       </View>
       {hasEvidence ? (

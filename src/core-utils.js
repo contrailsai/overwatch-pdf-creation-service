@@ -710,6 +710,7 @@ function normalizeAdProfile(profile) {
     page_name: profile.page_name || profile.display_name || 'Unknown',
     display_name: profile.display_name || profile.page_name || 'Unknown',
     profile_url: profile.profile_url || '',
+    meta_ads_library_url: profile.meta_ads_library_url || '',
     platform: profile.platform ? String(profile.platform).toLowerCase() : 'meta',
     platform_page_id: profile.platform_page_id || '',
     is_verified: Boolean(profile.is_verified),

@@ -195,7 +195,21 @@ const styles = StyleSheet.create({
   legalCode: { fontSize: 8.5, fontWeight: 700, color: Theme.INK, marginBottom: 2 },
   legalReason: { fontSize: 7.5, color: Theme.INK_SOFT, lineHeight: 1.35, marginBottom: 5 },
   reasoningText: { fontSize: 8, color: Theme.INK_SOFT, lineHeight: 1.42 },
-  galleryCaption: { fontSize: 8, color: Theme.MUTED, marginBottom: 6 },
+  galleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  galleryTitle: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: Theme.PRIMARY_BLUE,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  galleryMeta: { fontSize: 6.5, color: Theme.MUTED, textAlign: 'right' },
   sliceGrid: { flexDirection: 'row', gap: 5, alignItems: 'flex-start' },
   sliceCol: { width: '32.5%', flexDirection: 'column', gap: 3 },
   sliceCell: {
@@ -477,10 +491,15 @@ const DomainCaptureGalleryPages = ({ domain, screenshotSlices }) => {
 
   return chunk(images, SLICE_PAGE_SIZE).map((pageImages, pageIdx) => (
     <Page key={`${domain._id || 'domain'}-slices-${pageIdx}`} size="A4" style={styles.galleryPage}>
-      <Text style={styles.galleryCaption}>
-        Full-page capture · {processText(domain.domain_name, 40)} · {domainLanderCaption(domain)}
-        {images.length > SLICE_PAGE_SIZE ? ` · ${pageIdx + 1} of ${Math.ceil(images.length / SLICE_PAGE_SIZE)}` : ''}
-      </Text>
+      <View style={styles.galleryHeader}>
+        <Text style={styles.galleryTitle}>
+          Website Capture — {processText(domain.domain_name, 40)}
+        </Text>
+        <Text style={styles.galleryMeta}>
+          {domainLanderCaption(domain)}
+          {images.length > SLICE_PAGE_SIZE ? ` · ${pageIdx + 1} of ${Math.ceil(images.length / SLICE_PAGE_SIZE)}` : ''}
+        </Text>
+      </View>
       <View style={styles.sliceGrid} wrap={false}>
         {Array.from({ length: SLICE_COLS }, (_, colIdx) => {
           const colImages = pageImages.slice(colIdx * SLICE_ROWS, (colIdx + 1) * SLICE_ROWS);
