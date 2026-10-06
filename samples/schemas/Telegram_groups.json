@@ -1,0 +1,81 @@
+{
+  "_id": { "$oid": "700000000000000000000001" },
+  "schema_version": 1,
+  "platform": "telegram",
+  "chat_id": -1002005343149,
+  "title": "Example VFS Appointments",
+  "username": "example_vfs_channel",
+  "type": "channel",
+  "about": "Example public channel description from GetFullChannel.",
+  "original_url": "https://t.me/example_vfs_channel",
+  "participants_count": 12500,
+  "members_visible": false,
+  "verified": false,
+  "restricted": false,
+  "scam": false,
+  "fake": false,
+  "broadcast": true,
+  "megagroup": false,
+  "linked_chat_id": -1002111222333,
+  "username_list": ["example_vfs_channel"],
+  "photo": {
+    "s3_key": "telegram/groups/-1002005343149/photo.jpg",
+    "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/telegram/groups/-1002005343149/photo.jpg"
+  },
+  "telegram": {
+    "backfill": {
+      "status": "done",
+      "lookback": "7d",
+      "cutoff": { "$date": "2026-09-12T12:00:00.000Z" },
+      "started_at": { "$date": "2026-09-19T12:10:00.000Z" },
+      "finished_at": { "$date": "2026-09-19T12:25:00.000Z" },
+      "messages_seen": 184,
+      "last_error": null
+    },
+    "last_message_id": 220,
+    "last_message_at": { "$date": "2026-09-18T15:02:11.000Z" }
+  },
+  "workflow": {
+    "review_status": "reviewed",
+    "client_status": "open",
+    "visibility_status": "available",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": null,
+    "review_threat_score": 76,
+    "effective_threat_score": 76,
+    "risk_rank": "medium",
+    "threat_types": ["scam", "financial_fraud"],
+    "violation_flags": ["scam", "financial_fraud"],
+    "message_count": 184,
+    "participant_count": 12500,
+    "last_message_at": { "$date": "2026-09-18T15:02:11.000Z" },
+    "first_seen_at": { "$date": "2026-09-12T12:00:00.000Z" },
+    "reviewed_at": { "$date": "2026-09-19T14:00:00.000Z" }
+  },
+  "review_details": {
+    "threat_score": 76,
+    "threat_types": ["scam", "financial_fraud"],
+    "legal_codes": [{ "code": "IT Act 66D", "reasoning": "Impersonation for appointments" }],
+    "flags": { "scam": true, "financial_fraud": true },
+    "poi_names": [],
+    "reasoning": "Channel promotes unofficial VFS appointment slots with payment links.",
+    "reviewer_comments": "",
+    "simple_report_description": "Suspicious VFS appointment channel",
+    "reviewed_at": "2026-09-19T14:00:00.000Z"
+  },
+  "client_notes": [],
+  "content_reviewed_by": "reviewer@example.com",
+  "ingestion": {
+    "type": "telegram",
+    "source_url": "https://t.me/example_vfs_channel",
+    "ingested_at": { "$date": "2026-09-19T12:10:00.000Z" }
+  },
+  "system": {
+    "created_at": { "$date": "2026-09-19T12:10:00.000Z" },
+    "updated_at": { "$date": "2026-09-19T14:00:00.000Z" },
+    "s3_stored": true
+  }
+}

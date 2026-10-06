@@ -1,12 +1,8 @@
 {
-    "_id": {
-      "$oid": "6a4766c960150b9f6fe1ad38"
-    },
-    "post_id": {
-      "$oid": "69810f0b3c24564a2cb28467"
-    },
-    "text_embedding": [...],
-    "image_embedding": [...],
-    "platform": "facebook",
-    "effective_threat_score": 96
+    _id: ObjectId('6a71c5af532d2a3308a748fd'),
+    post_id: ObjectId('69810f0b3c24564a2cb28467'),
+    effective_threat_score: NumberInt('96'),
+    image_embedding: [...],
+    platform: 'facebook',
+    text_embedding: [...]
   }

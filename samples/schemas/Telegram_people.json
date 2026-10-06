@@ -1,0 +1,70 @@
+{
+  "_id": { "$oid": "700000000000000000000011" },
+  "schema_version": 1,
+  "platform": "telegram",
+  "user_id": 8840233507,
+  "username": "example_sender",
+  "first_name": "Alex",
+  "last_name": "Example",
+  "display_name": "Alex Example",
+  "bot": false,
+  "verified": false,
+  "scam": false,
+  "fake": false,
+  "premium": false,
+  "deleted": false,
+  "original_url": "https://t.me/example_sender",
+  "photo": {
+    "s3_key": null,
+    "s3_url": null
+  },
+  "seen_in": [
+    {
+      "chat_id": -1002005343149,
+      "group_id": { "$oid": "700000000000000000000001" },
+      "title": "Example VFS Appointments",
+      "last_seen_at": { "$date": "2026-09-18T15:02:11.000Z" }
+    },
+    {
+      "chat_id": -1001987654321,
+      "group_id": { "$oid": "700000000000000000000002" },
+      "title": "Example Visa Alerts",
+      "last_seen_at": { "$date": "2026-09-17T09:40:00.000Z" }
+    }
+  ],
+  "workflow": {
+    "review_status": "reviewed",
+    "client_status": "open",
+    "reviewed_at": { "$date": "2026-09-19T14:30:00.000Z" }
+  },
+  "list": {
+    "risk": "medium",
+    "risk_rank": "medium",
+    "group_count": 2,
+    "message_count": 12,
+    "max_threat_score": 76,
+    "last_active_at": { "$date": "2026-09-18T15:02:11.000Z" }
+  },
+  "review_details": {
+    "risk": "medium",
+    "threat_score": 70,
+    "threat_types": ["scam"],
+    "violations": ["scam"],
+    "legal_codes": [],
+    "flags": { "scam": true },
+    "reasoning": "Active poster in multiple appointment scam channels.",
+    "reviewer_comments": "",
+    "action": "submit_to_client",
+    "reviewed_at": "2026-09-19T14:30:00.000Z"
+  },
+  "client_notes": [],
+  "content_reviewed_by": "reviewer@example.com",
+  "ingestion": {
+    "type": "telegram",
+    "ingested_at": { "$date": "2026-09-18T15:02:11.000Z" }
+  },
+  "system": {
+    "created_at": { "$date": "2026-09-17T09:40:00.000Z" },
+    "updated_at": { "$date": "2026-09-19T14:30:00.000Z" }
+  }
+}
