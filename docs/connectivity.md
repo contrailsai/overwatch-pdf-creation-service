@@ -42,10 +42,12 @@ The database is chosen **per request** from `payload.database_name` — one clus
 | --- | --- | --- | --- |
 | `Posts` | capital `P` | `posts` | `_id`, `profile_id`, `content.*`, `list.*`, `system.*`, `workflow.*`, `author_snapshot` |
 | `profiles` | lowercase | `posts` (join) | `_id`, `enrichment.*`, `list.*`, `metadata.*` |
-| `case_events` | lowercase | `posts`, `ads` | `entity_type`, `entity_id`, `occurred_at`, `actor`, `summary`, `payload` |
+| `case_events` | lowercase | `posts`, `ads`, `apps` | `entity_type`, `entity_id`, `occurred_at`, `actor`, `summary`, `payload` |
 | `Ads` | capital `A` | `ads`, `ad_profiles` | `_id`, `ad_profile_id`, `linked_domain_ids`, `content.media`, `content.cards`, `list.reviewed_at` |
 | `Ad_profiles` | capital `A`, lowercase `p` | `ad_profiles`, `ads` (join) | `_id`, `enrichment.*`, `list.*`, `review_details.*`, `workflow.*` |
 | `Domains` | capital `D` | `domains`, `ad_profiles` | `_id`, `analysis_results.cloak_probe`, `review_details.*`, `list.*` |
+| `Apps` | capital `A` | `apps` | `_id`, `developer_id`, `platform_app_id`, `content.media`, `content.title`, `store.*`, `evidence.sections`, `list.*` |
+| `App_developers` | capital `A`, lowercase `d` | `apps` (join) | `_id`, `display_name`, `enrichment.*`, `list.app_count`, `list.risk_rank` |
 
 Casing is load-bearing — the git history contains a fix specifically for the `Posts` collection casing. Schema-v3 documents are read directly; legacy shapes are tolerated by the normalizers in `src/core-utils.js`.
 
@@ -53,10 +55,11 @@ Casing is load-bearing — the git history contains a fix specifically for the `
 
 - Posts: `find({ _id: { $in: objectIds } })`
 - Profiles: `find({ _id: { $in: profileIds } })` where `profileIds` are the distinct `post.profile_id`
-- Case events: `find({ entity_type: 'post', entity_id: { $in: objectIds } }).sort({ occurred_at: 1 })`; for ads `entity_type: { $in: ['ad','ads'] }`
+- Case events: `find({ entity_type: 'post', entity_id: { $in: objectIds } }).sort({ occurred_at: 1 })`; for ads `entity_type: { $in: ['ad','ads'] }`; for apps `entity_type: { $in: ['app','apps'] }`
 - Ads: `find({ _id: { $in: objectIds } })`; inside ad-profiles: `find({ ad_profile_id: { $in: reviewedProfileIds }, 'list.reviewed_at': { $ne: null } })`
 - Ad profiles: `find({ _id: { $in: objectIds } })`
 - Domains: `find({ _id: { $in: objectIds } })`
+- Apps: `find({ _id: { $in: objectIds } })`; developers: `find({ _id: { $in: developerIds } })` where `developerIds` are the distinct `app.developer_id`
 
 ---
 

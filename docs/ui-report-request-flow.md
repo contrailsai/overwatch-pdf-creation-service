@@ -78,13 +78,31 @@ Ad profiles example (layout is automatic: 1 id → single dossier, 2+ ids → co
 }
 ```
 
+Apps example (Google Play / App Store listings; unreviewed apps still render):
+
+```json
+{
+  "projectId": "SEBI",
+  "entityType": "apps",
+  "appIds": ["6ab65e0648deed136101ed92", "6aba06a4e8c8fd9c21da915f"],
+  "database_name": "SEBI-Data-Search",
+  "reportType": "Detailed",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "SEBI",
+    "project_details": { "labels": [], "legal_codes": [] }
+  },
+  "profile": null
+}
+```
+
 ### Required fields
 
 - `projectId`: string
 - `database_name`: string
-- `entityType`: `posts` (default), `ads`, `domains`, or `ad_profiles`. If omitted and `adProfileIds` is present, treat as `ad_profiles`. If omitted and `adIds` is present, treat as `ads`. If omitted and `domainIds` is present, treat as `domains`.
-- IDs: posts use `postIds`. Ads use `adIds` (or `postIds` when `entityType` is `ads`). Domains use `domainIds` (or `postIds` when `entityType` is `domains`). Ad profiles use `adProfileIds` (or `postIds` when `entityType` is `ad_profiles`). Non-empty array of valid Mongo ObjectId strings.
-- `variantKeysByDomainId`: required for domains. Map of domain id → cloak variant `label` (`bare` or a param like `pEl8X=MI1_HT2`). Included in the cache hash so Bare vs a param does not reuse the wrong file. **Not** used for ad profile reports (default scam-preferred lander is attached server-side).
+- `entityType`: `posts` (default), `ads`, `domains`, `ad_profiles`, or `apps`. If omitted and `adProfileIds` is present, treat as `ad_profiles`. If omitted and `adIds` is present, treat as `ads`. If omitted and `domainIds` is present, treat as `domains`. If omitted and `appIds` is present, treat as `apps`.
+- IDs: posts use `postIds`. Ads use `adIds` (or `postIds` when `entityType` is `ads`). Domains use `domainIds` (or `postIds` when `entityType` is `domains`). Ad profiles use `adProfileIds` (or `postIds` when `entityType` is `ad_profiles`). Apps use `appIds` (or `postIds` when `entityType` is `apps`). Non-empty array of valid Mongo ObjectId strings.
+- `variantKeysByDomainId`: required for domains. Map of domain id → cloak variant `label` (`bare` or a param like `pEl8X=MI1_HT2`). Included in the cache hash so Bare vs a param does not reuse the wrong file. **Not** used for ad profile or apps reports.
 - `reportType`: one of `Detailed | Single | Profile | SimpleProfile | SimpleCase | Summary`
 - `reportFormat`: `pdf` or `docx` (default should be `pdf` if omitted client-side)
 
@@ -95,6 +113,7 @@ Ad profiles example (layout is automatic: 1 id → single dossier, 2+ ids → co
 - Ads reports support `Summary` and `Detailed` only, and **PDF only** (no DOCX, Profile, Single, or SimpleCase in v1).
 - Domain reports support `Summary` and `Detailed` only, and **PDF only**. One-domain export is `Detailed` with a single id. Unreviewed domains are skipped; if none remain, the job fails.
 - Ad profile reports support **`Summary` only** (PDF only). Collection is `Ad_profiles` (capital A). Unreviewed profiles are skipped; nested ads/domains must be reviewed (`list.reviewed_at`). Ads table is capped at 20 (metrics still use all reviewed ads). **Layout is chosen by ID count after review filter:** exactly **1** reviewed profile → single dossier (`AdsProfileReport`); **2+** → combined catalog (`AdsProfilesSummaryReport`). Do not send `Detailed` for ad profiles.
+- App reports support `Summary` and `Detailed` only, and **PDF only**. Collection is `Apps` (capital A); `App_developers` is joined automatically. **Unreviewed apps are not skipped** — they render with an `Unreviewed` badge, so no review step is required before exporting. Screenshots are capped at 6 and evidence images at 16 (6 per section).
 - For posts `Profile` and `SimpleProfile` reports, send a proper `profile` object (including `_id`), because profile ID is part of hash generation.- `project` should be an object (not array) if you want proper branding/org metadata in report generation.
 
 ## 2) Client-side hash generation (must match backend exactly)
@@ -105,15 +124,16 @@ Backend hash is deterministic SHA-256 over this exact raw string:
 - Ads: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-ads`
 - Domains: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-domains-{extra}`
 - Ad profiles: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-ad_profiles`
+- Apps: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-apps`
 
 Where `extra` is the sorted `id=variantKey` pairs joined with `|`.
 
-The `-ads` / `-domains` / `-ad_profiles` suffix is required so the client cache key matches Lambda. Posts hashes must **not** gain a suffix. Domain lander keys are required so Bare vs a param does not reuse the wrong file.
+The `-ads` / `-domains` / `-ad_profiles` / `-apps` suffix is required so the client cache key matches Lambda. Posts hashes must **not** gain a suffix. Domain lander keys are required so Bare vs a param does not reuse the wrong file.
 
 Where:
 
-- Entity IDs (`postIds`, `adIds`, `domainIds`, or `adProfileIds`) are sorted lexicographically before hashing.
-- `profileId` is `profile?._id` or empty string (domains and ad profiles always send `null` profile, so the raw string contains `--`).
+- Entity IDs (`postIds`, `adIds`, `domainIds`, `adProfileIds`, or `appIds`) are sorted lexicographically before hashing.
+- `profileId` is `profile?._id` or empty string (domains, ad profiles, and apps always send `null` profile, so the raw string contains `--`).
 - `reportFormat` is usually `pdf` or `docx`.
 - `entityType` defaults to `posts`. Only non-`posts` types append `-{entityType}`.
 
@@ -128,8 +148,9 @@ export function generateReportHash(input: {
   adIds?: string[];
   domainIds?: string[];
   adProfileIds?: string[];
+  appIds?: string[];
   variantKeysByDomainId?: Record<string, string>;
-  entityType?: "posts" | "ads" | "domains" | "ad_profiles";
+  entityType?: "posts" | "ads" | "domains" | "ad_profiles" | "apps";
   reportType: "Detailed" | "Single" | "Profile" | "SimpleProfile" | "SimpleCase" | "Summary";
   reportFormat?: "pdf" | "docx";
   profile?: { _id?: string | null } | null;
@@ -144,7 +165,9 @@ export function generateReportHash(input: {
         ? "domains"
         : input.adIds?.length
           ? "ads"
-          : "posts");
+          : input.appIds?.length
+            ? "apps"
+            : "posts");
   const ids =
     entityType === "ads"
       ? (input.adIds?.length ? input.adIds : input.postIds)
@@ -152,7 +175,9 @@ export function generateReportHash(input: {
         ? (input.domainIds?.length ? input.domainIds : input.postIds)
         : entityType === "ad_profiles"
           ? (input.adProfileIds?.length ? input.adProfileIds : input.postIds)
-          : input.postIds;
+          : entityType === "apps"
+            ? (input.appIds?.length ? input.appIds : input.postIds)
+            : input.postIds;
   const sortedIds = [...(ids ?? [])].sort();
   const entitySuffix = entityType !== "posts" ? `-${entityType}` : "";
   let raw = `${input.projectId}-${sortedIds.join(",")}-${input.reportType}-${profileId}-${reportFormat}${entitySuffix}`;
@@ -222,7 +247,7 @@ Optional: include trace headers in message attributes and/or `otelCarrier` if yo
 
 The service updates statuses roughly in this order:
 
-- `[10%] Fetching posts from DB` (ads: `Fetching ads from DB`; domains: `Fetching domains from DB`; ad profiles: `Fetching ad profiles from DB`)
+- `[10%] Fetching posts from DB` (ads: `Fetching ads from DB`; domains: `Fetching domains from DB`; ad profiles: `Fetching ad profiles from DB`; apps: `Fetching apps from DB`)
 - `[30%] Processing Images`
 - `[60%] Generating PDF report` or `Generating DOCX report`
 - `[80%] Uploading ...`
@@ -242,10 +267,11 @@ Treat as failed when:
 
 ## 6) Recommended client safeguards
 
-- Validate `postIds` / `adIds` / `domainIds` as 24-char hex strings before sending.
+- Validate `postIds` / `adIds` / `domainIds` / `appIds` as 24-char hex strings before sending.
 - For ads, send `entityType: "ads"` and compute the hash with the `-ads` suffix.
 - For domains, send `entityType: "domains"`, `variantKeysByDomainId`, and compute the hash with the `-domains-{extra}` suffix.
 - For ad profiles, send `entityType: "ad_profiles"`, `adProfileIds`, `reportType: "Summary"`, and compute the hash with the `-ad_profiles` suffix. Layout is automatic from ID count (1 vs 2+).
+- For apps, send `entityType: "apps"`, `appIds`, `reportType: "Summary"` or `"Detailed"`, and compute the hash with the `-apps` suffix. No review step is needed — unreviewed apps render with an `Unreviewed` badge.
 - Normalize `reportFormat` to lowercase (`pdf`/`docx`).
 - Prevent duplicate SQS sends for same `report_hash` while a request is already in-progress.
 - Use timeout/retry logic in UI polling and show latest `status` text directly in progress UI.

@@ -55,7 +55,7 @@ Both are kept for context. Do not treat their status tables as current — see [
 
 **How a request flows.** SQS record → `validatePayload` → per-`entityType` Mongo reads + joins → S3 image download and `sharp` resize into `/tmp/images` → `@react-pdf/renderer` (or the `docx` package) → **watermark** (PDF only) → S3 → `[100%] Complete` in Supabase.
 
-**The four entity types.** `posts` (the original, only one with DOCX), `ads`, `domains`, `ad_profiles`.
+**The five entity types.** `posts` (the original, only one with DOCX), `ads`, `domains`, `ad_profiles`, `apps` (Google Play / App Store listings).
 
 **The six report types.** `Detailed`, `Single`, `Profile`, `SimpleProfile` (DOCX-only), `SimpleCase` (DOCX-only), `Summary`. Not every entity type supports every type — the full matrix is in [report-catalog.md](./report-catalog.md).
 
@@ -72,6 +72,6 @@ Both are kept for context. Do not treat their status tables as current — see [
 
 - **Exact strings are quoted.** Validation messages, status text, and section labels appear verbatim so you can grep for them in logs.
 - **`reportType` values are capitalised** exactly as the code expects (`SimpleProfile`, not `simpleprofile`).
-- **Collection names show exact casing** (`Posts`, `Ads`, `Ad_profiles`, `Domains`) because casing is load-bearing.
+- **Collection names show exact casing** (`Posts`, `Ads`, `Ad_profiles`, `Domains`, `Apps`, `App_developers`) because casing is load-bearing.
 - **File references** are relative to the repository root.
 - Status text uses the literal bracketed form the service writes, e.g. `` `[30%] Processing Images` ``.

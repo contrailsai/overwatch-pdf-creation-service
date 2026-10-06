@@ -1,0 +1,189 @@
+{
+  "_id": "6ab65e0648deed136101ed92",
+  "schema_version": 3,
+  "platform": "google_play",
+  "platform_app_id": "com.bharatfunded.trade",
+  "original_url": "https://play.google.com/store/apps/details?id=com.bharatfunded.trade&hl=en&gl=in",
+  "developer_id": "6ab65dfaf2b0ece71b22380d",
+  "detail_level": "detailed",
+  "workflow": {
+    "ai_status": "pending",
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "available",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": null,
+    "review_threat_score": null,
+    "effective_threat_score": null,
+    "risk_rank": null,
+    "threat_types": [],
+    "violation_flags": [],
+    "score": null,
+    "ratings": null,
+    "installs": "100+",
+    "min_installs": 100,
+    "genre": "Finance",
+    "free": true,
+    "price": 0,
+    "currency": "INR",
+    "content_rating": "Rated for 3+",
+    "sourced_at": "2026-09-29T12:02:54.118Z",
+    "reviewed_at": null
+  },
+  "content": {
+    "title": "BharatFund Trader",
+    "summary": "Prop trading challenges, live charts and funded account tracking in one app.",
+    "description": "BharatFundedTrade is the official mobile app for traders taking prop firm evaluations. TAKE A CHALLENGE, TRACK EVERY ACCOUNT, TRADE FROM THE TERMINAL.",
+    "media": [
+      {
+        "type": "image",
+        "role": "icon",
+        "original_url": "https://play-lh.googleusercontent.com/icon.png",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/icon.png"
+      },
+      {
+        "type": "image",
+        "role": "header",
+        "original_url": "https://play-lh.googleusercontent.com/header.jpg",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/header.jpg"
+      },
+      {
+        "type": "image",
+        "role": "screenshot",
+        "original_url": "https://play-lh.googleusercontent.com/shot0.png",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/screenshots/0.png"
+      },
+      {
+        "type": "image",
+        "role": "screenshot",
+        "original_url": "https://play-lh.googleusercontent.com/shot1.png",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/screenshots/1.png"
+      }
+    ]
+  },
+  "developer_snapshot": {
+    "platform_developer_id": "Setupfx",
+    "platform_developer_internal_id": "5675535085972026117",
+    "name": "Setupfx",
+    "legal_name": "SETUPFX24 LIMITED",
+    "email": "setupfx24@gmail.com",
+    "legal_email": "support24@setupfx24.com",
+    "website": null,
+    "phone": "+1 447-221-2745",
+    "address": "3 Area Glasgow City Centre\nFitzroy Place\nGLASGOW\nG3 7RH\nUnited Kingdom",
+    "profile_url": "https://play.google.com/store/apps/developer?id=Setupfx"
+  },
+  "store": {
+    "histogram": [0, 0, 0, 0, 0],
+    "real_installs": 259,
+    "categories": [],
+    "genre_id": "FINANCE",
+    "version": "Varies with device",
+    "released": "Jul 29, 2026",
+    "updated": null,
+    "last_updated_on": null,
+    "offers_iap": false,
+    "in_app_product_price": null,
+    "contains_ads": false,
+    "ad_supported": false,
+    "content_rating_description": null,
+    "privacy_policy": "https://bharathfundedtrader.com/privacy-policy",
+    "data_safety": [
+      { "title": "No data shared with third parties", "detail": "Learn more about how developers declare sharing" },
+      { "title": "This app may collect these data types", "detail": "Personal info, Financial info and 2 others" },
+      { "title": "Data is encrypted in transit", "detail": null },
+      { "title": "You can request that data be deleted", "detail": null }
+    ],
+    "video": null,
+    "permissions": {
+      "Photos/Media/Files": ["modify or delete the contents of your USB storage", "read the contents of your USB storage"],
+      "Storage": ["modify or delete the contents of your USB storage", "read the contents of your USB storage"],
+      "Camera": ["take pictures and videos"],
+      "Microphone": ["record audio"],
+      "Other": [
+        "Google Play license check",
+        "control vibration",
+        "draw over other apps",
+        "full network access",
+        "view network connections"
+      ]
+    },
+    "comments": []
+  },
+  "analysis_results": {},
+  "review_details": {},
+  "ingestion": {
+    "type": "play_store_detail",
+    "source_url": "https://play.google.com/store/apps/details?id=com.bharatfunded.trade&hl=en&gl=in",
+    "query": null,
+    "lang": "en",
+    "country": "in",
+    "ingested_at": "2026-09-29T12:02:54.118Z"
+  },
+  "system": {
+    "created_at": "2026-09-25T11:41:46.577Z",
+    "updated_at": "2026-10-05T14:21:54.945Z",
+    "s3_stored": true
+  },
+  "evidence": {
+    "has_evidence": true,
+    "sections": [
+      {
+        "title": "App Name",
+        "description": "BharatFund Trader",
+        "media": []
+      },
+      {
+        "title": "Executive Summary",
+        "description": "BharatFund Trader identified several potential red flags concerning the platform credibility and legitimacy.",
+        "media": []
+      },
+      {
+        "title": "Website Registration",
+        "description": "The domain bharathfundedtrader.com was registered on 21 April 2026.",
+        "media": [
+          {
+            "type": "image",
+            "role": "evidence",
+            "original_url": null,
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/evidence/v2/Website-Registration.png",
+            "filename": "Website-Registration.png"
+          }
+        ]
+      },
+      {
+        "title": "AI generated Platform",
+        "description": "The website appears to use AI-generated profile images.",
+        "media": [
+          {
+            "type": "image",
+            "role": "evidence",
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/evidence/v2/AI-1.png",
+            "filename": "AI-1.png"
+          },
+          {
+            "type": "image",
+            "role": "evidence",
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/evidence/v2/AI-2.png",
+            "filename": "AI-2.png"
+          }
+        ]
+      },
+      {
+        "title": "Application workflow",
+        "description": "Screen recording of the onboarding flow.",
+        "media": [
+          {
+            "type": "video",
+            "role": "evidence",
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/play_apps/com.bharatfunded.trade/evidence/v2/workflow.mp4",
+            "filename": "workflow.mp4"
+          }
+        ]
+      }
+    ]
+  }
+}

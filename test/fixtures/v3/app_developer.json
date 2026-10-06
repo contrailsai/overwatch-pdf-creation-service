@@ -1,0 +1,41 @@
+{
+  "_id": "6ab65dfaf2b0ece71b22380d",
+  "platform": "google_play",
+  "platform_developer_id": "Setupfx",
+  "client_notes": [],
+  "display_name": "Setupfx",
+  "enrichment": {
+    "email": "setupfx24@gmail.com",
+    "legal_email": "support24@setupfx24.com",
+    "website": null,
+    "phone": "+1 447-221-2745",
+    "address": "3 Area Glasgow City Centre\nFitzroy Place\nGLASGOW\nG3 7RH\nUnited Kingdom",
+    "legal_name": "SETUPFX24 LIMITED",
+    "privacy_policy": "https://bharathfundedtrader.com/privacy-policy"
+  },
+  "list": {
+    "app_count": 2,
+    "email": "setupfx24@gmail.com",
+    "last_active_at": null,
+    "max_threat_score": null,
+    "reviewed_app_count": 0,
+    "risk": null,
+    "risk_rank": null,
+    "website": null,
+    "phone": "+1 447-221-2745"
+  },
+  "profile_url": "https://play.google.com/store/apps/developer?id=Setupfx",
+  "review_details": {},
+  "schema_version": 3,
+  "system": {
+    "created_at": "2026-09-25T11:41:46.536Z",
+    "last_synced_from_app_at": "2026-09-29T12:02:54.076Z",
+    "updated_at": "2026-09-29T12:02:54.076Z"
+  },
+  "workflow": {
+    "review_status": "pending",
+    "client_status": "open",
+    "reviewed_at": null
+  },
+  "platform_developer_internal_id": "5675535085972026117"
+}

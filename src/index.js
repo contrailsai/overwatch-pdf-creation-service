@@ -86,6 +86,8 @@ exports.handler = async (event) => {
                   span.setAttribute('domain.count', validation.entityIds.length);
                 } else if (validation.entityType === 'ad_profiles') {
                   span.setAttribute('ad_profile.count', validation.entityIds.length);
+                } else if (validation.entityType === 'apps') {
+                  span.setAttribute('app.count', validation.entityIds.length);
                 } else {
                   span.setAttribute('post.count', validation.entityIds.length);
                 }

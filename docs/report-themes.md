@@ -40,7 +40,7 @@ DOCX output uses **different** fonts, and the two DOCX families do not agree wit
 | Element | Generation A | Generation B | Domains family |
 | --- | --- | --- | --- |
 | Brand title | `OVERWATCH` (18 / `'900'` / letterSpacing 0.5) | `Overwatch` (18 / 700) | `OVERWATCH` in summary; `Overwatch` in detailed |
-| Subtitle | `Digital Risk Protection Report` (Summary) / `Profile Investigation Report` (Profile) | `Digital Risk Protection` | `Domain Integrity Report` (summary) / `Domain Integrity` (detailed) / `Meta Ads Integrity Report` (ads summary) / `Meta Ads Integrity` (ads detailed) |
+| Subtitle | `Digital Risk Protection Report` (Summary) / `Profile Investigation Report` (Profile) | `Digital Risk Protection` | `Domain Integrity Report` (summary) / `Domain Integrity` (detailed) / `Meta Ads Integrity Report` (ads summary) / `Meta Ads Integrity` (ads detailed) / `App Integrity Report` (apps summary) / `App Integrity` (apps detailed) |
 | Footer | `CONFIDENTIAL DOCUMENT` · `POWERED BY CONTRAILS AI` · `PAGE X OF Y` | `Confidential Document` · `Powered by Contrails AI` · `Page X of Y` | uppercase in summary, title case in detailed |
 | Timestamp | `"dd MMM yyyy, hh:mm a 'IST'"` (Asia/Kolkata) | `'dd MMM yyyy, hh:mm a'` (Asia/Kolkata, no suffix) | summary uses the `IST` form, detailed uses the plain form |
 
@@ -80,6 +80,7 @@ Two design systems grew independently. They disagree on **every** accent colour.
 | `DomainsSummaryReport`, `DomainsDetailedReport` | Import `DomainTheme` directly — the **only** renderers whose detailed variant keeps the summary accents |
 | `adsProfilesPdfShared` (→ both ad-profile documents) | Builds its `Theme` by spreading `DomainTheme`, so it is exactly `DomainTheme` |
 | `AdsSummaryReport` | Redeclares a value-identical 11-key subset **inline** instead of importing — a drift risk |
+| `appPdfShared` (→ both apps documents) | Imports `DomainTheme` and re-exports it as `AppTheme`, so **both** apps renderers share the Domains accents |
 
 So `DomainsDetailedReport` body text is Generation B's `#0F172A`, but its links are `#3B82F6` and its risk colours are `#F43F5E / #F97316 / #F59E0B / #10B981`. `AdsDetailedReport` is the opposite: same detailed page geometry, Generation B accents. Do not infer a report's palette from its layout style.
 
@@ -140,8 +141,9 @@ Every renderer computes a risk tier, but the **thresholds, comparison operators,
 | Domains Summary/Detailed | `domainRiskInfo(domain)` | `>= 96` | `>= 76` | `>= 41` (after `list.risk_rank`) | `Safe` | `Unreviewed` when rank is unknown |
 | Ad profiles — ads table | `adRiskInfo(ad)` | `> 95` | `> 75` | `> 40` | `Safe` | ✅ when score `null`, no `threat_types`, no `reviewed_at` |
 | Ad profiles — profile | `profileRiskInfo(profile)` | from `risk_rank \|\| risk` only | — | — | `Safe` | label is **`Reviewed`** when no rank present |
+| Apps Summary/Detailed | `appRiskInfo(app)` | `>= 96` | `>= 76` | `>= 41` (after `review.risk_rank`) | `Safe` | `Unreviewed` when no score and no review signal |
 
-Score source everywhere: `review_details.threat_score ?? analysis_results.risk_score ?? 0` (ads also fall back to `list.review_threat_score`, `list.effective_threat_score`).
+Score source everywhere: `review_details.threat_score ?? analysis_results.risk_score ?? 0` (ads also fall back to `list.review_threat_score`, `list.effective_threat_score`; apps also fall back to `list.ai_threat_score`).
 
 > **Off-by-one bug.** Generation A uses `>` and Generation B uses `>=` with the same nominal numbers, so a score of exactly **76** is "Medium Risk" in a Posts Summary and "Low Risk" in a Posts Detailed. Standards: this is the single highest-value fix in the theme layer.
 
@@ -372,11 +374,54 @@ The ads table caps display at **20** rows and, when capped, prints `Showing N of
 
 **Catalog variant** additionally renders `CatalogMetricsSection` — `Profiles`, `High Risk Profiles`, `Ads`, `High Risk Ads`, `Domains`, `High Risk Domains` — under an `Executive Summary` heading.
 
+### 6.5 Apps
+
+Both apps renderers import `DomainTheme` (as `AppTheme`) and share the pure helpers in `appPdfShared.js`. There is **no review filter** — every requested app renders, with an `Unreviewed` badge when no reviewer signal exists.
+
+**Apps Summary — `AppsSummaryReportDocument`** — props `{ apps, project }`. Single flowing A4 page, padding `30/30/40`, fixed header `OVERWATCH` / `App Integrity Report` + IST timestamp, uppercase footer.
+
+| Section | Content |
+| --- | --- |
+| Executive Summary | Six cards: `Total Apps` · `High` · `Medium` · `Low` (risk tiers, coloured only when non-zero) · `Developers` (distinct names) · `Alerted` (explicit `client_status: alerted`, or the legacy `processed` flag) |
+| App List Analysis | Fixed table header + one row per app |
+
+Columns: `#` 5% · `App` 27% · `Developer` 16% · `Store` 19% · `Violations` 11% · `Risk` 13% · `Dates` 9%.
+
+Row: **45×45** icon (`objectFit: 'contain'` on a `#F8FAFC` well, 8 px radius) or `No Img`; app title (2 lines); package id; platform plus a **store link** (`Play Store` / `App Store`, `app.original_url`) underneath; developer name + legal name + a `Developer page` link; store facts one per line (`installs`, genre, `N ratings`, price); up to 3 violation chips or `—`; risk badge; `Sourced` / `Reviewed` dates.
+
+**Apps Detailed — `AppsDetailedReportDocument`** — props `{ apps, project }`. Each app renders as **three page groups**: the page-1 hook, then `App & Developer`, then `Evidence`. All three share a **fixed** header (`Overwatch` / `App Integrity`, right-aligned app title + package) and a fixed `Page X of Y` footer. The `Evidence` group is omitted entirely when an app has no evidence.
+
+**Page 1 — the hook.** Everything needed to decide whether to keep reading; nothing else.
+
+1. Heading `N. {title}`.
+2. Two columns (left 57% / right 43%):
+   - Left: **`App & Publisher`** card — when the app has a review signal, a **`Risk` key/value pill** (coloured risk badge) is the first item; then a two-column grid (Application: package, platform, genre, content rating, installs, ratings, **store listing link**; Publisher: developer, legal name, email, website) — then **`Review Details`**: risk badge, `Case Summary` lead (11 pt), `Detected Violations` pills, `Legal Violations` cards (red accent bar, up to 3), `Reviewer Comments`, and **`Detailed Reasoning`** directly beneath. Reviewed apps show the content; unreviewed apps read `Not yet reviewed…`.
+   - Right: a **gallery column** — 58×58 icon well, then up to **6** screenshots in a 2-across grid (148 pt high, `objectFit: 'cover'`, `objectPosition: 'top'`) plus a `+ N more screenshot(s) captured` note.
+
+**Section 1 — `App & Developer`.** Store + publisher first, side by side, then description:
+
+1. `Store Details` (50%) and `Publisher Details` (50%) cards in a two-column row.
+2. `Description` — summary lead + description truncated to 950 chars / 10 lines.
+3. `Permissions & Data Safety` — a two-column card (Data Safety | Permissions) to keep its height down.
+4. `Automated Analysis` (conditional) — any non-empty `analysis_results`, flattened generically.
+
+**Section 2 — `Evidence`.** Deterministic buckets rather than raw document order:
+
+1. `Executive Summary` prose card (620 chars / 8 lines).
+2. `Captured Fields` card — the fixed, effectively-constant evidence titles rendered as a configured multi-column grid: **Listing & Contact** (App Name, Package Name, Email, Website, UPI ID, Associated Numbers, Associated Address, Bank/IFSC, socials…) and **Developer Details** (Company Name, Email, Website, Instagram, Facebook, Phone number, Address, GST). Half-width fields pack two per row; long values take a full row. Titles ending in `(Developer Details)` are grouped into the Developer bucket; short unrecognised text values fall in as fields too.
+3. **Image sub-sections** — one card per section that has images: title, description (320 chars / 4 lines), and a grid of up to 4 images. Cell size adapts to the count (1 → 62% wide, 2 → 48%, 3+ → 32%). Cards are atomic (`wrap={false}`) so a grid never splits across pages.
+4. **Other sections** — prose that is neither the executive summary nor a media capture (e.g. redirect notices), rendered as title + wrapped text. Capped at 6.
+5. Video-only captures are dropped entirely; there is no video rendering.
+
+Caps (`src/core-utils.js`): `MAX_APP_SCREENSHOTS = 6`, `MAX_APP_EVIDENCE_IMAGES = 10`, `MAX_APP_EVIDENCE_IMAGES_PER_SECTION = 4`, `MAX_APP_PERMISSION_ITEMS = 10`. Evidence images are addressed by a stable `slot` (`sectionIndex:mediaIndex`) that is also the image-cache key, so the pipeline and the renderer agree without re-walking the tree.
+
+Cards use flat white fills with a single `#E2E8F0` hairline border — no tinted or gradient chrome. Only the semantic fills (risk badge, violation pill, legal card) carry colour.
+
 ---
 
 ## 7. The `DomainTheme` token set
 
-`src/components/domainPdfShared.js` is the closest thing to a shared theme in the repo. `DomainsSummaryReport` and `DomainsDetailedReport` import it directly; `adsProfilesPdfShared` builds its `Theme` by spreading it; `AdsSummaryReport` redeclares a value-identical subset inline.
+`src/components/domainPdfShared.js` is the closest thing to a shared theme in the repo. `DomainsSummaryReport` and `DomainsDetailedReport` import it directly; `adsProfilesPdfShared` builds its `Theme` by spreading it; `appPdfShared` re-exports it as `AppTheme` for both apps renderers; `AdsSummaryReport` redeclares a value-identical subset inline.
 
 | Token | Value | Role |
 | --- | --- | --- |

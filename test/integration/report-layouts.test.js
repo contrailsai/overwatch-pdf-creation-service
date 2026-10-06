@@ -19,6 +19,8 @@ const { DomainsSummaryReportDocument } = require('../../src/components/DomainsSu
 const { DomainsDetailedReportDocument } = require('../../src/components/DomainsDetailedReport');
 const { AdsProfilesSummaryReportDocument } = require('../../src/components/AdsProfilesSummaryReport');
 const { AdsProfileReportDocument } = require('../../src/components/AdsProfileReport');
+const { AppsSummaryReportDocument } = require('../../src/components/AppsSummaryReport');
+const { AppsDetailedReportDocument } = require('../../src/components/AppsDetailedReport');
 const { generateDetailedCasesDocxBuffer } = require('../../src/components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('../../src/components/docx/ProfileReportDocx');
 const { generateSimpleProfileDocxBuffer } = require('../../src/components/docx/SimpleProfileReportDocx');
@@ -29,6 +31,7 @@ const {
   makeNormalizedPost,
   makeNormalizedAd,
   makeNormalizedDomain,
+  makeNormalizedApp,
   makeAdProfileReportGroup,
 } = require('./smoke-fixtures');
 
@@ -222,6 +225,57 @@ test('Ads Profile Report PDF renders with single fixture profile dossier', async
     profiles,
     project,
   });
+  await assertPdfRenderable(element);
+});
+
+test('Apps Summary PDF renders with fixture apps', async () => {
+  const project = makeProject();
+  const apps = [
+    makeNormalizedApp(),
+    makeNormalizedApp({
+      _id: '6aba06a4e8c8fd9c21da915f',
+      title: 'NischintLoan-Credit Assistant',
+      package_id: 'com.hydroacres.nischint',
+      screenshots: [],
+      total_screenshots: 0,
+      evidence: { has_evidence: false, totalImages: 0, sections: [] },
+      permissions: [],
+      data_safety: [],
+      developer: { ...makeNormalizedApp().developer, name: 'Hydroacres', website: 'https://www.nischintloan.com' },
+    }),
+  ];
+  const element = React.createElement(AppsSummaryReportDocument, { apps, project });
+  await assertPdfRenderable(element);
+});
+
+test('Apps Detailed PDF renders with fixture apps', async () => {
+  const project = makeProject();
+  const apps = [
+    makeNormalizedApp({
+      compressedImage: null,
+      compressedScreenshots: [null, null],
+    }),
+    makeNormalizedApp({
+      _id: '6aba06a4e8c8fd9c21da915f',
+      title: 'NischintLoan-Credit Assistant',
+      review: {
+        threat_score: 88,
+        risk_rank: 'medium',
+        threat_types: ['financial_scam'],
+        violation_flags: [],
+        flags: {},
+        legal_codes: [{ code: 'IT-66D', reasoning: 'Cheating by personation.' }],
+        reasoning: 'Description: unregistered lending app.',
+        case_summary: 'Unregistered lending app.',
+        verdict: null,
+        recommended_action: null,
+        reviewer_comments: '',
+        reviewed_at: '2026-10-01T00:00:00.000Z',
+      },
+      evidence: { has_evidence: false, totalImages: 0, sections: [] },
+    }),
+  ];
+  const element = React.createElement(AppsDetailedReportDocument, { apps, project });
   await assertPdfRenderable(element);
 });
 

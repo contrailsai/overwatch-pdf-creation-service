@@ -11,15 +11,18 @@ const {
   normalizeProfile,
   normalizeAd,
   normalizeAdProfile,
+  normalizeApp,
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,
+  resolveAppEvidenceImageEntries,
   mapCaseEventToUpdateHistory,
   validatePayload,
   orderPostsByRequestedIds,
   isAdReviewed,
   isAdProfileReviewed,
   groupAdsAndDomainsByProfile,
+  MAX_APP_SCREENSHOTS,
 } = require('./core-utils');
 const {
   attachReportLander,
@@ -44,6 +47,8 @@ const { DomainsSummaryReportDocument } = require('./components/DomainsSummaryRep
 const { DomainsDetailedReportDocument } = require('./components/DomainsDetailedReport');
 const { AdsProfilesSummaryReportDocument } = require('./components/AdsProfilesSummaryReport');
 const { AdsProfileReportDocument } = require('./components/AdsProfileReport');
+const { AppsSummaryReportDocument } = require('./components/AppsSummaryReport');
+const { AppsDetailedReportDocument } = require('./components/AppsDetailedReport');
 const { generateSingleCaseDocxBuffer } = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('./components/docx/ProfileReportDocx');
@@ -205,6 +210,68 @@ async function processAndCacheAdImages(ads, { includeAllCards = false, concurren
   }
 
   return { compressedImages, compressedCardImages };
+}
+
+/**
+ * Cache app creatives. Expects **normalized** apps (the evidence image slots the
+ * cache keys derive from live on the view model). Summary fetches one thumb per
+ * app; Detailed also fetches up to MAX_APP_SCREENSHOTS screenshots and every
+ * capped evidence image. App header banners are deliberately not fetched.
+ *
+ * @returns {{
+ *   compressedImages: Array<string|null>,
+ *   compressedScreenshotImages: Array<string[]>,
+ *   compressedEvidenceImages: Array<Map<string, string>>,
+ * }}
+ */
+async function processAndCacheAppImages(
+  apps,
+  { includeScreenshots = false, includeEvidence = false, concurrency = 10 } = {},
+) {
+  const compressedImages = new Array(apps.length);
+  const compressedScreenshotImages = new Array(apps.length);
+  const compressedEvidenceImages = new Array(apps.length);
+
+  for (let i = 0; i < apps.length; i += concurrency) {
+    const chunk = apps.slice(i, i + concurrency);
+    const promises = chunk.map(async (app, index) => {
+      const slot = i + index;
+
+      const thumbUrl = app.icon_url || app.header_url || app.screenshots?.[0]?.url || null;
+      compressedImages[slot] = await processImage(thumbUrl, app._id, 'app_icon');
+
+      if (includeScreenshots) {
+        const shots = (app.screenshots || []).slice(0, MAX_APP_SCREENSHOTS);
+        compressedScreenshotImages[slot] = await Promise.all(
+          shots.map((shot, shotIndex) =>
+            processImage(shot.url, app._id, `app_shot_${String(shotIndex).padStart(2, '0')}`),
+          ),
+        );
+      } else {
+        compressedScreenshotImages[slot] = [];
+      }
+
+      const evidencePaths = new Map();
+      if (includeEvidence) {
+        const entries = resolveAppEvidenceImageEntries(app);
+        await Promise.all(
+          entries.map(async (entry) => {
+            const [sectionIndex, mediaIndex] = String(entry.slot).split(':');
+            const localPath = await processImage(
+              entry.url,
+              app._id,
+              `app_ev_${String(sectionIndex).padStart(2, '0')}_${String(mediaIndex).padStart(2, '0')}`,
+            );
+            if (localPath) evidencePaths.set(entry.slot, localPath);
+          }),
+        );
+      }
+      compressedEvidenceImages[slot] = evidencePaths;
+    });
+    await Promise.all(promises);
+  }
+
+  return { compressedImages, compressedScreenshotImages, compressedEvidenceImages };
 }
 
 async function writeJpegFromBuffer(buffer, destPath, { width, extract } = {}) {
@@ -419,6 +486,7 @@ async function runReportJob(client, payload, options = {}) {
   const isAds = entityType === 'ads';
   const isDomains = entityType === 'domains';
   const isAdProfiles = entityType === 'ad_profiles';
+  const isApps = entityType === 'apps';
 
   // Normalize profile before image fetch so v3 enrichment.profile_pic_s3 maps to metadata.profile_pic
   const normalizedProfile = payload.profile ? normalizeProfile(payload.profile) : null;
@@ -753,6 +821,116 @@ async function runReportJob(client, payload, options = {}) {
       const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
       storageUrl = persisted.storageUrl;
       if (persisted.localPath) localPath = persisted.localPath;
+    } else if (isApps) {
+      await updateReportStatus(reportHash, '[10%] Fetching apps from DB');
+
+      const objectIds = buildObjectIds(entityIds);
+      const appsFromDb = await db.collection('Apps').find({ _id: { $in: objectIds } }).toArray();
+      const orderedApps = orderPostsByRequestedIds(entityIds, appsFromDb);
+
+      if (orderedApps.length === 0) {
+        throw new Error('No apps found for the requested IDs');
+      }
+
+      const developerIds = [
+        ...new Set(
+          orderedApps
+            .map((app) => app.developer_id)
+            .filter(Boolean)
+            .map((id) => id.toString()),
+        ),
+      ];
+      const developersById = new Map();
+      if (developerIds.length > 0) {
+        const joinedDevelopers = await db
+          .collection('App_developers')
+          .find({ _id: { $in: buildObjectIds(developerIds) } })
+          .toArray();
+        for (const developer of joinedDevelopers) {
+          developersById.set(developer._id.toString(), developer);
+        }
+      }
+
+      const caseEvents = await db
+        .collection('case_events')
+        .find({
+          entity_type: { $in: ['app', 'apps'] },
+          entity_id: { $in: objectIds },
+        })
+        .sort({ occurred_at: 1 })
+        .toArray();
+      const eventsByAppId = groupCaseEventsByEntityId(caseEvents);
+
+      // Normalize before image processing: the evidence image slots that become
+      // cache keys live on the normalized view model. Order is preserved 1:1.
+      const apps = orderedApps.map((app) => {
+        const developerKey =
+          app.developer_id?.toString?.() || (app.developer_id ? String(app.developer_id) : null);
+        return normalizeApp(app, {
+          joinedDeveloper: developerKey ? developersById.get(developerKey) || null : null,
+          updateHistory: eventsByAppId.get(app._id.toString()) || [],
+        });
+      });
+
+      await updateReportStatus(reportHash, '[30%] Processing Images');
+
+      const includeDetailedImages = reportType === 'Detailed';
+      const {
+        compressedImages,
+        compressedScreenshotImages,
+        compressedEvidenceImages,
+      } = await withSpan(
+        'process-app-images',
+        { 'images.count': apps.length, 'entity.type': 'apps' },
+        async () =>
+          processAndCacheAppImages(apps, {
+            includeScreenshots: includeDetailedImages,
+            includeEvidence: includeDetailedImages,
+            concurrency: 10,
+          }),
+      );
+
+      const appsForReport = apps.map((app, index) => ({
+        ...app,
+        compressedImage: compressedImages[index] || null,
+        compressedScreenshots: compressedScreenshotImages[index] || [],
+        evidence: {
+          ...app.evidence,
+          sections: app.evidence.sections.map((section) => ({
+            ...section,
+            images: section.images.map((image) => ({
+              ...image,
+              localPath: compressedEvidenceImages[index]?.get?.(image.slot) || null,
+            })),
+          })),
+        },
+      }));
+
+      await updateReportStatus(reportHash, '[60%] Generating PDF report');
+
+      const pdfStream = await withSpan(
+        'render-pdf',
+        { 'report.type': reportType, 'app.count': apps.length, 'entity.type': 'apps' },
+        async () => {
+          if (reportType === 'Summary') {
+            return await renderToStream(
+              React.createElement(AppsSummaryReportDocument, { apps: appsForReport, project }),
+            );
+          }
+          if (reportType === 'Detailed') {
+            return await renderToStream(
+              React.createElement(AppsDetailedReportDocument, { apps: appsForReport, project }),
+            );
+          }
+          throw new Error(`App PDF report type '${reportType}' is not supported`);
+        },
+      );
+
+      await updateReportStatus(reportHash, '[80%] Uploading to Storage');
+
+      const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
+      storageUrl = persisted.storageUrl;
+      if (persisted.localPath) localPath = persisted.localPath;
     } else {
     await updateReportStatus(reportHash, '[10%] Fetching posts from DB');
 
@@ -951,5 +1129,6 @@ module.exports = {
   processImage,
   processAndCacheImages,
   processAndCacheAdImages,
+  processAndCacheAppImages,
   processAndCacheDomainImages,
 };

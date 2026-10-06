@@ -44,7 +44,7 @@ The single largest maintainability issue: **there is no theme module.** Each ren
 | Item | Effort | Severity |
 | --- | --- | --- |
 | Posts reports use only the **first** media item per post (`resolvePostMediaUrl`). Carousel posts lose every image after the first | M | 🟡 |
-| Ads DOCX, Domains DOCX, and Ad-profile DOCX are all unsupported. `validatePayload` rejects them explicitly, so this is a known gap rather than a bug | L | 🟢 |
+| Ads DOCX, Domains DOCX, Ad-profile DOCX, and Apps DOCX are all unsupported. `validatePayload` rejects them explicitly, so this is a known gap rather than a bug | L | 🟢 |
 | Ad profiles support only `reportType: Summary`. A genuine `Detailed` ad-profile product (beyond the automatic single-dossier layout) does not exist | L | 🟢 |
 | `AdsProfilesDetailedReport.js` is a deprecated re-export alias of `AdsProfileReport` and is not imported by `report-job.js` — dead file | S | 🟢 |
 | Unreviewed ads **do** render in `ads` reports (with an "Unreviewed" badge), but unreviewed domains/profiles are **filtered out and can fail the whole job**. Consider whether ads should filter too, or whether all branches should badge instead of drop | M | 🟡 |

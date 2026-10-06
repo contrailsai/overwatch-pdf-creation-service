@@ -11,10 +11,19 @@ const {
   normalizeProfile,
   normalizeAd,
   normalizeAdProfile,
+  normalizeApp,
+  normalizeLegalCodes,
   adSourceLinkLabel,
+  appSourceLabel,
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,
+  resolveAppThumbUrl,
+  resolveAppScreenshotUrls,
+  resolveAppEvidenceImageEntries,
+  isAppImageMedia,
+  isAppReviewed,
+  appThreatScore,
   pickMediaUrl,
   mapCaseEventToUpdateHistory,
   isAdReviewed,
@@ -22,6 +31,7 @@ const {
   sortAdsForProfileReport,
   sliceAdsForProfileReport,
   groupAdsAndDomainsByProfile,
+  MAX_APP_SCREENSHOTS,
 } = require('../../src/core-utils');
 
 const fixtureDir = path.join(__dirname, '../fixtures/v3');
@@ -29,6 +39,8 @@ const v3Post = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'post.json'), 'u
 const v3CaseEvent = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'case_event.json'), 'utf8'));
 const v3Profile = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'profile_tinytoontunes.json'), 'utf8'));
 const v3Ad = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'ad.json'), 'utf8'));
+const v3App = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'app.json'), 'utf8'));
+const v3AppDeveloper = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'app_developer.json'), 'utf8'));
 
 test('validatePayload accepts a valid PDF payload', () => {
   const payload = {
@@ -431,6 +443,226 @@ test('generateReportHash domains extra differs by lander key and leaves posts/ad
   assert.notEqual(bareHash, postsHash);
   assert.notEqual(bareHash, adsHash);
   assert.equal(postsHash, generateReportHash('SEBI', ids, 'Detailed', '', 'pdf', 'posts', scamKeys));
+});
+
+test('validatePayload accepts entityType apps with appIds', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'apps',
+    appIds: [v3App._id],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.equal(result.entityType, 'apps');
+  assert.deepEqual(result.entityIds, [v3App._id]);
+});
+
+test('validatePayload infers apps when appIds is present without entityType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    appIds: [v3App._id],
+    reportType: 'Detailed',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.equal(result.entityType, 'apps');
+});
+
+test('validatePayload accepts apps IDs sent as postIds when entityType is apps', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'apps',
+    postIds: [v3App._id],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.deepEqual(result.entityIds, [v3App._id]);
+});
+
+test('validatePayload rejects apps with DOCX', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'apps',
+    appIds: [v3App._id],
+    reportType: 'Detailed',
+    reportFormat: 'docx',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /App reports currently support PDF only/i);
+});
+
+test('validatePayload rejects apps with Single reportType', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'apps',
+    appIds: [v3App._id],
+    reportType: 'Single',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /App reports only support/i);
+});
+
+test('validatePayload names appIds for invalid app ObjectIds', () => {
+  const result = validatePayload({
+    projectId: 'SEBI',
+    database_name: 'SEBI-Data-Search',
+    entityType: 'apps',
+    appIds: ['not-an-object-id'],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /appIds contains invalid ObjectId/i);
+});
+
+test('generateReportHash apps suffix differs from posts/ads/domains and leaves posts unchanged', () => {
+  const crypto = require('crypto');
+  const ids = [v3App._id, '6aba06a4e8c8fd9c21da915f'];
+  const sorted = [...ids].sort();
+  const postsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf');
+  const adsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'ads');
+  const domainsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'domains');
+  const appsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'apps');
+  const expectedRaw = `SEBI-${sorted.join(',')}-Summary--pdf-apps`;
+  assert.equal(appsHash, crypto.createHash('sha256').update(expectedRaw).digest('hex'));
+  assert.notEqual(appsHash, postsHash);
+  assert.notEqual(appsHash, adsHash);
+  assert.notEqual(appsHash, domainsHash);
+  assert.equal(postsHash, generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'posts'));
+});
+
+test('normalizeApp maps identity, store facts, developer and evidence', () => {
+  const normalized = normalizeApp(v3App);
+
+  assert.equal(normalized._id, '6ab65e0648deed136101ed92');
+  assert.equal(normalized.platform, 'google_play');
+  assert.equal(normalized.package_id, 'com.bharatfunded.trade');
+  assert.equal(normalized.source_label, 'Play Store');
+  assert.equal(normalized.title, 'BharatFund Trader');
+  assert.equal(normalized.store.installs, '100+');
+  assert.equal(normalized.store.min_installs, 100);
+  assert.equal(normalized.store.real_installs, 259);
+  assert.equal(normalized.store.genre, 'Finance');
+  assert.equal(normalized.store.free, true);
+  assert.equal(normalized.developer.name, 'Setupfx');
+  assert.equal(normalized.developer.legal_name, 'SETUPFX24 LIMITED');
+  assert.equal(normalized.review.threat_score, null);
+  assert.equal(normalized.screenshots.length, 2);
+  assert.equal(normalized.total_screenshots, 2);
+  assert.match(normalized.icon_url, /icon\.png$/);
+  assert.match(normalized.header_url, /header\.jpg$/);
+  assert.equal(normalized.permissions.length, 5);
+  assert.equal(normalized.data_safety.length, 4);
+
+  // Evidence: the .mp4 in "Application workflow" is dropped.
+  assert.equal(normalized.evidence.sections.length, 5);
+  assert.equal(normalized.evidence.totalImages, 3);
+  assert.equal(normalized.evidence.has_evidence, true);
+  assert.deepEqual(normalized.evidence.sections[2].images.map((image) => image.slot), ['2:0']);
+  assert.deepEqual(normalized.evidence.sections[3].images.map((image) => image.slot), ['3:0', '3:1']);
+  assert.equal(normalized.evidence.sections[4].images.length, 0);
+  assert.equal(normalized.evidence.sections[4].totalImages, 0);
+
+  const entries = resolveAppEvidenceImageEntries(normalized);
+  assert.equal(entries.length, 3);
+  assert.deepEqual(entries.map((entry) => entry.slot), ['2:0', '3:0', '3:1']);
+  assert.match(entries[0].url, /Website-Registration\.png$/);
+});
+
+test('normalizeApp flattens object-shaped store categories', () => {
+  const normalized = normalizeApp({
+    ...v3App,
+    store: { ...v3App.store, categories: [{ name: 'Finance', id: 'FINANCE' }, 'Business'] },
+  });
+  assert.deepEqual(normalized.store.categories, ['Finance', 'Business']);
+});
+
+test('normalizeApp merges joined App_developers and caps media', () => {
+  const joined = normalizeApp(v3App, { joinedDeveloper: v3AppDeveloper });
+  assert.equal(joined.developer.app_count, 2);
+  assert.equal(joined.store.app_count, 2);
+  assert.equal(normalizeApp(v3App).developer.app_count, null);
+
+  const manyShots = {
+    ...v3App,
+    content: {
+      ...v3App.content,
+      media: Array.from({ length: 20 }, (_, i) => ({
+        type: 'image',
+        role: 'screenshot',
+        s3_url: `https://example.com/shot-${i}.png`,
+      })),
+    },
+    evidence: {
+      has_evidence: true,
+      sections: [
+        {
+          title: 'Bulk',
+          description: '',
+          media: Array.from({ length: 30 }, (_, i) => ({
+            type: 'image',
+            role: 'evidence',
+            s3_url: `https://example.com/ev-${i}.png`,
+          })),
+        },
+      ],
+    },
+  };
+  const normalized = normalizeApp(manyShots);
+  assert.equal(normalized.screenshots.length, MAX_APP_SCREENSHOTS);
+  assert.equal(normalized.total_screenshots, 20);
+  assert.equal(normalized.evidence.sections[0].images.length, 4);
+  assert.equal(normalized.evidence.totalImages, 30);
+  assert.equal(normalized.evidence.sections[0].totalImages, 30);
+});
+
+test('isAppImageMedia and app media resolvers skip non-raster media', () => {
+  const video = { type: 'video', s3_url: 'https://example.com/a.mp4' };
+  const fakeImage = { type: 'image', s3_url: 'https://example.com/a.mp4' };
+  const raster = { type: 'image', s3_url: 'https://example.com/a.png' };
+  assert.equal(isAppImageMedia(video), false);
+  assert.equal(isAppImageMedia(fakeImage), false);
+  assert.equal(isAppImageMedia(raster), true);
+
+  assert.match(resolveAppThumbUrl(v3App), /icon\.png$/);
+  assert.equal(resolveAppScreenshotUrls(v3App).length, 2);
+  assert.match(resolveAppScreenshotUrls(v3App)[0], /screenshots\/0\.png$/);
+  assert.equal(appSourceLabel(v3App), 'Play Store');
+  assert.equal(appSourceLabel({ platform: 'apple_app_store' }), 'App Store');
+  assert.equal(appSourceLabel({ platform: 'mystery', original_url: 'https://x' }), 'View App');
+});
+
+test('isAppReviewed and appThreatScore read review signals', () => {
+  assert.equal(isAppReviewed(v3App), false);
+  assert.equal(appThreatScore(v3App), null);
+
+  const reviewed = {
+    ...v3App,
+    workflow: { ...v3App.workflow, review_status: 'reviewed', reviewed_at: '2026-10-01T00:00:00.000Z' },
+    review_details: { threat_score: 88 },
+  };
+  assert.equal(isAppReviewed(reviewed), true);
+  assert.equal(appThreatScore(reviewed), 88);
+  assert.equal(appThreatScore({ list: { effective_threat_score: 55 } }), 55);
+  assert.equal(appThreatScore({ analysis_results: { risk_score: 12 } }), 12);
+  assert.equal(appThreatScore({ list: { ai_threat_score: 0 } }), 0);
+});
+
+test('normalizeLegalCodes flattens strings and code/name objects', () => {
+  assert.deepEqual(normalizeLegalCodes(['IT-66D', { name: 'IT-66C', reasoning: 'x' }]), [
+    { code: 'IT-66D', reasoning: '' },
+    { code: 'IT-66C', reasoning: 'x' },
+  ]);
+  assert.deepEqual(normalizeLegalCodes(undefined), []);
+  assert.deepEqual(normalizeLegalCodes([{ reasoning: 'no code' }]), []);
 });
 
 test('normalizeAd maps page name, cards, and destination mismatch', () => {

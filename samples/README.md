@@ -48,11 +48,16 @@ One example document per MongoDB collection the service reads, in **MongoDB Exte
 | [`pois.json`](schemas/pois.json) | `pois` | Person of interest: `name`, `aliases`, `topics`, `post_count` |
 | [`topics.json`](schemas/topics.json) | `topics` | `topic_id`, `narrative`, `category`, `parent_topic_id`, `pois` |
 | [`post_embeddings.json`](schemas/post_embeddings.json) | `post_embeddings` | `text_embedding` / `image_embedding`, `effective_threat_score` |
+| [`Apps.json`](schemas/Apps.json) | `Apps` | `platform` / `platform_app_id`, `developer_id`, `content.media` (icon/header/screenshots), `store.*`, `evidence.sections`, `list.*` — drives the Apps Summary/Detailed reports |
+| [`Ads.json`](schemas/Ads.json) | `Ads` | `ad_profile_id`, `content.media` / `content.cards`, `ad_delivery.*`, `list.*` |
+| [`Ad_profiles.json`](schemas/Ad_profiles.json) | `Ad_profiles` | `enrichment.*`, `list.*`, `review_details.*`, `workflow.*` |
+| [`Domains.json`](schemas/Domains.json) | `Domains` | `discovery.*`, `analysis_results.cloak_probe`, `list.*`, `review_details.*` |
 
 ### Caveats
 
 - These are **example documents, not JSON Schema files**. There is no validation contract in them — nothing in this repo loads or enforces them.
 - `post_embeddings.json` is a **sketch and is not valid JSON**: the vector fields use `[...]` as a placeholder for the real float arrays. Every other file parses cleanly. Do not feed it to `jq` or a linter.
+- `Apps.json` (like `unique_clusters.json`, `pdf_reports.json`, and `Feeds.json`) uses MongoDB **shell syntax** — `ObjectId('…')`, `NumberInt('…')`, `ISODate('…')` — rather than Extended JSON, so it is **not** parseable by `JSON.parse`. The newer `Ads.json` / `Ad_profiles.json` / `Domains.json` use `{ "$oid": … }` / `{ "$date": … }`. Convert before loading. There is no `App_developers.json` example yet; the Apps branch joins that collection via `developer_id` (see [../docs/connectivity.md §2](../docs/connectivity.md)).
 - The schema-v3 field mapping the service actually applies (v3 `content.*` vs legacy top-level, `enrichment.profile_pic_s3` → `metadata.profile_pic`, and so on) is described in [../docs/architecture.md §5](../docs/architecture.md#5-data-normalisation-boundary).
 
 ---
