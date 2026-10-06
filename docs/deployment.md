@@ -20,6 +20,12 @@ RUN npm install
 
 COPY . .
 
+# Lambda runs the function as a user that does NOT own these files, and
+# @babel/register reads the raw src/**/*.js sources at runtime. A source file
+# that arrives 0600 is unreadable at cold start -> EACCES. Git only tracks the
+# executable bit, so a bad mode is invisible in review; normalise it here.
+RUN chmod -R a+rX /var/task
+
 CMD ["src/index.handler"]
 ```
 
@@ -29,9 +35,10 @@ CMD ["src/index.handler"]
 | `SHARP_IGNORE_GLOBAL_LIBVIPS=1` | Prevents `sharp` from trying to link a system libvips that does not exist in the image |
 | `npm_config_arch=arm64` / `npm_config_platform=linux` | Makes `npm install` fetch the `linux/arm64` prebuilt `sharp`. **These must match the target architecture** |
 | `npm install` before `COPY . .` | Keeps the dependency layer cached across source-only changes |
+| `RUN chmod -R a+rX /var/task` | Makes every copied file readable by the runtime user. **Do not remove** — see [INC-2026-10-06-01](./incidents/2026-10-06-apps-eacces/README.md). `a+rX` never marks a data file executable |
 | `CMD ["src/index.handler"]` | Lambda handler convention: `<file>.<export>` |
 
-Because `@babel/register` transpiles JSX **at runtime**, `src/` must be in the image — there is no compile step that could strip it.
+Because `@babel/register` transpiles JSX **at runtime**, `src/` must be in the image — there is no compile step that could strip it. This is also why an unreadable `src/` file is fatal rather than merely inconvenient: the sources *are* the artifact.
 
 > **Build with `--provenance=false`.** Buildx provenance attestations produce an OCI manifest list that Lambda's image validation rejects. `running_steps.txt` and `CREATION STEPS.md` both include the flag for this reason.
 
@@ -49,8 +56,21 @@ export IMAGE_TAG="latest"
 export LAMBDA_FUNCTION_NAME="overwatch-report-generation"
 export IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
 
+# 0. Preflight — every file in the build context must be group/other readable.
+#    A 0600 source file is readable on your machine (you own it) but NOT inside
+#    the Lambda image, where the function runs as a different user. That shipped
+#    once and broke every cold start: see INC-2026-10-06-01.
+npm run check:permissions          # exits 1 and lists offenders
+npm run fix:permissions            # repairs them, if any
+
 # 1. Build for the Lambda architecture
 docker build --platform linux/arm64 --provenance=false -t "$IMAGE_URI" .
+
+# 1b. Verify the artifact BEFORE pushing — mode, and readability as a non-root user
+docker run --rm --entrypoint /bin/sh "$IMAGE_URI" -c \
+  "ls -l /var/task/src/components/ | grep -v '^-rw' || echo 'all readable'"
+docker run --rm --user 993 --entrypoint /bin/sh "$IMAGE_URI" -c \
+  "cat /var/task/src/index.js >/dev/null && echo READ_OK || echo READ_FAILED"
 
 # 2. Authenticate to ECR (re-run whenever the token expires)
 aws ecr get-login-password --region "$AWS_REGION" \
@@ -62,6 +82,8 @@ docker push "$IMAGE_URI"
 # 4. Point the function at the new image
 aws lambda update-function-code --function-name "$LAMBDA_FUNCTION_NAME" --image-uri "$IMAGE_URI"
 ```
+
+Steps 0 and 1b exist because **Git cannot catch this class of bug**: Git stores only `100644`/`100755`, so a `0600` file is committed as `100644`, appears in no diff, and passes every local test. The mode only matters once a uid boundary exists — i.e. only inside the image. `npm run check:permissions` catches the working tree; the `chmod -R a+rX` layer in the Dockerfile and the step 1b read test catch the artifact. Runbook: [incident-response.md](./incidents/2026-10-06-apps-eacces/incident-response.md).
 
 Concrete values currently in `running_steps.txt` (account `992382580458`, region `ap-south-1`, repo `overwatch-pdf-creation`, function `overwatch-report-generation`). Prefer the parameterised form so the account id is not hardcoded in a tracked file.
 

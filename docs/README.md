@@ -28,6 +28,17 @@ Index of the documentation set. Start here.
 | [../samples/README.md](../samples/README.md) | The `samples/` folder: ready-to-post SQS payloads and example collection documents |
 | [../HOW_TO_TEST_PDFS.md](../HOW_TO_TEST_PDFS.md) | Copy-paste cheatsheet: every sample payload and its curl command |
 
+## Incidents
+
+Post-incident records and the runbooks that come out of them.
+
+| Doc | What it answers |
+| --- | --- |
+| [incidents/2026-10-06-apps-eacces/README.md](./incidents/2026-10-06-apps-eacces/README.md) | **INC-2026-10-06-01** — the apps-report release broke every cold start with `EACCES: permission denied` on a `/var/task` source file. Full timeline, the five-condition root cause, evidence, and why Git could not catch it |
+| [incidents/2026-10-06-apps-eacces/incident-response.md](./incidents/2026-10-06-apps-eacces/incident-response.md) | **Runbook** for any `EACCES`/`Permission denied` on a `/var/task` path: symptoms, 2-minute triage, remediation, pre-deploy image verification, rollback |
+
+**If a deploy breaks every cold start with `EACCES` or `MODULE_NOT_FOUND` on `/var/task/...`, go straight to the runbook** — it is a build-artifact problem, not an application bug. Start with `npm run check:permissions`.
+
 ## Client integration
 
 These are aimed at the UI team and are the **contract** the service depends on.
