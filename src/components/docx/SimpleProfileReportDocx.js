@@ -2,7 +2,7 @@
  * SimpleProfileReportDocx.js
  *
  * Generates a minimal profile DOCX: plain profile summary + numbered cases
- * (I., II., …) with URL, description, and bordered image. No header/footer branding.
+ * (I., II., …) with URL, description, and centred borderless image. No header/footer branding.
  */
 
 const {

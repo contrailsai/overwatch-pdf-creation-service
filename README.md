@@ -1,110 +1,154 @@
 # Overwatch PDF Creation Service
 
-This repository contains the standalone, serverless AWS Lambda backend service responsible for dynamically generating PDF reports for the Overwatch platform. It is designed around an event-driven architecture triggered by AWS SQS.
-
-## 🚀 Features
-
-* **Event-Driven Execution:** Runs as a Dockerized AWS Lambda function triggered by SQS queues, ensuring scalability and isolation.
-* **React-Based PDF Generation:** Uses `@react-pdf/renderer` to build complex, highly styled PDF documents using familiar React components.
-* **On-the-fly Image Optimization:** Fetches media from S3 and heavily compresses/resizes them using `sharp` before embedding them into the PDF, significantly reducing the final file size and memory footprint.
-* **Real-time Status Tracking:** Communicates with Supabase at various milestones (10%, 30%, 60%, 80%, 100%) to provide users with a live progress bar on the frontend UI.
-* **Comprehensive Telemetry:** Fully instrumented with OpenTelemetry to export traces and metrics to Grafana, providing deep observability into generation times, cache hits, and external service latencies.
+Standalone, event-driven backend service that renders **PDF and DOCX reports** for the Overwatch platform. It runs as a Dockerised AWS Lambda triggered by SQS, reads source data from MongoDB, pulls media from S3, reports progress to Supabase, and writes the finished document back to S3.
 
 ---
 
-## 📊 Supported Report Types
+## How it works
 
-The service dynamically selects the React layout based on the `reportType` requested in the SQS payload:
+```
+UI ──SQS──▶ Lambda (Docker, arm64) ──▶ MongoDB   (posts / ads / domains / ad profiles)
+                    │                 ──▶ S3      (media images, resized via sharp)
+                    │                 ──▶ Supabase (reports_generation progress)
+                    └──▶ S3 reports/<reportHash>.pdf|docx
+                          + OpenTelemetry → Grafana
+```
 
-1. **Detailed Report** (`DetailedCaseReport.js`)
-   * A comprehensive, multi-case document that iterates over numerous posts, displaying detailed metadata, engagement stats, and full image contents for each case.
-   
-2. **Single Case Report** (`SingleCaseReport.js`)
-   * A focused, in-depth analysis of one specific post/case. Usually contains more granular context around the single event.
+1. An SQS message body is parsed and validated.
+2. The `entityType` decides which collections are read, joined, and review-filtered.
+3. Images are downloaded from S3, resized to 800 px via `sharp`, and cached in `/tmp/images`.
+4. The matching renderer produces a PDF stream (`@react-pdf/renderer`) or a DOCX buffer (`docx`).
+5. **PDFs get a Contrails watermark**; DOCX does not.
+6. The document is uploaded to `reports/<reportHash>.pdf|docx` and the Supabase row is set to `[100%] Complete`.
 
-3. **Profile Report** (`ProfileReport.js`)
-   * Focuses on a specific actor/profile. It processes the user's profile picture and aggregates multiple cases/posts associated with that user to build a unified profile dossier.
-
-4. **Summary / Risk Report** (`SummaryReport.js`)
-   * A high-level overview (Risk Report) summarizing multiple posts without going overly deep into individual post metadata. Useful for executive briefs.
-
----
-
-## 🧠 Logic & Workflow (How Reports are Made)
-
-When an SQS message is received, the Lambda executes the following pipeline:
-
-1. **Initialization & Parsing:** 
-   Extracts `projectId`, `postIds`, `reportType`, `database_name`, and tracing context (`otelCarrier` / `messageAttributes`) from the SQS payload.
-2. **Data Fetching (10%):** 
-   Connects to MongoDB and fetches the full metadata for the requested `postIds` from the `posts` collection (schema v3). Profile enrichment comes from `profiles` via `profile_id`; action logs come from `case_events`. The array order requested in the SQS payload is strictly maintained.
-3. **Image Processing & Caching (30%):** 
-   * Iterates through the posts and downloads associated S3 image URLs to Lambda's `/tmp/images` ephemeral storage.
-   * Compresses and resizes images to a max width of 800px using `sharp`. 
-   * If `sharp` fails, it falls back to raw buffer saving (provided the file passes JPEG/PNG magic byte checks).
-4. **PDF Generation (60%):** 
-   Normalizes the database post objects and passes them alongside the compressed local images to the appropriate React PDF component. The component renders the document into a Node.js Stream.
-5. **S3 Upload (80%):** 
-   The generated PDF stream is piped directly into the target AWS S3 bucket under `reports/{reportHash}.pdf`. (The `reportHash` is deterministically generated from the project ID, post IDs, and report type).
-6. **Completion & Sync (100%):** 
-   Updates the `reports_generation` table in Supabase with the final S3 URL and completion timestamp.
-7. **Telemetry Flush:** 
-   Before the Lambda environment freezes, OpenTelemetry `forceFlush()` is called to ensure all metrics and traces (e.g., `generate_pdf_duration_seconds`) reach Grafana.
+Full detail: [docs/architecture.md](docs/architecture.md) · [docs/connectivity.md](docs/connectivity.md)
 
 ---
 
-## 🛠️ Architecture Setup
+## Report types
 
-- **Language:** Node.js 20 (Babel enabled for JSX parsing outside of a browser context)
-- **Containerization:** `public.ecr.aws/lambda/nodejs:20` base image.
-- **Image Processing:** `sharp` (specifically compiled for `linux/arm64` via Docker ENVs).
-- **Storage/DB:** MongoDB (Data), AWS S3 (PDF Output/Raw Images), Supabase (Status State).
-- **Observability:** `@opentelemetry/sdk-node`
+`reportType` selects the document; `entityType` selects the data family. Not every combination is valid.
 
-### Important Environment Variables
+| `entityType` | Supported `reportType` | Formats |
+| --- | --- | --- |
+| `posts` (default) | `Detailed`, `Single`, `Profile`, `SimpleProfile`\*, `SimpleCase`\*, `Summary` | PDF + DOCX\* |
+| `ads` | `Summary`, `Detailed` | PDF only |
+| `domains` | `Summary`, `Detailed` | PDF only |
+| `ad_profiles` | `Summary` (layout chosen by reviewed-profile count: 1 → dossier, 2+ → catalog) | PDF only |
 
-The container requires the following environment variables to run properly:
+\* `SimpleProfile` and `SimpleCase` are **DOCX-only**. Posts `Summary` is **PDF-only**.
 
-* **AWS Settings:** Standard AWS credentials for S3 and SQS access.
-* **Database & Auth:** MongoDB connection strings and Supabase keys.
-* **OpenTelemetry:**
-  * `OTEL_EXPORTER_OTLP_ENDPOINT`: Your OTLP collector URL.
-  * `OTEL_EXPORTER_OTLP_HEADERS`: Auth headers for the collector.
-  * `OTEL_EXPORTER_OTLP_PROTOCOL`: `http/protobuf` or `grpc`.
-  * `OTEL_SERVICE_NAME`: Set to `overwatch-pdf-service` to correctly aggregate in Grafana Service Graphs.
+The complete matrix, validation rules, data sources, filters, and image-pipeline behaviour per branch: **[docs/report-catalog.md](docs/report-catalog.md)**.
+What each document actually looks like — palettes, badges, sections: **[docs/report-themes.md](docs/report-themes.md)**.
 
 ---
 
-## Local Verification (No ECR/Lambda Deploy Required)
-
-You can now validate report generation locally with automated tests.
-
-### 1) Install dependencies
+## Quick start
 
 ```bash
 npm install
 ```
 
-### 2) Run all tests
+Create a `.env` at the repo root:
 
 ```bash
-npm test
+MONGO_URI=mongodb+srv://…
+AWS_ACCESS_KEY_ID=…
+AWS_SECRET_ACCESS_KEY=…
+AWS_REGION=ap-south-1
+AWS_S3_BUCKET=…
+# Optional — without these, progress updates are skipped silently
+SUPABASE_URL=…
+SUPABASE_KEY=…
 ```
 
-This runs:
-- Unit tests for payload validation, hash determinism, and ordering logic.
-- Local smoke tests that generate:
-  - one real PDF stream using the Summary report renderer
-  - one real DOCX buffer using the single-case DOCX generator
-
-### 3) Run suites separately (optional)
+Run the local test server (same pipeline as Lambda, HTTP in, file out):
 
 ```bash
+npm run dev:reports     # http://127.0.0.1:3847
+
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" \
+  -d @samples/messages/sample_sqs_message_ambani_v2.json
+```
+
+Generated files land in `./local-reports/output/`. [`samples/messages/`](samples/messages) holds a ready-to-post payload for every report family — `HOW_TO_TEST_PDFS.md` lists a curl for each; [docs/local-testing.md](docs/local-testing.md) covers endpoints, env vars and troubleshooting.
+
+### Tests
+
+```bash
+npm test                # 77 tests: unit + renderer integration
 npm run test:unit
 npm run test:integration
 ```
 
-### Notes
+The suite uses in-memory fixtures and needs no Mongo, S3, or network access.
 
-- These tests do not require Docker, ECR, or Lambda deployment.
-- Integration smoke tests validate renderer output signatures (`%PDF` and DOCX zip header `PK`) to catch report-generation regressions quickly.
+---
+
+## Deploy
+
+Container image Lambda on **arm64**. `sharp` binaries are architecture-specific, so the image must be built for the target platform.
+
+```bash
+export AWS_ACCOUNT_ID="…" AWS_REGION="ap-south-1"
+export IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/overwatch-pdf-creation:latest"
+
+docker build --platform linux/arm64 --provenance=false -t "$IMAGE_URI" .
+aws ecr get-login-password --region "$AWS_REGION" \
+  | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+docker push "$IMAGE_URI"
+aws lambda update-function-code --function-name overwatch-report-generation --image-uri "$IMAGE_URI"
+```
+
+Function requirements, IAM, SQS tuning, rollback and a pre-deploy checklist: **[docs/deployment.md](docs/deployment.md)**.
+
+---
+
+## Repository layout
+
+```
+src/
+  index.js                 Lambda handler — parse, validate, trace, run
+  report-job.js            the pipeline: DB → images → render → persist
+  core-utils.js            validation, hash, normalizers, media resolution
+  domain-display.js        domain/lander logic, screenshot slicing
+  s3.js  mongo.js  supabase.js  instrumentation.js  pdf-watermark.js
+  dev-report-server.js     local HTTP harness
+  components/              PDF documents (@react-pdf/renderer)
+  components/docx/         DOCX generators (docx)
+docs/                      documentation set — start at docs/README.md
+test/                      unit + integration tests and fixtures
+samples/
+  messages/                ready-to-post SQS payloads + sample curl script
+  schemas/                 example MongoDB documents per collection (posts, profiles, …)
+public/fonts/              Outfit, Mukta, and emoji assets
+```
+
+---
+
+## Documentation
+
+Start at **[docs/README.md](docs/README.md)** for the full index.
+
+| | |
+| --- | --- |
+| [Architecture](docs/architecture.md) | Pipeline, modules, caching, telemetry |
+| [Connectivity](docs/connectivity.md) | Mongo, S3, Supabase, SQS, OpenTelemetry |
+| [Report catalog](docs/report-catalog.md) | Routing matrix and validation rules |
+| [Report themes](docs/report-themes.md) | Visual design per report type |
+| [Local testing](docs/local-testing.md) | Dev server and test suite |
+| [Samples](samples/README.md) | Sample payloads and collection documents |
+| [Deployment](docs/deployment.md) | Docker → ECR → Lambda |
+| [Roadmap](docs/roadmap.md) | Pending tasks and future improvements |
+| [UI request flow](docs/ui-report-request-flow.md) | Payload + hash contract for clients |
+
+---
+
+## Known gaps
+
+- Failed SQS records are logged and skipped, so the queue does not retry them — the `[Error]` row in Supabase is the only signal.
+- There is no CI/CD; deploy is a manual image build and push.
+- There is no shared theme module — two incompatible palettes have grown side by side across the renderers.
+- Ads, domains and ad profiles are PDF-only; posts carousels render only their first image.
+
+See [docs/roadmap.md](docs/roadmap.md) for the full backlog with severity and effort.

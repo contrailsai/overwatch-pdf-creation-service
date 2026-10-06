@@ -141,15 +141,15 @@ Pass `entityType` into `generateReportHash` as the 6th argument.
 
 Create:
 
-- `sample_sqs_message_sebi_ads_summary.json`
-- `sample_sqs_message_sebi_ads_detailed.json`
+- `samples/messages/sample_sqs_message_sebi_ads_summary.json`
+- `samples/messages/sample_sqs_message_sebi_ads_detailed.json`
 
 Add curls to `HOW_TO_TEST_PDFS.md`:
 
 ```bash
 npm run dev:reports
-curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_ads_summary.json
-curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @sample_sqs_message_sebi_ads_detailed.json
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_ads_summary.json
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_ads_detailed.json
 ```
 
 PDFs land in `./local-reports/output`.

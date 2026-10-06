@@ -1,0 +1,63 @@
+# Samples
+
+Reference inputs for the PDF service, split by what they are.
+
+```
+samples/
+  messages/   ready-to-post SQS payloads + a legacy curl script
+  schemas/    example MongoDB documents, one per collection
+```
+
+---
+
+## `messages/` — SQS request payloads
+
+Each file is a complete **SQS `MessageBody`** (a JSON request payload) and can be POSTed verbatim to the local dev server, which runs the same pipeline as Lambda.
+
+```bash
+npm run dev:reports
+
+curl -X POST http://localhost:3847/ \
+  -H "Content-Type: application/json" \
+  -d @samples/messages/sample_sqs_message_ambani_v2.json
+```
+
+Payload fields, validation rules, and the hash contract: [../docs/report-catalog.md](../docs/report-catalog.md) and [../docs/ui-report-request-flow.md](../docs/ui-report-request-flow.md).
+Dev-server endpoints and troubleshooting: [../docs/local-testing.md](../docs/local-testing.md).
+
+**Full inventory of every payload with its `entityType` / `reportType` / database: [../HOW_TO_TEST_PDFS.md §3](../HOW_TO_TEST_PDFS.md#3-sample-inventory).**
+
+### Notes
+
+- The samples target real tenant databases (`Ambani-Data-v2`, `SEBI-Data-Search`, `ICICI-Data-Search`, `PMO-Data-Search`). They only generate output if that database exists on the `MONGO_URI` cluster and the referenced ObjectIds are still present.
+- `sample_sqs_message_sebi_ad_profiles_detailed.json` is **misnamed** — its `reportType` is `Summary` with a single profile id, so it exercises the single-dossier layout, not a `Detailed` request. Tracked in [../docs/roadmap.md](../docs/roadmap.md).
+- `sample_curl_requests.sh` is **stale**: it targets `POST localhost:4000/generate` and `GET /job-status/1`, neither of which exists. Kept for history, pending rewrite or deletion.
+- No sample covers posts `Summary` or any DOCX type. Copy an existing payload and change `reportType` / `reportFormat` to reach those branches.
+
+---
+
+## `schemas/` — example collection documents
+
+One example document per MongoDB collection the service reads, in **MongoDB Extended JSON** (`$oid`, `$date`). These are the shapes the normalizers in `src/core-utils.js` consume — useful when interpreting a report field, writing a new normalizer, or seeding a test database.
+
+| File | Collection | Key contents |
+| --- | --- | --- |
+| [`posts.json`](schemas/posts.json) | `Posts` | `content.media` / `engagement`, `list.*`, `workflow.*`, `profile_id` |
+| [`profiles.json`](schemas/profiles.json) | `profiles` | `enrichment.*` (incl. `profile_pic_s3`), `list.*`, `platform_user_id` |
+| [`case_events.json`](schemas/case_events.json) | `case_events` | `entity_type` / `entity_id`, `occurred_at`, `actor`, `summary` — feeds `update_history` |
+| [`pois.json`](schemas/pois.json) | `pois` | Person of interest: `name`, `aliases`, `topics`, `post_count` |
+| [`topics.json`](schemas/topics.json) | `topics` | `topic_id`, `narrative`, `category`, `parent_topic_id`, `pois` |
+| [`post_embeddings.json`](schemas/post_embeddings.json) | `post_embeddings` | `text_embedding` / `image_embedding`, `effective_threat_score` |
+
+### Caveats
+
+- These are **example documents, not JSON Schema files**. There is no validation contract in them — nothing in this repo loads or enforces them.
+- `post_embeddings.json` is a **sketch and is not valid JSON**: the vector fields use `[...]` as a placeholder for the real float arrays. Every other file parses cleanly. Do not feed it to `jq` or a linter.
+- The schema-v3 field mapping the service actually applies (v3 `content.*` vs legacy top-level, `enrichment.profile_pic_s3` → `metadata.profile_pic`, and so on) is described in [../docs/architecture.md §5](../docs/architecture.md#5-data-normalisation-boundary).
+
+---
+
+## Conventions
+
+- Filenames are unchanged from their previous locations, so references in older notes still match on the basename.
+- Paths in commands are relative to the **repository root**.

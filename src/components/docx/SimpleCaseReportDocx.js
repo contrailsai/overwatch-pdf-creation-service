@@ -1,7 +1,7 @@
 /**
  * SimpleCaseReportDocx.js
  *
- * Generates a minimal single-case DOCX: URL, description, and bordered image only.
+ * Generates a minimal single-case DOCX: URL, description, and centred borderless image only.
  * No profile block, Roman numerals, or header/footer branding.
  */
 

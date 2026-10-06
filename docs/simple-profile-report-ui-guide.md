@@ -51,7 +51,7 @@ Minimal DOCX profile reports for cleaner client-facing output. Same request flow
 | Name of the account | `profile.metadata.full_name`, else `@profile.username` |
 | Link to the account | `profile.profile_url` (hyperlink) |
 | Number of followers | `profile.metadata.follower_count` (line omitted if missing) |
-| Note | `This account's said location: {location}` (line omitted if location missing) |
+| Note | `This account operates from {location}` (line omitted if location missing) |
 
 Below the profile block, the heading **Evidence** introduces the numbered cases.
 
@@ -62,11 +62,12 @@ Each case is rendered as:
 ```
 I.   URL: <post.original_url>
      Description: <case description>
-     <case image with tight black border>
+     <case image, centred, borderless>
 ```
 
 - Case markers use Roman numerals with a trailing period (I., II., III., …).
 - URL starts on the same line as the case number; Description is on the next line, indented to align.
+- If no image is available it is omitted silently — there is no placeholder and no border.
 - Description uses `review_details.simple_report_description` when present and non-empty; otherwise it falls back to `review_details.reasoning`. Only `review_details` is consulted — `analysis_results` is never used for Simple Profile reports.
 - The document uses Times New Roman throughout.
 - A leading `Description:` prefix in the description text is stripped automatically.

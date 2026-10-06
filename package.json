@@ -6,9 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev:reports": "node src/dev-report-server.js",
-    "test": "node --test test/**/*.test.js",
-    "test:unit": "node --test test/unit/**/*.test.js",
-    "test:integration": "node --test test/integration/"
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:unit": "node --test \"test/unit/**/*.test.js\"",
+    "test:integration": "node --test \"test/integration/**/*.test.js\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.500.0",

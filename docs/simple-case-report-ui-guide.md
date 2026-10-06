@@ -38,13 +38,14 @@ Minimal DOCX single-case reports for cleaner client-facing output. Same request 
 ```
 URL: <post.original_url>
 Description: <case description>
-<case image with tight black border>
+<case image, centred, borderless>
 ```
 
 - Description uses `review_details.simple_report_description` when present and non-empty; otherwise it falls back to `review_details.reasoning`. Only `review_details` is consulted — `analysis_results` is never used.
 - The document uses Times New Roman throughout.
 - A leading `Description:` prefix in the description text is stripped automatically.
-- If no image is available, the URL and description lines are still rendered.
+- If no image is available it is omitted silently — there is no placeholder and no border.
+- If the URL is missing, `N/A` is rendered in its place.
 
 ## Hash generation
 

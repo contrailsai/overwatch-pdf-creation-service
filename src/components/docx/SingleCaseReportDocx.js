@@ -90,9 +90,15 @@ const noBorders = {
     insideVertical:   { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
 };
 
-// Page geometry (US Letter, margins 1080 TWIPs each side)
-// 1 inch = 1440 TWIPs, Letter = 12240 TWIPs wide
-// Available body width: 12240 – 1080*2 = 10080 TWIPs
+// Page geometry.
+//
+// No `page.size` is set anywhere in this module, so the `docx` package default
+// applies: A4 portrait, 11906 x 16838 TWIPs.
+//
+// PAGE_WIDTH below is Letter-derived (12240 - 1080*2) and is therefore ~334 TWIPs
+// wider than the real A4 body width (11906 - 1080*2 = 9746). Header/footer tables
+// using it slightly overrun the A4 margin box. Kept as-is to avoid reflowing every
+// existing report; see docs/report-themes.md §10.
 const PAGE_WIDTH = 10080;
 
 // A simple spacing paragraph
