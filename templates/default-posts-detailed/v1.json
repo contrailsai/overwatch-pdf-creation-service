@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "id": "default-posts-detailed",
+  "entityType": "posts",
+  "reportType": "Detailed",
+  "theme": {
+    "colors": {
+      "primary": "#1E293B",
+      "muted": "#64748B",
+      "border": "#E2E8F0",
+      "bgSection": "#F8FAFC",
+      "riskHigh": "#F43F5E",
+      "riskMedium": "#F97316",
+      "riskLow": "#F59E0B",
+      "safe": "#10B981"
+    },
+    "fontFamily": ["Outfit", "Mukta"],
+    "page": {
+      "size": "A4",
+      "orientation": "portrait",
+      "padding": [30, 30, 40, 30]
+    }
+  },
+  "branding": {
+    "headerTitle": "Overwatch Case Report",
+    "footerLeft": "Confidential Document",
+    "footerCenter": "Powered by Contrails AI",
+    "logoPath": null
+  },
+  "repeat": "perItem",
+  "pages": [
+    {
+      "id": "case",
+      "blocks": [
+        { "type": "brandHeader" },
+        {
+          "type": "row",
+          "children": [
+            {
+              "type": "text",
+              "text": "{{item.title}}",
+              "style": "title"
+            },
+            {
+              "type": "badge",
+              "bind": "item.risk.label",
+              "colorBind": "item.risk.color"
+            }
+          ]
+        },
+        {
+          "type": "columns",
+          "gap": 12,
+          "children": [
+            {
+              "type": "stack",
+              "flex": 1,
+              "children": [
+                {
+                  "type": "image",
+                  "bind": "item.imagePath",
+                  "style": "hero"
+                },
+                {
+                  "type": "kvGrid",
+                  "bind": "item.meta"
+                },
+                {
+                  "type": "section",
+                  "title": "Caption",
+                  "showIf": "item.caption",
+                  "blocks": [
+                    { "type": "text", "bind": "item.caption" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "stack",
+              "flex": 1,
+              "children": [
+                {
+                  "type": "section",
+                  "title": "Legal",
+                  "showIf": "item.legalCodes.length",
+                  "blocks": [
+                    {
+                      "type": "list",
+                      "bind": "item.legalCodes",
+                      "itemText": "{{code}}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "title": "Reasoning",
+                  "blocks": [
+                    { "type": "text", "bind": "item.reasoning" }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "title": "Labels",
+                  "showIf": "item.labels.length",
+                  "blocks": [
+                    {
+                      "type": "list",
+                      "bind": "item.labels",
+                      "itemText": "{{title}}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "title": "Risk",
+                  "blocks": [
+                    {
+                      "type": "text",
+                      "text": "{{item.risk.label}} ({{item.risk.score}})"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        { "type": "pageFooter" }
+      ]
+    }
+  ]
+}

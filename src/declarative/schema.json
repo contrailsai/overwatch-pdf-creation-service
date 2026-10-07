@@ -1,0 +1,185 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contrails.ai/schemas/overwatch-report-template-v1.json",
+  "title": "OverwatchDeclarativeReportTemplate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "entityType", "reportType", "theme", "branding", "repeat", "pages"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "entityType": {
+      "type": "string",
+      "enum": ["posts", "ads", "domains", "ad_profiles"]
+    },
+    "reportType": {
+      "type": "string",
+      "enum": ["Summary", "Detailed", "Single", "Profile", "SimpleProfile", "SimpleCase"]
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["colors", "fontFamily", "page"],
+      "properties": {
+        "colors": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "fontFamily": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "page": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["size", "orientation", "padding"],
+          "properties": {
+            "size": { "type": "string", "enum": ["A4", "LETTER"] },
+            "orientation": { "type": "string", "enum": ["portrait", "landscape"] },
+            "padding": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 4,
+              "maxItems": 4
+            }
+          }
+        }
+      }
+    },
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headerTitle", "footerLeft", "footerCenter"],
+      "properties": {
+        "headerTitle": { "type": "string" },
+        "footerLeft": { "type": "string" },
+        "footerCenter": { "type": "string" },
+        "logoPath": { "type": ["string", "null"] }
+      }
+    },
+    "repeat": {
+      "type": "string",
+      "enum": ["none", "perItem"]
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/page" }
+    }
+  },
+  "definitions": {
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "blocks"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/block" }
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "row",
+            "columns",
+            "stack",
+            "spacer",
+            "divider",
+            "text",
+            "link",
+            "image",
+            "badge",
+            "kvGrid",
+            "list",
+            "table",
+            "section",
+            "metricsRow",
+            "brandHeader",
+            "pageFooter"
+          ]
+        },
+        "showIf": { "type": "string" },
+        "hideIf": { "type": "string" },
+        "style": { "type": "string" },
+        "flex": { "type": "number" },
+        "gap": { "type": "number" },
+        "height": { "type": "number" },
+        "text": { "type": "string" },
+        "bind": { "type": "string" },
+        "colorBind": { "type": "string" },
+        "href": { "type": "string" },
+        "hrefBind": { "type": "string" },
+        "title": { "type": "string" },
+        "itemText": { "type": "string" },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "label"],
+            "properties": {
+              "key": { "type": "string" },
+              "label": { "type": "string" },
+              "width": { "type": "number" }
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "bind"],
+            "properties": {
+              "label": { "type": "string" },
+              "bind": { "type": "string" },
+              "colorBind": { "type": "string" }
+            }
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/block" }
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/block" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "row" } } },
+          "then": { "required": ["children"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "columns" } } },
+          "then": { "required": ["children"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "stack" } } },
+          "then": { "required": ["children"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "section" } } },
+          "then": { "required": ["title", "blocks"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "table" } } },
+          "then": { "required": ["bind", "columns"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "metricsRow" } } },
+          "then": { "required": ["metrics"] }
+        }
+      ]
+    }
+  }
+}

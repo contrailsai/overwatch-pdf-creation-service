@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "default-posts-summary",
+  "entityType": "posts",
+  "reportType": "Summary",
+  "theme": {
+    "colors": {
+      "primary": "#1E293B",
+      "muted": "#64748B",
+      "border": "#E2E8F0",
+      "bgSection": "#F8FAFC",
+      "riskHigh": "#F43F5E",
+      "riskMedium": "#F97316",
+      "riskLow": "#F59E0B",
+      "safe": "#10B981"
+    },
+    "fontFamily": ["Outfit", "Mukta"],
+    "page": {
+      "size": "A4",
+      "orientation": "landscape",
+      "padding": [24, 24, 32, 24]
+    }
+  },
+  "branding": {
+    "headerTitle": "Overwatch Risk Summary",
+    "footerLeft": "Confidential Document",
+    "footerCenter": "Powered by Contrails AI",
+    "logoPath": null
+  },
+  "repeat": "none",
+  "pages": [
+    {
+      "id": "summary",
+      "blocks": [
+        { "type": "brandHeader" },
+        {
+          "type": "metricsRow",
+          "metrics": [
+            { "label": "Total", "bind": "summary.total" },
+            { "label": "High", "bind": "summary.high", "colorBind": "theme.colors.riskHigh" },
+            { "label": "Medium", "bind": "summary.medium", "colorBind": "theme.colors.riskMedium" },
+            { "label": "Low", "bind": "summary.low", "colorBind": "theme.colors.riskLow" },
+            { "label": "Safe", "bind": "summary.safe", "colorBind": "theme.colors.safe" }
+          ]
+        },
+        {
+          "type": "table",
+          "bind": "items",
+          "columns": [
+            { "key": "index", "label": "#", "width": 28 },
+            { "key": "thumbnail", "label": "Media", "width": 56 },
+            { "key": "caption", "label": "Content", "width": 180 },
+            { "key": "platform", "label": "Platform", "width": 70 },
+            { "key": "risk.label", "label": "Risk", "width": 60 },
+            { "key": "violationsText", "label": "Violations", "width": 120 },
+            { "key": "postedAt", "label": "Posted", "width": 80 },
+            { "key": "status", "label": "Status", "width": 70 }
+          ]
+        },
+        { "type": "pageFooter" }
+      ]
+    }
+  ]
+}

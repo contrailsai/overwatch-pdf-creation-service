@@ -8,7 +8,8 @@
     "dev:reports": "node src/dev-report-server.js",
     "test": "node --test test/**/*.test.js",
     "test:unit": "node --test test/unit/**/*.test.js",
-    "test:integration": "node --test test/integration/"
+    "test:integration": "node --test test/integration/",
+    "publish-template": "node scripts/publish-template.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.500.0",
@@ -21,6 +22,7 @@
     "@opentelemetry/sdk-node": "^0.214.0",
     "@react-pdf/renderer": "^3.1.14",
     "@supabase/supabase-js": "^2.103.0",
+    "ajv": "^8.20.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "docx": "^9.6.1",
