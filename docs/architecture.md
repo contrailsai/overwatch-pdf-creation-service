@@ -65,7 +65,7 @@ The `[NN%]` strings below are the exact text written to `reports_generation.stat
 | 3 | — | `validatePayload` → `{ valid, errors, normalizedReportFormat, entityType, entityIds }` |
 | 4 | — | Extract W3C trace context from `otelCarrier`, else from SQS `messageAttributes` |
 | 5 | — | Start span `sqs.process generate-pdf` (kind `CONSUMER`) with `project.id`, `report.type`, `entity.type`, and a per-entity count attribute |
-| 6 | `[10%] Fetching <entity> from DB` | Mongo reads + joins + review filtering + ordering (apps: no review filter, so nothing is dropped) |
+| 6 | `[10%] Fetching <entity> from DB` | Mongo reads + joins + review filtering + ordering (apps and Telegram groups: no review filter, so nothing is dropped) |
 | 7 | `[30%] Processing Images` | S3 download → `sharp` → `/tmp/images` cache |
 | 8 | `[60%] Generating PDF report` / `Generating DOCX report` | Render to stream (PDF) or buffer (DOCX) |
 | 9 | `[80%] Uploading to Storage` | Watermark (PDF only) → S3 put, or write to local dir |
@@ -87,6 +87,7 @@ Inside the batch loop, each record is wrapped in its own `try/catch`. A failing 
 - **Posts** is the only entity type with DOCX output, and the only one where `reportFormat` changes the code path.
 - **Ad profiles** ignores `reportType` for layout; the reviewed-profile count picks single dossier vs catalog.
 - **Apps** is the only branch that normalizes *before* the image pipeline, because evidence-image cache keys (`sectionIndex:mediaIndex` slots) live on the normalized view model.
+- **Telegram groups** renders `Summary`/`Detailed` PDF only. The `analysis_results` AI dossier drives the review narrative and flagged-message gallery; `Telegram_messages` is read for the flagged message ids only, never the whole history.
 
 ---
 
@@ -99,6 +100,7 @@ Raw Mongo documents are never passed to renderers. `core-utils.js` normalises ev
 - `normalizeProfile(profile)` → merges legacy `metadata.*` with v3 `enrichment.*` / `list.*`.
 - `normalizeAdProfile(profile)` → flattens review verdict, violations, legal codes, risk.
 - `normalizeApp(app, { joinedDeveloper, updateHistory })` → screenshots split out of `content.media`, `store.*` / `permissions` / `data_safety` flattened, review scores normalised, and `evidence.sections` reduced to image-only media with capped `sectionIndex:mediaIndex` slots.
+- `normalizeTelegramGroup(group, { updateHistory, messagesById })` → group identity (`chat_id`, `username`, `type`, `about`, flags), aggregate counts (`participant_count`, `message_count`), workflow/backfill status, an `ai` model built from `analysis_results` (case summary, analysis prose, legal codes, operator involvement, promoted services/handles, flagged actors, flagged messages, batch summaries, media evidence), and a unified `review` model where human `review_details` wins and the AI dossier is the fallback. Referenced `Telegram_messages` rows are joined in for date/views/text/media.
 
 `case_events` rows are mapped into the legacy `update_history` shape by `mapCaseEventToUpdateHistory`.
 

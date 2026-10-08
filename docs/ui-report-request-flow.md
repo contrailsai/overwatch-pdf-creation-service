@@ -96,12 +96,30 @@ Apps example (Google Play / App Store listings; unreviewed apps still render):
 }
 ```
 
+Telegram groups example (unreviewed groups still render; messages/people are never included):
+
+```json
+{
+  "projectId": "VFS",
+  "entityType": "telegram_groups",
+  "telegramGroupIds": ["6aaffc52f2b0ece71b21f83f", "6ab005f9f2b0ece71b21fb7e"],
+  "database_name": "VFS-Data-Search",
+  "reportType": "Detailed",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "VFS",
+    "project_details": { "labels": [], "legal_codes": [] }
+  },
+  "profile": null
+}
+```
+
 ### Required fields
 
 - `projectId`: string
 - `database_name`: string
-- `entityType`: `posts` (default), `ads`, `domains`, `ad_profiles`, or `apps`. If omitted and `adProfileIds` is present, treat as `ad_profiles`. If omitted and `adIds` is present, treat as `ads`. If omitted and `domainIds` is present, treat as `domains`. If omitted and `appIds` is present, treat as `apps`.
-- IDs: posts use `postIds`. Ads use `adIds` (or `postIds` when `entityType` is `ads`). Domains use `domainIds` (or `postIds` when `entityType` is `domains`). Ad profiles use `adProfileIds` (or `postIds` when `entityType` is `ad_profiles`). Apps use `appIds` (or `postIds` when `entityType` is `apps`). Non-empty array of valid Mongo ObjectId strings.
+- `entityType`: `posts` (default), `ads`, `domains`, `ad_profiles`, `apps`, or `telegram_groups`. If omitted and `adProfileIds` is present, treat as `ad_profiles`. If omitted and `adIds` is present, treat as `ads`. If omitted and `domainIds` is present, treat as `domains`. If omitted and `appIds` is present, treat as `apps`. If omitted and `telegramGroupIds` is present, treat as `telegram_groups`.
+- IDs: posts use `postIds`. Ads use `adIds` (or `postIds` when `entityType` is `ads`). Domains use `domainIds` (or `postIds` when `entityType` is `domains`). Ad profiles use `adProfileIds` (or `postIds` when `entityType` is `ad_profiles`). Apps use `appIds` (or `postIds` when `entityType` is `apps`). Telegram groups use `telegramGroupIds` (or `postIds` when `entityType` is `telegram_groups`). Non-empty array of valid Mongo ObjectId strings.
 - `variantKeysByDomainId`: required for domains. Map of domain id → cloak variant `label` (`bare` or a param like `pEl8X=MI1_HT2`). Included in the cache hash so Bare vs a param does not reuse the wrong file. **Not** used for ad profile or apps reports.
 - `reportType`: one of `Detailed | Single | Profile | SimpleProfile | SimpleCase | Summary`
 - `reportFormat`: `pdf` or `docx` (default should be `pdf` if omitted client-side)
@@ -114,6 +132,7 @@ Apps example (Google Play / App Store listings; unreviewed apps still render):
 - Domain reports support `Summary` and `Detailed` only, and **PDF only**. One-domain export is `Detailed` with a single id. Unreviewed domains are skipped; if none remain, the job fails.
 - Ad profile reports support **`Summary` only** (PDF only). Collection is `Ad_profiles` (capital A). Unreviewed profiles are skipped; nested ads/domains must be reviewed (`list.reviewed_at`). Ads table is capped at 20 (metrics still use all reviewed ads). **Layout is chosen by ID count after review filter:** exactly **1** reviewed profile → single dossier (`AdsProfileReport`); **2+** → combined catalog (`AdsProfilesSummaryReport`). Do not send `Detailed` for ad profiles.
 - App reports support `Summary` and `Detailed` only, and **PDF only**. Collection is `Apps` (capital A); `App_developers` is joined automatically. **Unreviewed apps are not skipped** — they render with an `Unreviewed` badge, so no review step is required before exporting. Screenshots are capped at 6 and evidence images at 16 (6 per section).
+- Telegram group reports support `Summary` and `Detailed` only, and **PDF only**. Collection is `Telegram_groups` (capital `T`, lowercase `g`); `case_events` with `entity_type: 'telegram_group'` feed the update history. **Unreviewed groups are not skipped** — they render with an `Unreviewed` badge. Only aggregate counts (participants, messages) are shown; messages and member profiles are never read or rendered. There is no Evidence section and no developer section.
 - For posts `Profile` and `SimpleProfile` reports, send a proper `profile` object (including `_id`), because profile ID is part of hash generation.- `project` should be an object (not array) if you want proper branding/org metadata in report generation.
 
 ## 2) Client-side hash generation (must match backend exactly)
@@ -125,15 +144,16 @@ Backend hash is deterministic SHA-256 over this exact raw string:
 - Domains: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-domains-{extra}`
 - Ad profiles: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-ad_profiles`
 - Apps: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-apps`
+- Telegram groups: `{projectId}-{sortedIdsCsv}-{reportType}-{profileId}-{reportFormat}-telegram_groups`
 
 Where `extra` is the sorted `id=variantKey` pairs joined with `|`.
 
-The `-ads` / `-domains` / `-ad_profiles` / `-apps` suffix is required so the client cache key matches Lambda. Posts hashes must **not** gain a suffix. Domain lander keys are required so Bare vs a param does not reuse the wrong file.
+The `-ads` / `-domains` / `-ad_profiles` / `-apps` / `-telegram_groups` suffix is required so the client cache key matches Lambda. Posts hashes must **not** gain a suffix. Domain lander keys are required so Bare vs a param does not reuse the wrong file.
 
 Where:
 
-- Entity IDs (`postIds`, `adIds`, `domainIds`, `adProfileIds`, or `appIds`) are sorted lexicographically before hashing.
-- `profileId` is `profile?._id` or empty string (domains, ad profiles, and apps always send `null` profile, so the raw string contains `--`).
+- Entity IDs (`postIds`, `adIds`, `domainIds`, `adProfileIds`, `appIds`, or `telegramGroupIds`) are sorted lexicographically before hashing.
+- `profileId` is `profile?._id` or empty string (domains, ad profiles, apps, and Telegram groups always send `null` profile, so the raw string contains `--`).
 - `reportFormat` is usually `pdf` or `docx`.
 - `entityType` defaults to `posts`. Only non-`posts` types append `-{entityType}`.
 
@@ -149,8 +169,9 @@ export function generateReportHash(input: {
   domainIds?: string[];
   adProfileIds?: string[];
   appIds?: string[];
+  telegramGroupIds?: string[];
   variantKeysByDomainId?: Record<string, string>;
-  entityType?: "posts" | "ads" | "domains" | "ad_profiles" | "apps";
+  entityType?: "posts" | "ads" | "domains" | "ad_profiles" | "apps" | "telegram_groups";
   reportType: "Detailed" | "Single" | "Profile" | "SimpleProfile" | "SimpleCase" | "Summary";
   reportFormat?: "pdf" | "docx";
   profile?: { _id?: string | null } | null;
@@ -167,7 +188,9 @@ export function generateReportHash(input: {
           ? "ads"
           : input.appIds?.length
             ? "apps"
-            : "posts");
+            : input.telegramGroupIds?.length
+              ? "telegram_groups"
+              : "posts");
   const ids =
     entityType === "ads"
       ? (input.adIds?.length ? input.adIds : input.postIds)
@@ -177,7 +200,9 @@ export function generateReportHash(input: {
           ? (input.adProfileIds?.length ? input.adProfileIds : input.postIds)
           : entityType === "apps"
             ? (input.appIds?.length ? input.appIds : input.postIds)
-            : input.postIds;
+            : entityType === "telegram_groups"
+              ? (input.telegramGroupIds?.length ? input.telegramGroupIds : input.postIds)
+              : input.postIds;
   const sortedIds = [...(ids ?? [])].sort();
   const entitySuffix = entityType !== "posts" ? `-${entityType}` : "";
   let raw = `${input.projectId}-${sortedIds.join(",")}-${input.reportType}-${profileId}-${reportFormat}${entitySuffix}`;
@@ -247,7 +272,7 @@ Optional: include trace headers in message attributes and/or `otelCarrier` if yo
 
 The service updates statuses roughly in this order:
 
-- `[10%] Fetching posts from DB` (ads: `Fetching ads from DB`; domains: `Fetching domains from DB`; ad profiles: `Fetching ad profiles from DB`; apps: `Fetching apps from DB`)
+- `[10%] Fetching posts from DB` (ads: `Fetching ads from DB`; domains: `Fetching domains from DB`; ad profiles: `Fetching ad profiles from DB`; apps: `Fetching apps from DB`; Telegram groups: `Fetching Telegram groups from DB`)
 - `[30%] Processing Images`
 - `[60%] Generating PDF report` or `Generating DOCX report`
 - `[80%] Uploading ...`
@@ -272,6 +297,7 @@ Treat as failed when:
 - For domains, send `entityType: "domains"`, `variantKeysByDomainId`, and compute the hash with the `-domains-{extra}` suffix.
 - For ad profiles, send `entityType: "ad_profiles"`, `adProfileIds`, `reportType: "Summary"`, and compute the hash with the `-ad_profiles` suffix. Layout is automatic from ID count (1 vs 2+).
 - For apps, send `entityType: "apps"`, `appIds`, `reportType: "Summary"` or `"Detailed"`, and compute the hash with the `-apps` suffix. No review step is needed — unreviewed apps render with an `Unreviewed` badge.
+- For Telegram groups, send `entityType: "telegram_groups"`, `telegramGroupIds`, `reportType: "Summary"` or `"Detailed"`, and compute the hash with the `-telegram_groups` suffix. No review step is needed — unreviewed groups render with an `Unreviewed` badge.
 - Normalize `reportFormat` to lowercase (`pdf`/`docx`).
 - Prevent duplicate SQS sends for same `report_hash` while a request is already in-progress.
 - Use timeout/retry logic in UI polling and show latest `status` text directly in progress UI.

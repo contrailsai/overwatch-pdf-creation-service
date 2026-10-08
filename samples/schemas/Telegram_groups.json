@@ -2,13 +2,13 @@
   "_id": { "$oid": "700000000000000000000001" },
   "schema_version": 1,
   "platform": "telegram",
-  "chat_id": -1002005343149,
-  "title": "Example VFS Appointments",
-  "username": "example_vfs_channel",
+  "chat_id": -1001795254586,
+  "title": "Example Option Trading Channel",
+  "username": "example_option_trading",
   "type": "channel",
-  "about": "Example public channel description from GetFullChannel.",
-  "original_url": "https://t.me/example_vfs_channel",
-  "participants_count": 12500,
+  "about": "Educational purposes only. I am not a SEBI registered analyst.",
+  "original_url": "https://t.me/example_option_trading",
+  "participants_count": 153091,
   "members_visible": false,
   "verified": false,
   "restricted": false,
@@ -16,66 +16,142 @@
   "fake": false,
   "broadcast": true,
   "megagroup": false,
-  "linked_chat_id": -1002111222333,
-  "username_list": ["example_vfs_channel"],
+  "linked_chat_id": null,
+  "username_list": ["example_option_trading"],
   "photo": {
-    "s3_key": "telegram/groups/-1002005343149/photo.jpg",
-    "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/telegram/groups/-1002005343149/photo.jpg"
+    "s3_key": "telegram/groups/-1001795254586/photo.jpg",
+    "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/telegram/groups/-1001795254586/photo.jpg"
   },
   "telegram": {
     "backfill": {
       "status": "done",
-      "lookback": "7d",
-      "cutoff": { "$date": "2026-09-12T12:00:00.000Z" },
-      "started_at": { "$date": "2026-09-19T12:10:00.000Z" },
-      "finished_at": { "$date": "2026-09-19T12:25:00.000Z" },
-      "messages_seen": 184,
+      "lookback": "60d",
+      "cutoff": { "$date": "2026-08-06T09:49:17.833Z" },
+      "started_at": { "$date": "2026-10-05T09:49:17.833Z" },
+      "finished_at": { "$date": "2026-10-05T09:50:18.611Z" },
+      "messages_seen": 250,
       "last_error": null
     },
-    "last_message_id": 220,
-    "last_message_at": { "$date": "2026-09-18T15:02:11.000Z" }
+    "last_message_id": 286550,
+    "last_message_at": { "$date": "2026-10-05T09:36:35.000Z" }
   },
   "workflow": {
-    "review_status": "reviewed",
+    "review_status": "pending",
     "client_status": "open",
     "visibility_status": "available",
     "takedown_status": "none",
+    "ai_status": "completed",
     "alerted_at": null
   },
   "list": {
-    "ai_threat_score": null,
-    "review_threat_score": 76,
-    "effective_threat_score": 76,
+    "ai_threat_score": 90,
+    "review_threat_score": null,
+    "effective_threat_score": 90,
     "risk_rank": "medium",
-    "threat_types": ["scam", "financial_fraud"],
-    "violation_flags": ["scam", "financial_fraud"],
-    "message_count": 184,
-    "participant_count": 12500,
-    "last_message_at": { "$date": "2026-09-18T15:02:11.000Z" },
-    "first_seen_at": { "$date": "2026-09-12T12:00:00.000Z" },
-    "reviewed_at": { "$date": "2026-09-19T14:00:00.000Z" }
+    "threat_types": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "violation_flags": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "message_count": 250,
+    "participant_count": 153091,
+    "last_message_at": { "$date": "2026-10-05T09:36:35.000Z" },
+    "first_seen_at": { "$date": "2026-10-05T09:49:17.774Z" },
+    "reviewed_at": null,
+    "poi_detected": false
   },
   "review_details": {
-    "threat_score": 76,
-    "threat_types": ["scam", "financial_fraud"],
-    "legal_codes": [{ "code": "IT Act 66D", "reasoning": "Impersonation for appointments" }],
-    "flags": { "scam": true, "financial_fraud": true },
+    "threat_score": 90,
+    "risk_rank": "high",
+    "threat_types": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "legal_codes": [{ "code": "SEBI (IA) Regulations - Reg 3", "reasoning": "Paid calls without registration" }],
+    "flags": { "FRAUD": true },
     "poi_names": [],
-    "reasoning": "Channel promotes unofficial VFS appointment slots with payment links.",
+    "reasoning": "Human reviewer reasoning, when present.",
+    "simple_report_description": "Short reviewer summary",
     "reviewer_comments": "",
-    "simple_report_description": "Suspicious VFS appointment channel",
-    "reviewed_at": "2026-09-19T14:00:00.000Z"
+    "reviewed_at": "2026-10-08T09:55:20.651Z"
+  },
+  "analysis_results": {
+    "entity_type": "telegram_group",
+    "organization": "sebi",
+    "verdict": "takedown",
+    "recommended_action": "Telegram abuse report + takedown of channel and admin handle",
+    "threat_score": 90,
+    "confidence": 1,
+    "risk_level": "High",
+    "violations": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "threat_types": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "case_summary": "The operator illegally provides paid investment advice while stating they are not SEBI registered.",
+    "analysis": "The channel actively promotes paid investment advisory services for NIFTY and stock options...",
+    "legal_codes": [
+      {
+        "code": "SEBI (IA) Regulations - Reg 3",
+        "description": "The operator acts as an investment adviser without SEBI registration."
+      }
+    ],
+    "media_basis": "text_and_12_images",
+    "reviewed_at": "2026-10-08T09:55:20.651755+00:00",
+    "operator_involvement": {
+      "present": true,
+      "how": "The operator runs the broadcast channel and directs users to a payment link.",
+      "handles": ["@ExampleHandle"],
+      "payment_channels": ["https://pay.example.com/subscribe"],
+      "evidence_message_ids": [286305, 286309]
+    },
+    "promoted_services": [
+      {
+        "name": "https://pay.example.com/subscribe",
+        "service": "paid access to a premium investment-advice group",
+        "monetised": true,
+        "price_mentions": ["₹3499"],
+        "evidence_message_ids": [286305]
+      }
+    ],
+    "promoted_handles": [
+      {
+        "handle": "@ExampleHandle",
+        "type": "telegram_account",
+        "what": ["contact for paid advice queries"],
+        "monetised": true,
+        "message_ids": [286373]
+      }
+    ],
+    "flagged_actors": [
+      {
+        "actor_key": "operator",
+        "username_or_name": "operator",
+        "role": "paid_service_operator",
+        "violations": ["UNREGISTERED INVESTMENT ADVICE"],
+        "why": "Directly offers and profits from unregistered investment advice.",
+        "evidence_message_ids": [286305]
+      }
+    ],
+    "media_evidence": [{ "message_id": 286309, "finding": "Screenshot of a VIP trading chat used to promote performance." }],
+    "image_findings": [{ "message_id": 286309, "finding": "Screenshot of a VIP trading chat used to promote performance." }],
+    "message_analysis": {
+      "batches": 4,
+      "batch_summaries": [{ "batch": 1, "summary": "The operator promotes a paid premium group for investment advice." }],
+      "flagged_messages": [
+        {
+          "message_id": 286305,
+          "actor_key": "operator",
+          "violations": ["UNREGISTERED INVESTMENT ADVICE"],
+          "severity": "high",
+          "quote": "Paid group for only ₹3499",
+          "english": "Golden opportunity to join our paid group for only ₹3499.",
+          "finding": "Offers a paid subscription to a premium group for investment advice."
+        }
+      ]
+    }
   },
   "client_notes": [],
-  "content_reviewed_by": "reviewer@example.com",
+  "content_reviewed_by": null,
   "ingestion": {
     "type": "telegram",
-    "source_url": "https://t.me/example_vfs_channel",
-    "ingested_at": { "$date": "2026-09-19T12:10:00.000Z" }
+    "source_url": "https://t.me/example_option_trading",
+    "ingested_at": { "$date": "2026-10-05T09:49:17.774Z" }
   },
   "system": {
-    "created_at": { "$date": "2026-09-19T12:10:00.000Z" },
-    "updated_at": { "$date": "2026-09-19T14:00:00.000Z" },
+    "created_at": { "$date": "2026-10-05T09:49:17.774Z" },
+    "updated_at": { "$date": "2026-10-08T09:55:20.652Z" },
     "s3_stored": true
   }
 }

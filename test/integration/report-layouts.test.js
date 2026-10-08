@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { renderToStream } = require('@react-pdf/renderer');
+const { PDFDocument } = require('pdf-lib');
 const React = require('react');
 
 require('@babel/register')({
@@ -21,6 +22,8 @@ const { AdsProfilesSummaryReportDocument } = require('../../src/components/AdsPr
 const { AdsProfileReportDocument } = require('../../src/components/AdsProfileReport');
 const { AppsSummaryReportDocument } = require('../../src/components/AppsSummaryReport');
 const { AppsDetailedReportDocument } = require('../../src/components/AppsDetailedReport');
+const { TelegramGroupsSummaryReportDocument } = require('../../src/components/TelegramGroupsSummaryReport');
+const { TelegramGroupsDetailedReportDocument } = require('../../src/components/TelegramGroupsDetailedReport');
 const { generateDetailedCasesDocxBuffer } = require('../../src/components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('../../src/components/docx/ProfileReportDocx');
 const { generateSimpleProfileDocxBuffer } = require('../../src/components/docx/SimpleProfileReportDocx');
@@ -32,6 +35,7 @@ const {
   makeNormalizedAd,
   makeNormalizedDomain,
   makeNormalizedApp,
+  makeNormalizedTelegramGroup,
   makeAdProfileReportGroup,
 } = require('./smoke-fixtures');
 
@@ -48,6 +52,13 @@ async function assertPdfRenderable(element) {
   const pdfBuffer = await streamToBuffer(stream);
   assert.ok(pdfBuffer.length > 100);
   assert.equal(pdfBuffer.slice(0, 4).toString('utf8'), '%PDF');
+}
+
+async function renderPdfPageCount(element) {
+  const stream = await renderToStream(element);
+  const pdfBuffer = await streamToBuffer(stream);
+  const doc = await PDFDocument.load(pdfBuffer, { updateMetadata: false });
+  return doc.getPageCount();
 }
 
 test('Detailed report PDF renders with fixture posts', async () => {
@@ -277,6 +288,121 @@ test('Apps Detailed PDF renders with fixture apps', async () => {
   ];
   const element = React.createElement(AppsDetailedReportDocument, { apps, project });
   await assertPdfRenderable(element);
+});
+
+test('Telegram groups Summary PDF renders with fixture groups', async () => {
+  const project = makeProject();
+  const groups = [
+    makeNormalizedTelegramGroup({ compressedImage: null }),
+    makeNormalizedTelegramGroup({
+      _id: '6ab005f9f2b0ece71b21fb7e',
+      title: 'BOOKING VISA HYPE',
+      username: 'VFSBOOKINGHYPE',
+      participant_count: 298,
+      message_count: 90,
+      review: {
+        threat_score: 96,
+        risk_rank: 'high',
+        threat_types: ['Fraud', 'Impersonation'],
+        violation_flags: [],
+        flags: {},
+        legal_codes: [{ code: 'BNS - Sec 319', reasoning: 'Cheating by personation.' }],
+        reasoning: 'Impersonates consular booking services.',
+        case_summary: 'High-risk impersonation channel.',
+        reviewed_at: '2026-09-22T00:00:00.000Z',
+      },
+    }),
+  ];
+  const element = React.createElement(TelegramGroupsSummaryReportDocument, { groups, project });
+  await assertPdfRenderable(element);
+});
+
+test('Telegram groups Detailed PDF renders reviewed and unreviewed fixtures', async () => {
+  const project = makeProject();
+  const groups = [
+    makeNormalizedTelegramGroup({ compressedImage: null }),
+    makeNormalizedTelegramGroup({
+      _id: '6aaf0000f2b0ece71b210000',
+      title: 'Unreviewed Visa Alerts',
+      username: 'visa_alerts',
+      review: {
+        threat_score: null,
+        risk_rank: null,
+        threat_types: [],
+        violation_flags: [],
+        flags: {},
+        legal_codes: [],
+        reasoning: '',
+        case_summary: '',
+        reviewer_comments: '',
+        reviewed_at: null,
+      },
+      review_details: undefined,
+      workflow: { review_status: 'pending', client_status: 'open' },
+    }),
+  ];
+  const element = React.createElement(TelegramGroupsDetailedReportDocument, { groups, project });
+  await assertPdfRenderable(element);
+});
+
+test('Telegram groups Detailed layers profile, gallery and analysis pages', async () => {
+  const project = makeProject();
+
+  const minimal = makeNormalizedTelegramGroup({
+    ai: {
+      present: false,
+      operator_involvement: {},
+      promoted_services: [],
+      promoted_handles: [],
+      flagged_actors: [],
+      flagged_messages: [],
+      media_evidence: [],
+      batch_summaries: [],
+    },
+    telegram_backfill: {},
+    review: {
+      threat_score: null,
+      risk_rank: null,
+      threat_types: [],
+      violation_flags: [],
+      flags: {},
+      legal_codes: [],
+      reasoning: '',
+      case_summary: '',
+      reviewer_comments: '',
+      reviewed_at: null,
+    },
+  });
+  const minimalDoc = React.createElement(TelegramGroupsDetailedReportDocument, {
+    groups: [minimal],
+    project,
+  });
+  assert.equal(await renderPdfPageCount(minimalDoc), 1);
+
+  // Default fixture: profile page + 1 gallery page + 1 analysis/coverage page.
+  const rich = React.createElement(TelegramGroupsDetailedReportDocument, {
+    groups: [makeNormalizedTelegramGroup({ compressedImage: null })],
+    project,
+  });
+  assert.equal(await renderPdfPageCount(rich), 3);
+
+  // 5 flagged messages paginate the gallery 4-per-page.
+  const manyMessages = makeNormalizedTelegramGroup({
+    compressedImage: null,
+    ai: {
+      ...makeNormalizedTelegramGroup().ai,
+      flagged_messages: Array.from({ length: 5 }, (_, i) => ({
+        ...makeNormalizedTelegramGroup().ai.flagged_messages[0],
+        index: i,
+        message_id: 300000 + i,
+      })),
+    },
+  });
+  const paginated = React.createElement(TelegramGroupsDetailedReportDocument, {
+    groups: [manyMessages],
+    project,
+  });
+  assert.equal(await renderPdfPageCount(paginated), 4);
 });
 
 test('SimpleCase DOCX renders with fixture post', async () => {

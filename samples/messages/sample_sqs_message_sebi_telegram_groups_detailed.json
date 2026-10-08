@@ -1,0 +1,21 @@
+{
+  "projectId": "SEBI",
+  "entityType": "telegram_groups",
+  "telegramGroupIds": [
+    "6ac3729d5d4e962a3ab4d8c6"
+  ],
+  "database_name": "SEBI-Data-Search",
+  "reportType": "Detailed",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "SEBI",
+    "project_details": {
+      "labels": [
+        { "name": "FRAUD", "severity": "high" },
+        { "name": "UNREGISTERED INVESTMENT ADVICE", "severity": "high" }
+      ],
+      "legal_codes": []
+    }
+  },
+  "profile": null
+}

@@ -12,6 +12,7 @@ const {
   normalizeAd,
   normalizeAdProfile,
   normalizeApp,
+  normalizeTelegramGroup,
   normalizeLegalCodes,
   adSourceLinkLabel,
   appSourceLabel,
@@ -21,9 +22,18 @@ const {
   resolveAppThumbUrl,
   resolveAppScreenshotUrls,
   resolveAppEvidenceImageEntries,
+  resolveTelegramGroupPhotoUrl,
+  resolveTelegramMessageImageUrl,
+  normalizeTelegramGroupAiAnalysis,
+  collectTelegramGroupFlaggedMessageIds,
+  resolveTelegramGroupImageEntries,
+  hasTelegramGroupAiAnalysis,
+  MAX_TG_FLAGGED_MESSAGES,
   isAppImageMedia,
   isAppReviewed,
+  isTelegramGroupReviewed,
   appThreatScore,
+  telegramGroupThreatScore,
   pickMediaUrl,
   mapCaseEventToUpdateHistory,
   isAdReviewed,
@@ -41,6 +51,8 @@ const v3Profile = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'profile_tiny
 const v3Ad = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'ad.json'), 'utf8'));
 const v3App = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'app.json'), 'utf8'));
 const v3AppDeveloper = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'app_developer.json'), 'utf8'));
+const v3TelegramGroup = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'telegram_group.json'), 'utf8'));
+const v3TelegramGroupAi = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'telegram_group_ai.json'), 'utf8'));
 
 test('validatePayload accepts a valid PDF payload', () => {
   const payload = {
@@ -1051,4 +1063,238 @@ test('groupAdsAndDomainsByProfile attaches domains and caps display ads', () => 
   assert.equal(grouped[0].shownAdCount, 20);
   assert.equal(grouped[0].displayAds.length, 20);
   assert.equal(grouped[0].domains.length, 2);
+});
+
+test('validatePayload accepts entityType telegram_groups with telegramGroupIds', () => {
+  const result = validatePayload({
+    projectId: 'VFS',
+    database_name: 'VFS-Data-Search',
+    entityType: 'telegram_groups',
+    telegramGroupIds: [v3TelegramGroup._id],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.equal(result.entityType, 'telegram_groups');
+  assert.deepEqual(result.entityIds, [v3TelegramGroup._id]);
+});
+
+test('validatePayload infers telegram_groups when telegramGroupIds is present without entityType', () => {
+  const result = validatePayload({
+    projectId: 'VFS',
+    database_name: 'VFS-Data-Search',
+    telegramGroupIds: [v3TelegramGroup._id],
+    reportType: 'Detailed',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.equal(result.entityType, 'telegram_groups');
+});
+
+test('validatePayload accepts telegram group IDs sent as postIds when entityType is telegram_groups', () => {
+  const result = validatePayload({
+    projectId: 'VFS',
+    database_name: 'VFS-Data-Search',
+    entityType: 'telegram_groups',
+    postIds: [v3TelegramGroup._id],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, true, result.errors.join('; '));
+  assert.deepEqual(result.entityIds, [v3TelegramGroup._id]);
+});
+
+test('validatePayload rejects telegram_groups with DOCX', () => {
+  const result = validatePayload({
+    projectId: 'VFS',
+    database_name: 'VFS-Data-Search',
+    entityType: 'telegram_groups',
+    telegramGroupIds: [v3TelegramGroup._id],
+    reportType: 'Summary',
+    reportFormat: 'docx',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Telegram group reports currently support PDF only/i);
+});
+
+test('validatePayload rejects telegram_groups with Single reportType', () => {
+  const result = validatePayload({
+    projectId: 'VFS',
+    database_name: 'VFS-Data-Search',
+    entityType: 'telegram_groups',
+    telegramGroupIds: [v3TelegramGroup._id],
+    reportType: 'Single',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Telegram group reports only support/i);
+});
+
+test('validatePayload names telegramGroupIds for invalid telegram group ObjectIds', () => {
+  const result = validatePayload({
+    projectId: 'VFS',
+    database_name: 'VFS-Data-Search',
+    entityType: 'telegram_groups',
+    telegramGroupIds: ['not-an-object-id'],
+    reportType: 'Summary',
+    reportFormat: 'pdf',
+  });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /telegramGroupIds contains invalid ObjectId/i);
+});
+
+test('generateReportHash telegram_groups suffix differs from other entity hashes', () => {
+  const crypto = require('crypto');
+  const ids = [v3TelegramGroup._id, '6ab005f9f2b0ece71b21fb7e'];
+  const sorted = [...ids].sort();
+  const postsHash = generateReportHash('VFS', ids, 'Summary', '', 'pdf');
+  const adsHash = generateReportHash('VFS', ids, 'Summary', '', 'pdf', 'ads');
+  const groupsHash = generateReportHash('VFS', ids, 'Summary', '', 'pdf', 'telegram_groups');
+  const expectedRaw = `VFS-${sorted.join(',')}-Summary--pdf-telegram_groups`;
+  assert.equal(groupsHash, crypto.createHash('sha256').update(expectedRaw).digest('hex'));
+  assert.notEqual(groupsHash, postsHash);
+  assert.notEqual(groupsHash, adsHash);
+  assert.equal(postsHash, generateReportHash('VFS', ids, 'Summary', '', 'pdf', 'posts'));
+});
+
+test('normalizeTelegramGroup maps identity, counts, review and backfill', () => {
+  const normalized = normalizeTelegramGroup(v3TelegramGroup, { updateHistory: [] });
+
+  assert.equal(normalized._id, '6aaffc52f2b0ece71b21f83f');
+  assert.equal(normalized.platform, 'telegram');
+  assert.equal(normalized.chat_id, -1001962085866);
+  assert.match(normalized.title, /Schengen Visa Appointment Tracker/);
+  assert.equal(normalized.username, 'UKVFSBot');
+  assert.equal(normalized.type, 'channel');
+  assert.equal(normalized.participant_count, 81483);
+  assert.equal(normalized.message_count, 808);
+  assert.equal(normalized.broadcast, true);
+  assert.equal(normalized.megagroup, false);
+  assert.equal(normalized.verified, false);
+  assert.match(normalized.photo_url, /photo\.jpg$/);
+  assert.equal(normalized.first_seen_at, '2026-09-20T15:31:30.035Z');
+  assert.equal(normalized.last_message_at, '2026-09-23T01:46:08.000Z');
+  assert.equal(normalized.reviewed_at, '2026-09-22T23:21:17.992Z');
+  assert.equal(normalized.workflow.review_status, 'reviewed');
+  assert.equal(normalized.telegram_backfill.status, 'done');
+  assert.equal(normalized.telegram_backfill.messages_seen, 808);
+  assert.equal(normalized.content_reviewed_by, 'vfs_demo@contrails.ai');
+
+  assert.equal(normalized.review.threat_score, 76);
+  assert.equal(normalized.review.risk_rank, 'medium');
+  assert.equal(normalized.review.legal_codes.length, 4);
+  assert.equal(normalized.review.case_summary, v3TelegramGroup.review_details.simple_report_description);
+  assert.deepEqual(normalized.review.poi_names, []);
+  assert.equal(isTelegramGroupReviewed(v3TelegramGroup), true);
+  assert.equal(telegramGroupThreatScore(v3TelegramGroup), 76);
+});
+
+test('normalizeTelegramGroup tolerates unreviewed groups without review_details', () => {
+  const normalized = normalizeTelegramGroup({
+    _id: '6aaf0000f2b0ece71b210000',
+    title: 'Unreviewed Visa Alerts',
+    workflow: { review_status: 'pending', client_status: 'open' },
+    list: { message_count: 0, participant_count: null },
+  });
+
+  assert.equal(normalized.review.threat_score, null);
+  assert.equal(normalized.review.risk_rank, null);
+  assert.deepEqual(normalized.review.legal_codes, []);
+  assert.equal(normalized.message_count, 0);
+  assert.equal(normalized.participant_count, null);
+  assert.equal(isTelegramGroupReviewed(normalized), false);
+  assert.equal(telegramGroupThreatScore(normalized), null);
+  assert.equal(normalized.photo_url, null);
+});
+
+test('resolveTelegramGroupPhotoUrl prefers s3_url then s3_uri', () => {
+  assert.equal(resolveTelegramGroupPhotoUrl({ photo: { s3_url: 'https://e/a.jpg' } }), 'https://e/a.jpg');
+  assert.equal(resolveTelegramGroupPhotoUrl({ photo: { s3_uri: 's3://b/a.jpg' } }), 's3://b/a.jpg');
+  assert.equal(resolveTelegramGroupPhotoUrl({}), null);
+  assert.equal(resolveTelegramGroupPhotoUrl(null), null);
+});
+
+test('normalizeTelegramGroupAiAnalysis maps the AI dossier', () => {
+  const ai = normalizeTelegramGroupAiAnalysis(v3TelegramGroupAi);
+  assert.equal(ai.present, true);
+  assert.equal(ai.threat_score, 90);
+  assert.equal(ai.risk_level, 'High');
+  assert.equal(ai.verdict, 'takedown');
+  assert.equal(ai.legal_codes.length, 2);
+  assert.equal(ai.legal_codes[0].reasoning, v3TelegramGroupAi.analysis_results.legal_codes[0].description);
+  assert.equal(ai.flagged_messages.length, 2);
+  assert.equal(ai.total_flagged_messages, 2);
+  assert.equal(ai.batch_summaries.length, 2);
+  assert.deepEqual(ai.operator_involvement.handles, ['@Option_analyzer2']);
+  assert.equal(ai.promoted_services.length, 1);
+  assert.equal(ai.promoted_handles.length, 1);
+  assert.equal(ai.flagged_actors.length, 1);
+  assert.equal(ai.media_evidence.length, 1);
+  assert.equal(hasTelegramGroupAiAnalysis(v3TelegramGroupAi), true);
+  assert.equal(hasTelegramGroupAiAnalysis(v3TelegramGroup), false);
+});
+
+test('normalizeTelegramGroup falls back to the AI dossier for review fields', () => {
+  const normalized = normalizeTelegramGroup(v3TelegramGroupAi);
+  assert.equal(normalized.review.threat_score, 90);
+  assert.equal(normalized.review.risk_rank, 'High');
+  assert.equal(normalized.review.verdict, 'takedown');
+  assert.equal(normalized.review.recommended_action, v3TelegramGroupAi.analysis_results.recommended_action);
+  assert.equal(normalized.review.case_summary, v3TelegramGroupAi.analysis_results.case_summary);
+  assert.match(normalized.review.reasoning, /BANKNIFTY/);
+  assert.equal(normalized.review.legal_codes.length, 2);
+  assert.equal(normalized.review.confidence, 1);
+  assert.equal(normalized.review.media_basis, 'text_and_12_images');
+  assert.equal(normalized.flagged_message_count, 2);
+});
+
+test('normalizeTelegramGroup joins referenced messages into flagged messages and media evidence', () => {
+  const messagesById = new Map([
+    [286305, { message_id: 286305, date: '2026-10-01T09:50:15.000Z', views: 425, text: 'joined 305', media_urls: [] }],
+    [286309, { message_id: 286309, date: '2026-10-01T10:31:52.000Z', views: 439, text: 'joined 309', media_urls: ['https://e/309.jpg'] }],
+  ]);
+  const normalized = normalizeTelegramGroup(v3TelegramGroupAi, { messagesById });
+  assert.equal(normalized.ai.flagged_messages[0].date, '2026-10-01T09:50:15.000Z');
+  assert.equal(normalized.ai.flagged_messages[0].views, 425);
+  assert.equal(normalized.ai.flagged_messages[0].text, 'joined 305');
+  assert.deepEqual(normalized.ai.media_evidence[0].media_urls, ['https://e/309.jpg']);
+  assert.equal(normalized.ai.media_evidence[0].date, '2026-10-01T10:31:52.000Z');
+});
+
+test('collectTelegramGroupFlaggedMessageIds unions flagged and evidence ids', () => {
+  assert.deepEqual(collectTelegramGroupFlaggedMessageIds(v3TelegramGroupAi), [286305, 286309]);
+  assert.deepEqual(collectTelegramGroupFlaggedMessageIds(v3TelegramGroup), []);
+});
+
+test('resolveTelegramGroupImageEntries builds stable slots for flagged/evidence images', () => {
+  const messagesById = new Map([
+    [286305, { message_id: 286305, date: null, views: null, text: '', media_urls: ['https://e/305.jpg'] }],
+    [286309, { message_id: 286309, date: null, views: null, text: '', media_urls: ['https://e/309.jpg'] }],
+  ]);
+  const normalized = normalizeTelegramGroup(v3TelegramGroupAi, { messagesById });
+  assert.deepEqual(resolveTelegramGroupImageEntries(normalized), [
+    { slot: 'fm_286305', url: 'https://e/305.jpg' },
+    { slot: 'fm_286309', url: 'https://e/309.jpg' },
+    { slot: 'ev_286309', url: 'https://e/309.jpg' },
+  ]);
+});
+
+test('resolveTelegramMessageImageUrl keeps photos and drops non-images', () => {
+  assert.equal(resolveTelegramMessageImageUrl({ kind: 'photo', s3_url: 'https://e/a.jpg' }), 'https://e/a.jpg');
+  assert.equal(resolveTelegramMessageImageUrl({ kind: 'MessageMediaWebPage', s3_url: 'https://e/b' }), null);
+  assert.equal(resolveTelegramMessageImageUrl(null), null);
+});
+
+test('normalizeTelegramGroupAiAnalysis caps flagged messages and keeps the true total', () => {
+  const raw = {
+    _id: 'x',
+    analysis_results: {
+      message_analysis: {
+        flagged_messages: Array.from({ length: 40 }, (_, i) => ({ message_id: i + 1, finding: 'f' })),
+      },
+    },
+  };
+  const ai = normalizeTelegramGroupAiAnalysis(raw);
+  assert.equal(ai.flagged_messages.length, MAX_TG_FLAGGED_MESSAGES);
+  assert.equal(ai.total_flagged_messages, 40);
 });

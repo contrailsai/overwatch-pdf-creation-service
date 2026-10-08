@@ -405,6 +405,188 @@ function makeNormalizedAdProfile(overrides = {}) {
   };
 }
 
+function makeNormalizedTelegramGroup(overrides = {}) {
+  const flaggedMessage = {
+    index: 0,
+    message_id: 286305,
+    actor_key: 'operator',
+    severity: 'high',
+    violations: ['UNREGISTERED INVESTMENT ADVICE'],
+    quote: 'हमारा पैड ग्रुप ज्वाइन करने का सुनहरा अवसर केवल 3499 ₹ रुपिया में।',
+    english: 'Golden opportunity to join our paid group for only ₹3499.',
+    finding: 'The message offers a paid subscription to a premium group for investment advice.',
+    date: '2026-10-01T09:50:15.000Z',
+    views: 425,
+    text: 'हमारा पैड ग्रुप ज्वाइन करने का सुनहरा अवसर केवल 3499 ₹ रुपिया में।',
+    media_urls: [],
+    localPath: null,
+  };
+  const evidenceImage = {
+    message_id: 286309,
+    finding: 'Screenshot of a VIP trading chat used to promote performance.',
+    date: '2026-10-01T10:31:52.000Z',
+    views: 439,
+    media_urls: ['https://example.com/evidence.jpg'],
+    localPath: null,
+  };
+
+  return {
+    _id: '6ac3729d5d4e962a3ab4d8c6',
+    platform: 'telegram',
+    chat_id: -1001795254586,
+    title: 'FREE OPTION TRADING™',
+    username: 'free_option_trading_nifty_stock',
+    username_list: ['free_option_trading_nifty_stock'],
+    type: 'channel',
+    about:
+      'Disclaimer: This telegram group is created for educational purposes only. I am not a SEBI registered analyst.',
+    original_url: 'https://t.me/free_option_trading_nifty_stock',
+    linked_chat_id: null,
+    broadcast: true,
+    megagroup: false,
+    members_visible: false,
+    verified: false,
+    restricted: false,
+    scam: false,
+    fake: false,
+    photo_url: 'https://example.com/group-photo.jpg',
+    participant_count: 153091,
+    message_count: 250,
+    first_seen_at: '2026-10-05T09:49:17.774Z',
+    last_message_at: '2026-10-05T09:36:35.000Z',
+    created_at: '2026-10-05T09:49:17.774Z',
+    sourced_at: '2026-10-05T09:49:17.774Z',
+    updated_at: '2026-10-08T09:55:20.652Z',
+    reviewed_at: '2026-10-08T09:55:20.651Z',
+    update_history: [],
+    client_status: 'open',
+    processed: false,
+    content_reviewed_by: null,
+    review: {
+      threat_score: 90,
+      risk_rank: 'High',
+      threat_types: ['UNREGISTERED INVESTMENT ADVICE', 'FRAUD'],
+      violation_flags: ['UNREGISTERED INVESTMENT ADVICE', 'FRAUD'],
+      flags: {},
+      legal_codes: [
+        { code: 'SEBI (IA) Regulations - Reg 3', reasoning: 'Offers paid trading calls without SEBI registration.' },
+        { code: 'SEBI PFUTP Regulations - Reg 4', reasoning: 'Claims assured/guaranteed returns.' },
+        { code: 'BNS - Sec 318', reasoning: 'Dishonestly induces payment for unregistered advice.' },
+        { code: 'BNS - Sec 111', reasoning: 'Runs coordinated cyber infrastructure for financial benefit.' },
+      ],
+      reasoning:
+        'The Telegram channel promotes and sells paid investment advisory services while explicitly stating it is not SEBI registered.',
+      case_summary:
+        "The operator of the 'FREE OPTION TRADING™' Telegram channel illegally provides paid investment advice with misleading accuracy and profit claims.",
+      verdict: 'takedown',
+      recommended_action: 'Telegram abuse report + takedown of channel and admin handle',
+      reviewer_comments: '',
+      confidence: 1,
+      media_basis: 'text_and_12_images',
+      poi_names: [],
+      reviewed_at: '2026-10-08T09:55:20.651Z',
+    },
+    ai: {
+      present: true,
+      threat_score: 90,
+      risk_level: 'High',
+      confidence: 1,
+      verdict: 'takedown',
+      recommended_action: 'Telegram abuse report + takedown of channel and admin handle',
+      case_summary:
+        "The operator of the 'FREE OPTION TRADING™' Telegram channel illegally provides paid investment advice with misleading accuracy and profit claims.",
+      analysis:
+        "The Telegram channel 'FREE OPTION TRADING™' actively promotes and sells paid investment advisory services for NIFTY, BANKNIFTY, FINNIFTY and stock options. The operator explicitly states in the group's 'about' section that they are not a SEBI registered analyst, confirming the unregistered nature of the advice. Paid tiers are promoted (₹3499/year, ₹4999 lifetime) with claims of 'Accuracy 95%++' and 'guaranteed profits'.",
+      violations: ['UNREGISTERED INVESTMENT ADVICE', 'FRAUD'],
+      threat_types: ['UNREGISTERED INVESTMENT ADVICE', 'FRAUD'],
+      legal_codes: [
+        { code: 'SEBI (IA) Regulations - Reg 3', reasoning: 'Offers paid trading calls without SEBI registration.' },
+        { code: 'SEBI PFUTP Regulations - Reg 4', reasoning: 'Claims assured/guaranteed returns.' },
+        { code: 'BNS - Sec 318', reasoning: 'Dishonestly induces payment for unregistered advice.' },
+        { code: 'BNS - Sec 111', reasoning: 'Runs coordinated cyber infrastructure for financial benefit.' },
+      ],
+      media_basis: 'text_and_12_images',
+      organization: 'sebi',
+      reviewed_at: '2026-10-08T09:55:20.651Z',
+      operator_involvement: {
+        present: true,
+        how: 'The operator runs the broadcast channel, posts all promotional content and directs users to a payment link.',
+        handles: ['@Option_analyzer2'],
+        payment_channels: ['https://cosmofeed.com/vig/6476f874a5e1ac0020b734b0'],
+        evidence_message_ids: [286305, 286309],
+      },
+      promoted_services: [
+        {
+          kind: 'service',
+          name: 'https://cosmofeed.com/vig/6476f874a5e1ac0020b734b0',
+          what: ["paid access to a 'premium group' for investment advice and trade calls"],
+          monetised: true,
+          price_mentions: ['₹3499', '₹4999'],
+          message_ids: [286305, 286309],
+        },
+      ],
+      promoted_handles: [
+        {
+          kind: 'handle',
+          name: '@Option_analyzer2',
+          what: ['contact for queries about paid investment advice'],
+          monetised: true,
+          price_mentions: [],
+          message_ids: [286373],
+        },
+      ],
+      flagged_actors: [
+        {
+          actor_key: 'operator',
+          name: 'operator',
+          role: 'paid_service_operator',
+          violations: ['UNREGISTERED INVESTMENT ADVICE', 'FRAUD'],
+          why: 'Directly offers and profits from unregistered investment advice.',
+          evidence_message_ids: [286305, 286309],
+        },
+      ],
+      flagged_messages: [flaggedMessage],
+      batch_summaries: [
+        {
+          batch: 1,
+          summary:
+            'This batch primarily consists of the operator promoting a paid premium group for investment advice and trade calls.',
+        },
+      ],
+      batches: 4,
+      media_evidence: [evidenceImage],
+      image_findings: [{ message_id: 286309, finding: 'Screenshot of a VIP trading chat used to promote performance.' }],
+      total_flagged_messages: 30,
+    },
+    flagged_message_count: 1,
+    ingestion: {
+      type: 'telegram',
+      source_url: 'https://t.me/free_option_trading_nifty_stock',
+      ingested_at: '2026-10-05T09:49:17.774Z',
+    },
+    telegram_backfill: {
+      status: 'done',
+      lookback: '60d',
+      messages_seen: 250,
+      last_error: null,
+      started_at: '2026-10-05T09:49:17.833Z',
+      finished_at: '2026-10-05T09:50:18.611Z',
+    },
+    workflow: {
+      review_status: 'pending',
+      client_status: 'open',
+      visibility_status: 'available',
+      takedown_status: 'none',
+      ai_status: 'completed',
+      alerted_at: null,
+    },
+    analysis_results: {},
+    client_notes: [],
+    compressedImage: null,
+    ...overrides,
+  };
+}
+
 function makeAdProfileReportGroup(overrides = {}) {
   const { profile: profileOverrides, ads: adsOverride, domains: domainsOverride, ...rest } = overrides;
   const profile = makeNormalizedAdProfile(profileOverrides);
@@ -446,5 +628,6 @@ module.exports = {
   makeNormalizedDomain,
   makeNormalizedAdProfile,
   makeNormalizedApp,
+  makeNormalizedTelegramGroup,
   makeAdProfileReportGroup,
 };

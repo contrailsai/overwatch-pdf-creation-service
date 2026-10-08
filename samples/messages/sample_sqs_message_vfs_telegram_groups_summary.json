@@ -1,0 +1,25 @@
+{
+  "projectId": "VFS",
+  "entityType": "telegram_groups",
+  "telegramGroupIds": [
+    "6aaffc52f2b0ece71b21f83f",
+    "6ab005f9f2b0ece71b21fb7e",
+    "6aafe562f2b0ece71b21cc84",
+    "6aaffc4ef2b0ece71b21f825"
+  ],
+  "database_name": "VFS-Data-Search",
+  "reportType": "Summary",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "VFS",
+    "project_details": {
+      "labels": [
+        { "name": "Fraud", "severity": "high" },
+        { "name": "Impersonation", "severity": "high" },
+        { "name": "Misinformation", "severity": "medium" }
+      ],
+      "legal_codes": []
+    }
+  },
+  "profile": null
+}

@@ -1,0 +1,113 @@
+{
+  "_id": "6aaffc52f2b0ece71b21f83f",
+  "schema_version": 1,
+  "platform": "telegram",
+  "chat_id": -1001962085866,
+  "title": "Schengen Visa Appointment Tracker: Free UK & Ireland VFS alerts",
+  "username": "UKVFSBot",
+  "type": "channel",
+  "about": "FREE Schengen Visa Appointment Tracker Telegram bot delivering instant alerts when visa appointment slots open up at VFS, BLS, or TLS centers across the UK and Ireland.",
+  "original_url": "https://t.me/UKVFSBot",
+  "participants_count": 81483,
+  "members_visible": false,
+  "verified": false,
+  "restricted": false,
+  "scam": false,
+  "fake": false,
+  "broadcast": true,
+  "megagroup": false,
+  "linked_chat_id": -1001885324308,
+  "username_list": ["UKVFSBot"],
+  "photo": {
+    "s3_key": "telegram/groups/-1001962085866/photo.jpg",
+    "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/telegram/groups/-1001962085866/photo.jpg"
+  },
+  "telegram": {
+    "backfill": {
+      "status": "done",
+      "lookback": "7d",
+      "cutoff": "2026-09-16T15:31:30.035Z",
+      "started_at": "2026-09-23T07:05:00.000Z",
+      "finished_at": "2026-09-23T07:05:37.931Z",
+      "messages_seen": 808,
+      "last_error": null
+    },
+    "last_message_id": 910,
+    "last_message_at": "2026-09-23T01:46:08.000Z"
+  },
+  "workflow": {
+    "review_status": "reviewed",
+    "client_status": "open",
+    "visibility_status": "available",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": null,
+    "review_threat_score": 76,
+    "effective_threat_score": 76,
+    "risk_rank": "medium",
+    "threat_types": ["Misinformation", "Fraud", "Appointment-Scalping", "Bot-Networks"],
+    "violation_flags": ["Misinformation", "Fraud", "Appointment-Scalping", "Bot-Networks"],
+    "message_count": 808,
+    "participant_count": 81483,
+    "last_message_at": "2026-09-23T01:46:08.000Z",
+    "first_seen_at": "2026-09-20T15:31:30.035Z",
+    "reviewed_at": "2026-09-22T23:21:17.992Z"
+  },
+  "review_details": {
+    "threat_score": 76,
+    "threat_types": ["Misinformation", "Fraud", "Appointment-Scalping", "Bot-Networks"],
+    "legal_codes": [
+      {
+        "code": "BNS - Sec 111",
+        "reasoning": "Deploys continuing, coordinated cyber infrastructure (automated multi-account bots/scraping syndicates) for illicit material and financial benefit."
+      },
+      {
+        "code": "IT Rules - 3(1)(b)(viii)",
+        "reasoning": "Promotes, coordinates, and facilitates commercial cyber-scalping, illegal portal circumvention, and black-market financial transactions."
+      },
+      {
+        "code": "BNS - Sec 318",
+        "reasoning": "Illegally monetizes and resells access to free official visa appointment slots using automated scripts/bots."
+      },
+      {
+        "code": "IT Rules - 3(1)(b)(v)",
+        "reasoning": "Falsely misleads applicants regarding the channel's true origin and operational legitimacy by masquerading as an official service."
+      }
+    ],
+    "flags": {
+      "Defamation": false,
+      "Anti-India-Propaganda": false,
+      "Hate-speech": false,
+      "Misinformation": true,
+      "Obscene": false,
+      "Fraud": true,
+      "asset-misuse": false,
+      "Terrorism": false,
+      "Violence": false,
+      "Impersonation": false,
+      "Identity-Harvesting": false,
+      "Document-Forgery": false,
+      "Appointment-Scalping": true,
+      "Bot-Networks": true
+    },
+    "poi_names": [],
+    "reasoning": "The channel leverages country-specific consular targeting combined with VFS-style branding to create deceptive legitimacy. Automated bots coordinate slot scalping and resale, escalated by coordinated multi-account infrastructure.",
+    "simple_report_description": "VFS appointment-scalping bot channel impersonating official consular booking services.",
+    "reviewer_comments": "",
+    "reviewed_at": "2026-09-22T23:21:17.992Z"
+  },
+  "client_notes": [],
+  "content_reviewed_by": "vfs_demo@contrails.ai",
+  "ingestion": {
+    "type": "telegram",
+    "source_url": "https://t.me/UKVFSBot",
+    "ingested_at": "2026-09-20T15:31:30.035Z"
+  },
+  "system": {
+    "created_at": "2026-09-20T15:31:30.035Z",
+    "updated_at": "2026-09-23T07:05:37.931Z",
+    "s3_stored": true
+  }
+}

@@ -88,6 +88,8 @@ exports.handler = async (event) => {
                   span.setAttribute('ad_profile.count', validation.entityIds.length);
                 } else if (validation.entityType === 'apps') {
                   span.setAttribute('app.count', validation.entityIds.length);
+                } else if (validation.entityType === 'telegram_groups') {
+                  span.setAttribute('telegram_group.count', validation.entityIds.length);
                 } else {
                   span.setAttribute('post.count', validation.entityIds.length);
                 }

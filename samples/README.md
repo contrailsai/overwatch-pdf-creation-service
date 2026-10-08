@@ -52,6 +52,8 @@ One example document per MongoDB collection the service reads, in **MongoDB Exte
 | [`Ads.json`](schemas/Ads.json) | `Ads` | `ad_profile_id`, `content.media` / `content.cards`, `ad_delivery.*`, `list.*` |
 | [`Ad_profiles.json`](schemas/Ad_profiles.json) | `Ad_profiles` | `enrichment.*`, `list.*`, `review_details.*`, `workflow.*` |
 | [`Domains.json`](schemas/Domains.json) | `Domains` | `discovery.*`, `analysis_results.cloak_probe`, `list.*`, `review_details.*` |
+| [`Telegram_groups.json`](schemas/Telegram_groups.json) | `Telegram_groups` | `chat_id` / `username` / `type` / `about`, `photo.s3_url`, `list.*` (participants, messages, threat types), `review_details.*` (human review), `analysis_results.*` (AI dossier: case summary, analysis, legal codes, operator involvement, promoted services, flagged actors, `message_analysis.flagged_messages`, `media_evidence`), `telegram.backfill` — drives the Telegram group Summary/Detailed reports |
+| [`Telegram_messages.json`](schemas/Telegram_messages.json) | `Telegram_messages` | `group_id` / `message_id` / `date` / `views` / `text` / `media[].s3_url` — only the flagged ids referenced by the AI dossier are read |
 
 ### Caveats
 

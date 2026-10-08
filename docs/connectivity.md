@@ -48,6 +48,8 @@ The database is chosen **per request** from `payload.database_name` — one clus
 | `Domains` | capital `D` | `domains`, `ad_profiles` | `_id`, `analysis_results.cloak_probe`, `review_details.*`, `list.*` |
 | `Apps` | capital `A` | `apps` | `_id`, `developer_id`, `platform_app_id`, `content.media`, `content.title`, `store.*`, `evidence.sections`, `list.*` |
 | `App_developers` | capital `A`, lowercase `d` | `apps` (join) | `_id`, `display_name`, `enrichment.*`, `list.app_count`, `list.risk_rank` |
+| `Telegram_groups` | capital `T`, lowercase `g` | `telegram_groups` | `_id`, `chat_id`, `title`, `username`, `type`, `about`, `photo.s3_url`, `participants_count`, `list.*`, `review_details.*`, `analysis_results.*` (AI dossier), `workflow.*`, `telegram.backfill` |
+| `Telegram_messages` | capital `T`, lowercase `m` | `telegram_groups` (flagged only) | `group_id`, `message_id`, `date`, `views`, `text`, `media[].s3_url` — read for the handful of ids the AI flagged |
 
 Casing is load-bearing — the git history contains a fix specifically for the `Posts` collection casing. Schema-v3 documents are read directly; legacy shapes are tolerated by the normalizers in `src/core-utils.js`.
 
@@ -55,11 +57,12 @@ Casing is load-bearing — the git history contains a fix specifically for the `
 
 - Posts: `find({ _id: { $in: objectIds } })`
 - Profiles: `find({ _id: { $in: profileIds } })` where `profileIds` are the distinct `post.profile_id`
-- Case events: `find({ entity_type: 'post', entity_id: { $in: objectIds } }).sort({ occurred_at: 1 })`; for ads `entity_type: { $in: ['ad','ads'] }`; for apps `entity_type: { $in: ['app','apps'] }`
+- Case events: `find({ entity_type: 'post', entity_id: { $in: objectIds } }).sort({ occurred_at: 1 })`; for ads `entity_type: { $in: ['ad','ads'] }`; for apps `entity_type: { $in: ['app','apps'] }`; for Telegram groups `entity_type: 'telegram_group'`
 - Ads: `find({ _id: { $in: objectIds } })`; inside ad-profiles: `find({ ad_profile_id: { $in: reviewedProfileIds }, 'list.reviewed_at': { $ne: null } })`
 - Ad profiles: `find({ _id: { $in: objectIds } })`
 - Domains: `find({ _id: { $in: objectIds } })`
 - Apps: `find({ _id: { $in: objectIds } })`; developers: `find({ _id: { $in: developerIds } })` where `developerIds` are the distinct `app.developer_id`
+- Telegram groups: `find({ _id: { $in: objectIds } })`; then `Telegram_messages.find({ group_id: { $in: objectIds }, message_id: { $in: flaggedIds } })` where `flaggedIds` is the union of the AI's flagged-message, media-evidence and image-finding message ids. The rest of the message history is never queried
 
 ---
 

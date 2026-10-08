@@ -40,7 +40,7 @@ DOCX output uses **different** fonts, and the two DOCX families do not agree wit
 | Element | Generation A | Generation B | Domains family |
 | --- | --- | --- | --- |
 | Brand title | `OVERWATCH` (18 / `'900'` / letterSpacing 0.5) | `Overwatch` (18 / 700) | `OVERWATCH` in summary; `Overwatch` in detailed |
-| Subtitle | `Digital Risk Protection Report` (Summary) / `Profile Investigation Report` (Profile) | `Digital Risk Protection` | `Domain Integrity Report` (summary) / `Domain Integrity` (detailed) / `Meta Ads Integrity Report` (ads summary) / `Meta Ads Integrity` (ads detailed) / `App Integrity Report` (apps summary) / `App Integrity` (apps detailed) |
+| Subtitle | `Digital Risk Protection Report` (Summary) / `Profile Investigation Report` (Profile) | `Digital Risk Protection` | `Domain Integrity Report` (summary) / `Domain Integrity` (detailed) / `Meta Ads Integrity Report` (ads summary) / `Meta Ads Integrity` (ads detailed) / `App Integrity Report` (apps summary) / `App Integrity` (apps detailed) / `Telegram Group Integrity Report` (Telegram group summary) / `Telegram Group Integrity` (Telegram group detailed) |
 | Footer | `CONFIDENTIAL DOCUMENT` · `POWERED BY CONTRAILS AI` · `PAGE X OF Y` | `Confidential Document` · `Powered by Contrails AI` · `Page X of Y` | uppercase in summary, title case in detailed |
 | Timestamp | `"dd MMM yyyy, hh:mm a 'IST'"` (Asia/Kolkata) | `'dd MMM yyyy, hh:mm a'` (Asia/Kolkata, no suffix) | summary uses the `IST` form, detailed uses the plain form |
 
@@ -142,6 +142,7 @@ Every renderer computes a risk tier, but the **thresholds, comparison operators,
 | Ad profiles — ads table | `adRiskInfo(ad)` | `> 95` | `> 75` | `> 40` | `Safe` | ✅ when score `null`, no `threat_types`, no `reviewed_at` |
 | Ad profiles — profile | `profileRiskInfo(profile)` | from `risk_rank \|\| risk` only | — | — | `Safe` | label is **`Reviewed`** when no rank present |
 | Apps Summary/Detailed | `appRiskInfo(app)` | `>= 96` | `>= 76` | `>= 41` (after `review.risk_rank`) | `Safe` | `Unreviewed` when no score and no review signal |
+| Telegram groups Summary/Detailed | `groupRiskInfo(group)` | `>= 96` | `>= 76` | `>= 41` (after `review.risk_rank`) | `Safe` | `Unreviewed` when no score and no review signal |
 
 Score source everywhere: `review_details.threat_score ?? analysis_results.risk_score ?? 0` (ads also fall back to `list.review_threat_score`, `list.effective_threat_score`; apps also fall back to `list.ai_threat_score`).
 
@@ -416,6 +417,40 @@ Row: **45×45** icon (`objectFit: 'contain'` on a `#F8FAFC` well, 8 px radius) o
 Caps (`src/core-utils.js`): `MAX_APP_SCREENSHOTS = 6`, `MAX_APP_EVIDENCE_IMAGES = 10`, `MAX_APP_EVIDENCE_IMAGES_PER_SECTION = 4`, `MAX_APP_PERMISSION_ITEMS = 10`. Evidence images are addressed by a stable `slot` (`sectionIndex:mediaIndex`) that is also the image-cache key, so the pipeline and the renderer agree without re-walking the tree.
 
 Cards use flat white fills with a single `#E2E8F0` hairline border — no tinted or gradient chrome. Only the semantic fills (risk badge, violation pill, legal card) carry colour.
+
+### 6.6 Telegram groups
+
+Both renderers import `DomainTheme` (as `GroupTheme`) and share the pure helpers in `telegramGroupPdfShared.js`. There is **no review filter** — every requested group renders, with an `Unreviewed` badge when no reviewer signal exists. The `analysis_results` **AI dossier** drives the review narrative, legal findings and the flagged-message gallery; `Telegram_messages` is joined for the flagged ids only.
+
+**Telegram Groups Summary — `TelegramGroupsSummaryReportDocument`** — props `{ groups, project }`. Single flowing A4 page, padding `30/30/40`, fixed header `OVERWATCH` / `Telegram Group Integrity Report` + IST timestamp, uppercase footer.
+
+| Section | Content |
+| --- | --- |
+| Executive Summary | Six cards: `Total Groups` · `High` · `Medium` · `Low` (risk tiers, coloured only when non-zero) · `Flagged Msgs` (sum of AI flagged messages) · `AI Analysed` (groups with an `analysis_results` dossier) |
+| Telegram Group List Analysis | Fixed table header + one row per group |
+
+Columns: `#` 5% · `Group` 24% · `Audience` 12% · `Messages` 8% · `Flagged` 8% · `Violations` 14% · `Risk` 13% · `Dates` 16%.
+
+Row: **45×45** group photo (`objectFit: 'contain'` on a `#F8FAFC` well, 8 px radius) or `No Img`; group title (2 lines); `@username`; type (`CHANNEL` / `GROUP`); a `View Channel` / `Open in Telegram` link; participant count (compact, e.g. `153.1K`) under a `PARTICIPANTS` label plus any of `Verified` / `Scam` / `Fake` / `Restricted`; message count under `MESSAGES`; AI flagged-message count under `FLAGGED`; up to 3 violation chips or `—`; risk badge; `Sourced` / `Reviewed` dates.
+
+**Telegram Groups Detailed — `TelegramGroupsDetailedReportDocument`** — props `{ groups, project }`. Each group renders as a sequence of page groups: **Profile & Review** (1 page), **Flagged Messages** (0–3 pages of 4 cards), **AI Analysis & Evidence** (0–2 pages), and an optional **Client Notes** page.
+
+**1. Profile & Review (page 1).** Everything about the group and its review, on one sheet.
+
+- Heading `N. {title}`.
+- Two columns (left 57% / right 43%):
+  - Left: **`Group Details`** — a two-column key/value grid (Type, Username, Chat ID, Linked chat ID, Username list, Participants, Messages, First seen, Last message, Telegram link), a `Channel Flags` pill row, and the `About` description (420 chars / 6 lines).
+  - Right: **`Verdict`** — risk badge + a 3-cell stat strip (`Risk tier`, `Threat score`, `Flagged msgs`), then Verdict, Recommended action, AI confidence, Media basis, AI reviewed at, Review status and AI status; then **`Flagged Actors`** (name, role, violations, rationale).
+- **`Review Details`** — full-width, two columns: the left column carries `Case Summary` (11 pt), `Detected Violations` pills (cap 10) and reviewer comments; the right column carries **every legal code with its reasoning** (cap 8, remainder deferred to the AI section). Unreviewed groups with no AI dossier read `Not yet reviewed…`. Each legal card is atomic (`wrap={false}`).
+- **`Operator Involvement`** — the AI's `how` narrative plus handle pills (payment links are shown on the analysis page under Monetisation).
+
+**2. Flagged Messages (gallery).** Telegram-format cards, 2 per row × 2 rows per page (`GALLERY_PER_PAGE = 4`), up to `MAX_GALLERY_MESSAGES = 12`. Each card: channel avatar + `@username`, message date · views · `#message_id`, a severity badge (High/Medium/Low), the message text in a Telegram-style bubble, a blue-ruled `English` translation, the message image thumbnail when the joined message has one, an `AI finding` block, and violation chips. The heading shows `page / total` and `showing N of trueTotal`.
+
+**3. AI Analysis & Evidence.** `Detailed AI Analysis` (the full `analysis_results.analysis`, 2600 chars / 40 lines), `Message Batch Summaries` (cap 8), `Monetisation & Promoted Handles` (name, what, monetised, price mentions, linked-message count), `Image Evidence` (2-across grid, cap 8, each with date, `#message_id` and the AI finding), and `Collection Coverage` (backfill status, lookback, messages seen, last error).
+
+**4. Client Notes** — emitted only when the group has client notes.
+
+Caps in the group shared helpers: `MAX_TG_FLAGGED_MESSAGES = 24` normalized (true total kept in `ai.total_flagged_messages`), `MAX_TG_EVIDENCE_IMAGES = 16`, `MAX_TG_BATCH_SUMMARIES = 8`, `MAX_TG_PROMOTED_SERVICES = 8`. Counts are driven by `compactNumber`, so `153091` renders `153.1K` and `250` renders `250`.
 
 ---
 

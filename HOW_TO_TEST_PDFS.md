@@ -43,6 +43,14 @@ curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samp
 # SEBI Apps (Google Play) — Summary / Detailed; unreviewed apps still render
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_apps_summary.json
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_apps_detailed.json
+
+# VFS Telegram groups — Summary / Detailed; unreviewed groups still render
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_vfs_telegram_groups_summary.json
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_vfs_telegram_groups_detailed.json
+
+# SEBI Telegram groups — AI dossier + flagged-message gallery
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_telegram_groups_summary.json
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_telegram_groups_detailed.json
 ```
 
 > `sample_sqs_message_sebi_ad_profiles_detailed.json` is **misnamed** — its `reportType` is `Summary` with a single profile id. See [roadmap.md](docs/roadmap.md).
@@ -68,6 +76,10 @@ Every tracked sample in [`samples/messages/`](samples/messages), with its actual
 | [`sample_sqs_message_sebi_domains_detailed_bare.json`](samples/messages/sample_sqs_message_sebi_domains_detailed_bare.json) | domains | Detailed (bare variant) | pdf | SEBI-Data-Search |
 | [`sample_sqs_message_sebi_apps_summary.json`](samples/messages/sample_sqs_message_sebi_apps_summary.json) | apps | Summary | pdf | SEBI-Data-Search |
 | [`sample_sqs_message_sebi_apps_detailed.json`](samples/messages/sample_sqs_message_sebi_apps_detailed.json) | apps | Detailed | pdf | SEBI-Data-Search |
+| [`sample_sqs_message_vfs_telegram_groups_summary.json`](samples/messages/sample_sqs_message_vfs_telegram_groups_summary.json) | telegram_groups | Summary | pdf | VFS-Data-Search |
+| [`sample_sqs_message_vfs_telegram_groups_detailed.json`](samples/messages/sample_sqs_message_vfs_telegram_groups_detailed.json) | telegram_groups | Detailed | pdf | VFS-Data-Search |
+| [`sample_sqs_message_sebi_telegram_groups_summary.json`](samples/messages/sample_sqs_message_sebi_telegram_groups_summary.json) | telegram_groups | Summary | pdf | SEBI-Data-Search |
+| [`sample_sqs_message_sebi_telegram_groups_detailed.json`](samples/messages/sample_sqs_message_sebi_telegram_groups_detailed.json) | telegram_groups | Detailed | pdf | SEBI-Data-Search |
 
 **Not covered by any sample:** posts `Summary`, and every DOCX type (`Detailed`, `Single`, `Profile`, `SimpleProfile`, `SimpleCase`). Build them from an existing sample by changing `reportType` / `reportFormat`, then POST it.
 

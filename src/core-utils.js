@@ -4,11 +4,12 @@ const { ObjectId } = require('mongodb');
 const SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase', 'Summary']);
 const DOCX_SUPPORTED_REPORT_TYPES = new Set(['Detailed', 'Single', 'Profile', 'SimpleProfile', 'SimpleCase']);
 const DOCX_ONLY_REPORT_TYPES = new Set(['SimpleProfile', 'SimpleCase']);
-const SUPPORTED_ENTITY_TYPES = new Set(['posts', 'ads', 'domains', 'ad_profiles', 'apps']);
+const SUPPORTED_ENTITY_TYPES = new Set(['posts', 'ads', 'domains', 'ad_profiles', 'apps', 'telegram_groups']);
 const ADS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
 const DOMAINS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
 const AD_PROFILES_SUPPORTED_REPORT_TYPES = new Set(['Summary']);
 const APPS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
+const TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
 const MAX_PROFILE_REPORT_ADS = 20;
 const MAX_APP_SCREENSHOTS = 6;
 const MAX_APP_EVIDENCE_IMAGES = 10;
@@ -20,6 +21,7 @@ function entityIdFieldName(entityType) {
   if (entityType === 'domains') return 'domainIds';
   if (entityType === 'ad_profiles') return 'adProfileIds';
   if (entityType === 'apps') return 'appIds';
+  if (entityType === 'telegram_groups') return 'telegramGroupIds';
   return 'postIds';
 }
 
@@ -29,11 +31,15 @@ function resolveEntityType(payload) {
   if (explicit === 'domains' || explicit === 'domain') return 'domains';
   if (explicit === 'ad_profiles' || explicit === 'ad_profile' || explicit === 'adprofiles') return 'ad_profiles';
   if (explicit === 'apps' || explicit === 'app') return 'apps';
+  if (explicit === 'telegram_groups' || explicit === 'telegram_group' || explicit === 'telegramgroups') {
+    return 'telegram_groups';
+  }
   if (explicit === 'posts' || explicit === 'post') return 'posts';
   if (Array.isArray(payload?.adProfileIds) && payload.adProfileIds.length > 0) return 'ad_profiles';
   if (Array.isArray(payload?.domainIds) && payload.domainIds.length > 0) return 'domains';
   if (Array.isArray(payload?.adIds) && payload.adIds.length > 0) return 'ads';
   if (Array.isArray(payload?.appIds) && payload.appIds.length > 0) return 'apps';
+  if (Array.isArray(payload?.telegramGroupIds) && payload.telegramGroupIds.length > 0) return 'telegram_groups';
   return 'posts';
 }
 
@@ -53,6 +59,12 @@ function resolveEntityIds(payload) {
   }
   if (entityType === 'apps') {
     if (Array.isArray(payload?.appIds) && payload.appIds.length > 0) return payload.appIds;
+    return payload?.postIds;
+  }
+  if (entityType === 'telegram_groups') {
+    if (Array.isArray(payload?.telegramGroupIds) && payload.telegramGroupIds.length > 0) {
+      return payload.telegramGroupIds;
+    }
     return payload?.postIds;
   }
   return payload?.postIds;
@@ -110,6 +122,9 @@ function validatePayload(payload) {
     else if (entityType === 'domains') errors.push('domainIds or postIds must be a non-empty array');
     else if (entityType === 'ad_profiles') errors.push('adProfileIds or postIds must be a non-empty array');
     else if (entityType === 'apps') errors.push('appIds or postIds must be a non-empty array');
+    else if (entityType === 'telegram_groups') {
+      errors.push('telegramGroupIds or postIds must be a non-empty array');
+    }
     else errors.push('postIds must be a non-empty array');
   }
   if (!reportType || typeof reportType !== 'string' || !SUPPORTED_REPORT_TYPES.has(reportType)) {
@@ -127,6 +142,11 @@ function validatePayload(payload) {
   if (entityType === 'apps' && reportType && !APPS_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`App reports only support: ${Array.from(APPS_SUPPORTED_REPORT_TYPES).join(', ')}`);
   }
+  if (entityType === 'telegram_groups' && reportType && !TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES.has(reportType)) {
+    errors.push(
+      `Telegram group reports only support: ${Array.from(TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES).join(', ')}`,
+    );
+  }
   if (!['pdf', 'docx'].includes(normalizedReportFormat)) {
     errors.push('reportFormat must be either pdf or docx');
   }
@@ -141,6 +161,9 @@ function validatePayload(payload) {
   }
   if (entityType === 'apps' && normalizedReportFormat === 'docx') {
     errors.push('App reports currently support PDF only');
+  }
+  if (entityType === 'telegram_groups' && normalizedReportFormat === 'docx') {
+    errors.push('Telegram group reports currently support PDF only');
   }
   if (normalizedReportFormat === 'docx' && !DOCX_SUPPORTED_REPORT_TYPES.has(reportType)) {
     errors.push(`DOCX is only supported for: ${Array.from(DOCX_SUPPORTED_REPORT_TYPES).join(', ')}`);
@@ -984,6 +1007,455 @@ function isAdProfileReviewed(profile) {
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * Telegram groups                                                     *
+ * ------------------------------------------------------------------ */
+
+/** Group profile picture URL from `photo.s3_url` / `photo.s3_uri`. */
+function resolveTelegramGroupPhotoUrl(group) {
+  return group?.photo?.s3_url || group?.photo?.s3_uri || null;
+}
+
+/* ---- Telegram group AI analysis (analysis_results) ---- */
+
+const MAX_TG_FLAGGED_MESSAGES = 24;
+const MAX_TG_EVIDENCE_IMAGES = 16;
+const MAX_TG_BATCH_SUMMARIES = 8;
+const MAX_TG_PROMOTED_SERVICES = 8;
+
+/** First fetchable image URL on a Telegram_messages `media[]` item. */
+function resolveTelegramMessageImageUrl(mediaItem) {
+  if (!mediaItem || typeof mediaItem !== 'object') return null;
+  const kind = String(mediaItem.kind || '').toLowerCase();
+  if (kind && !kind.includes('photo')) return null;
+  return mediaItem.s3_url || mediaItem.s3_uri || null;
+}
+
+/** AI `legal_codes` use `{ code, description }`; reuse the `{ code, reasoning }` shape. */
+function normalizeAiLegalCodes(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return { code: item, reasoning: '' };
+      return {
+        code: item?.code || item?.name || '',
+        reasoning: item?.description || item?.reasoning || '',
+      };
+    })
+    .filter((item) => item.code);
+}
+
+function normalizeFlaggedActor(actor) {
+  if (!actor || typeof actor !== 'object') return null;
+  const violations = Array.isArray(actor.violations) ? actor.violations.filter(Boolean) : [];
+  const name = actor.username_or_name || actor.actor_key || '';
+  if (!name && violations.length === 0) return null;
+  return {
+    actor_key: actor.actor_key || '',
+    name,
+    role: actor.role || '',
+    violations,
+    why: actor.why || '',
+    evidence_message_ids: Array.isArray(actor.evidence_message_ids) ? actor.evidence_message_ids : [],
+  };
+}
+
+function normalizePromotedLink(item, kind) {
+  if (!item || typeof item !== 'object') return null;
+  const name = item.name || item.handle || '';
+  if (!name) return null;
+  return {
+    kind,
+    name,
+    what: Array.isArray(item.what) ? item.what.filter(Boolean) : item.service ? [item.service] : [],
+    monetised: Boolean(item.monetised),
+    price_mentions: Array.isArray(item.price_mentions) ? item.price_mentions.filter(Boolean) : [],
+    message_ids: Array.isArray(item.message_ids)
+      ? item.message_ids
+      : Array.isArray(item.evidence_message_ids)
+        ? item.evidence_message_ids
+        : [],
+  };
+}
+
+function normalizeFlaggedMessage(item, index) {
+  if (!item || typeof item !== 'object') return null;
+  const messageId = item.message_id ?? null;
+  if (messageId == null && !item.quote && !item.finding) return null;
+  return {
+    index,
+    message_id: messageId,
+    actor_key: item.actor_key || '',
+    severity: String(item.severity || 'medium').toLowerCase(),
+    violations: Array.isArray(item.violations) ? item.violations.filter(Boolean) : [],
+    quote: item.quote || '',
+    english: item.english || '',
+    finding: item.finding || '',
+    // Filled by the pipeline from Telegram_messages.
+    date: null,
+    views: null,
+    text: '',
+    media_urls: [],
+  };
+}
+
+/**
+ * Normalize the AI dossier (`analysis_results`) attached to Telegram groups.
+ * This is the source of the review narrative for AI-analysed but not
+ * human-reviewed groups.
+ */
+function normalizeTelegramGroupAiAnalysis(group) {
+  const analysis =
+    group?.analysis_results && typeof group.analysis_results === 'object' ? group.analysis_results : {};
+  const messageAnalysis =
+    analysis.message_analysis && typeof analysis.message_analysis === 'object'
+      ? analysis.message_analysis
+      : {};
+  const operator =
+    analysis.operator_involvement && typeof analysis.operator_involvement === 'object'
+      ? analysis.operator_involvement
+      : {};
+
+  const rawFlaggedMessages = Array.isArray(messageAnalysis.flagged_messages)
+    ? messageAnalysis.flagged_messages
+    : [];
+  const flaggedMessages = rawFlaggedMessages
+    .map(normalizeFlaggedMessage)
+    .filter(Boolean)
+    .slice(0, MAX_TG_FLAGGED_MESSAGES);
+
+  const batchSummaries = (Array.isArray(messageAnalysis.batch_summaries)
+    ? messageAnalysis.batch_summaries
+    : []
+  )
+    .map((entry, index) => ({
+      batch: entry?.batch ?? index + 1,
+      summary: entry?.summary || '',
+    }))
+    .filter((entry) => entry.summary)
+    .slice(0, MAX_TG_BATCH_SUMMARIES);
+
+  const mediaEvidence = (Array.isArray(analysis.media_evidence) ? analysis.media_evidence : [])
+    .map((entry) => ({
+      message_id: entry?.message_id ?? null,
+      finding: entry?.finding || '',
+      localPath: null,
+    }))
+    .filter((entry) => entry.finding)
+    .slice(0, MAX_TG_EVIDENCE_IMAGES);
+
+  const imageFindings = (Array.isArray(analysis.image_findings) ? analysis.image_findings : [])
+    .map((entry) => ({
+      message_id: entry?.message_id ?? null,
+      finding: entry?.finding || '',
+    }))
+    .filter((entry) => entry.finding);
+
+  return {
+    present: Object.keys(analysis).length > 0,
+    threat_score: typeof analysis.threat_score === 'number' ? analysis.threat_score : null,
+    risk_level: analysis.risk_level || null,
+    confidence: typeof analysis.confidence === 'number' ? analysis.confidence : null,
+    verdict: analysis.verdict || null,
+    recommended_action: analysis.recommended_action || null,
+    case_summary: analysis.case_summary || '',
+    analysis: analysis.analysis || '',
+    violations: Array.isArray(analysis.violations) ? analysis.violations.filter(Boolean) : [],
+    threat_types: Array.isArray(analysis.threat_types) ? analysis.threat_types.filter(Boolean) : [],
+    legal_codes: normalizeAiLegalCodes(analysis.legal_codes),
+    media_basis: analysis.media_basis || '',
+    organization: analysis.organization || '',
+    reviewed_at: toIsoOrNull(analysis.reviewed_at),
+    operator_involvement: {
+      present: Boolean(operator.present),
+      how: operator.how || '',
+      handles: Array.isArray(operator.handles) ? operator.handles.filter(Boolean) : [],
+      payment_channels: Array.isArray(operator.payment_channels)
+        ? operator.payment_channels.filter(Boolean)
+        : [],
+      evidence_message_ids: Array.isArray(operator.evidence_message_ids)
+        ? operator.evidence_message_ids
+        : [],
+    },
+    promoted_services: (Array.isArray(analysis.promoted_services) ? analysis.promoted_services : [])
+      .map((item) => normalizePromotedLink(item, 'service'))
+      .filter(Boolean)
+      .slice(0, MAX_TG_PROMOTED_SERVICES),
+    promoted_handles: (Array.isArray(analysis.promoted_handles) ? analysis.promoted_handles : [])
+      .map((item) => normalizePromotedLink(item, 'handle'))
+      .filter(Boolean)
+      .slice(0, MAX_TG_PROMOTED_SERVICES),
+    flagged_actors: (Array.isArray(analysis.flagged_actors) ? analysis.flagged_actors : [])
+      .map(normalizeFlaggedActor)
+      .filter(Boolean),
+    flagged_messages: flaggedMessages,
+    total_flagged_messages: rawFlaggedMessages.length,
+    batch_summaries: batchSummaries,
+    batches: typeof messageAnalysis.batches === 'number' ? messageAnalysis.batches : batchSummaries.length || null,
+    media_evidence: mediaEvidence,
+    image_findings: imageFindings,
+  };
+}
+
+/** Unique Telegram message ids the AI analysis references (flagged + evidence). */
+function collectTelegramGroupFlaggedMessageIds(group) {
+  const ai = normalizeTelegramGroupAiAnalysis(group);
+  const ids = new Set();
+  const add = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) ids.add(value);
+  };
+  for (const message of ai.flagged_messages) add(message.message_id);
+  for (const entry of ai.media_evidence) add(entry.message_id);
+  for (const entry of ai.image_findings) add(entry.message_id);
+  return [...ids];
+}
+
+/**
+ * Image entries to fetch for a normalized group: one thumb per flagged message
+ * that has media, plus one per AI media-evidence finding. Slots are stable so
+ * the renderer can zip local paths back without re-walking the tree.
+ */
+function resolveTelegramGroupImageEntries(normalizedGroup) {
+  const entries = [];
+  const seen = new Set();
+
+  const push = (slot, url) => {
+    if (!slot || !url || seen.has(slot)) return;
+    seen.add(slot);
+    entries.push({ slot, url });
+  };
+
+  for (const message of normalizedGroup?.ai?.flagged_messages || []) {
+    if (message.message_id == null) continue;
+    push(`fm_${message.message_id}`, (message.media_urls || [])[0]);
+  }
+  for (const entry of normalizedGroup?.ai?.media_evidence || []) {
+    if (entry.message_id == null) continue;
+    push(`ev_${entry.message_id}`, (entry.media_urls || [])[0]);
+  }
+
+  return entries;
+}
+
+/**
+ * Normalize Telegram group review fields into the same shape the apps report
+ * model uses. Human `review_details` wins; when absent (AI-only groups) the
+ * fields fall back to the AI dossier. `simple_report_description` is the group
+ * schema alias for the reviewer's case summary.
+ */
+function normalizeTelegramGroupReviewDetails(group) {
+  const list = group?.list || {};
+  const review =
+    group?.review_details && typeof group.review_details === 'object' ? group.review_details : {};
+  const analysis =
+    group?.analysis_results && typeof group.analysis_results === 'object' ? group.analysis_results : {};
+  const reviewThreatTypes = Array.isArray(review.threat_types) ? review.threat_types : [];
+  const listThreatTypes = Array.isArray(list.threat_types) ? list.threat_types : [];
+  const aiThreatTypes = Array.isArray(analysis.threat_types) ? analysis.threat_types : [];
+  const reviewFlags = Array.isArray(review.violation_flags) ? review.violation_flags : [];
+  const listFlags = Array.isArray(list.violation_flags) ? list.violation_flags : [];
+  const aiFlags = Array.isArray(analysis.violations) ? analysis.violations : [];
+  const humanLegalCodes = normalizeLegalCodes(review.legal_codes);
+
+  return {
+    ...review,
+    threat_score:
+      review.threat_score ??
+      analysis.threat_score ??
+      list.review_threat_score ??
+      list.effective_threat_score ??
+      list.ai_threat_score ??
+      analysis.risk_score ??
+      null,
+    risk_rank:
+      review.risk_rank ?? review.risk ?? analysis.risk_level ?? list.risk_rank ?? null,
+    threat_types:
+      reviewThreatTypes.length > 0 ? reviewThreatTypes : listThreatTypes.length > 0 ? listThreatTypes : aiThreatTypes,
+    violation_flags:
+      reviewFlags.length > 0 ? reviewFlags : listFlags.length > 0 ? listFlags : aiFlags,
+    flags: review.flags && typeof review.flags === 'object' ? review.flags : {},
+    legal_codes: humanLegalCodes.length > 0 ? humanLegalCodes : normalizeAiLegalCodes(analysis.legal_codes),
+    reasoning: review.reasoning || analysis.analysis || '',
+    case_summary:
+      review.simple_report_description || review.case_summary || analysis.case_summary || '',
+    verdict: review.verdict || analysis.verdict || null,
+    recommended_action: review.recommended_action || analysis.recommended_action || null,
+    reviewer_comments: review.reviewer_comments || '',
+    confidence: typeof analysis.confidence === 'number' ? analysis.confidence : null,
+    media_basis: analysis.media_basis || '',
+    poi_names: Array.isArray(review.poi_names)
+      ? review.poi_names.map((name) => String(name || '').trim()).filter(Boolean)
+      : [],
+    reviewed_at: review.reviewed_at ?? list.reviewed_at ?? analysis.reviewed_at ?? null,
+  };
+}
+
+/**
+ * Normalize a Telegram_groups document into the stable shape the Telegram group
+ * report layouts expect.
+ *
+ * Aggregate counts always come from the group document. The AI dossier
+ * (`analysis_results`) supplies the review narrative and the flagged-message
+ * list; only the handful of messages the AI references are joined in.
+ *
+ * @param {object} group Raw Mongo Telegram_groups doc
+ * @param {object} [opts]
+ * @param {Array} [opts.updateHistory] Prefetched case_events mapped to update_history
+ * @param {Map<number, object>} [opts.messagesById] Prefetched Telegram_messages view models
+ */
+function normalizeTelegramGroup(group, opts = {}) {
+  const { updateHistory = null, messagesById = null } = opts;
+  const list = group?.list || {};
+  const system = group?.system || {};
+  const workflow = group?.workflow || {};
+  const ingestion = group?.ingestion || {};
+  const backfill =
+    group?.telegram?.backfill && typeof group.telegram.backfill === 'object' ? group.telegram.backfill : {};
+
+  const clientStatus = workflow.client_status || group.client_status || 'open';
+  const processed =
+    Boolean(group.processed) ||
+    Boolean(workflow.alerted_at) ||
+    clientStatus === 'alerted';
+
+  let history;
+  if (Array.isArray(updateHistory)) {
+    history = updateHistory.map((update) => ({
+      ...update,
+      updated_at: toIsoOrNull(update.updated_at),
+    }));
+  } else {
+    history = [];
+  }
+
+  const review = normalizeTelegramGroupReviewDetails(group);
+  const ai = normalizeTelegramGroupAiAnalysis(group);
+  const participantCount =
+    typeof list.participant_count === 'number'
+      ? list.participant_count
+      : typeof group?.participants_count === 'number'
+        ? group.participants_count
+        : null;
+
+  // Attach the joined Telegram message (date / views / media) to each flagged
+  // message and media-evidence entry so the gallery can render Telegram-style.
+  const lookupMessage = (messageId) =>
+    messagesById && messageId != null ? messagesById.get(messageId) || null : null;
+
+  ai.flagged_messages = ai.flagged_messages.map((message) => {
+    const joined = lookupMessage(message.message_id);
+    return {
+      ...message,
+      date: joined?.date || null,
+      views: joined?.views ?? null,
+      text: joined?.text || message.quote || '',
+      media_urls: joined?.media_urls || [],
+      localPath: null,
+    };
+  });
+  ai.media_evidence = ai.media_evidence.map((entry) => {
+    const joined = lookupMessage(entry.message_id);
+    return {
+      ...entry,
+      date: joined?.date || null,
+      views: joined?.views ?? null,
+      media_urls: joined?.media_urls || [],
+    };
+  });
+
+  return {
+    _id: group._id.toString(),
+    platform: group.platform ? String(group.platform).toLowerCase() : 'telegram',
+    chat_id: group.chat_id ?? null,
+    title: group.title || 'Unknown Telegram group',
+    username: group.username || '',
+    username_list: Array.isArray(group.username_list) ? group.username_list.filter(Boolean) : [],
+    type: group.type || '',
+    about: group.about || '',
+    original_url: group.original_url || ingestion.source_url || '',
+    linked_chat_id: group.linked_chat_id ?? null,
+    broadcast: Boolean(group.broadcast),
+    megagroup: Boolean(group.megagroup),
+    members_visible: Boolean(group.members_visible),
+    verified: Boolean(group.verified),
+    restricted: Boolean(group.restricted),
+    scam: Boolean(group.scam),
+    fake: Boolean(group.fake),
+    photo_url: resolveTelegramGroupPhotoUrl(group),
+    participant_count: participantCount,
+    message_count: typeof list.message_count === 'number' ? list.message_count : null,
+    first_seen_at: toIsoOrNull(list.first_seen_at ?? ingestion.ingested_at),
+    last_message_at: toIsoOrNull(list.last_message_at ?? group?.telegram?.last_message_at),
+    created_at: toIsoOrNull(system.created_at ?? ingestion.ingested_at),
+    sourced_at: toIsoOrNull(list.first_seen_at ?? ingestion.ingested_at),
+    updated_at: toIsoOrNull(system.updated_at),
+    reviewed_at: toIsoOrNull(review.reviewed_at),
+    update_history: history,
+    client_status: clientStatus,
+    processed,
+    content_reviewed_by: group.content_reviewed_by || null,
+    review,
+    ai,
+    flagged_message_count: ai.flagged_messages.length,
+    ingestion: {
+      type: ingestion.type || 'telegram',
+      source_url: ingestion.source_url || group.original_url || '',
+      ingested_at: toIsoOrNull(ingestion.ingested_at),
+    },
+    telegram_backfill: {
+      status: backfill.status || '',
+      lookback: backfill.lookback || '',
+      messages_seen: typeof backfill.messages_seen === 'number' ? backfill.messages_seen : null,
+      last_error: backfill.last_error || null,
+      started_at: toIsoOrNull(backfill.started_at),
+      finished_at: toIsoOrNull(backfill.finished_at),
+    },
+    workflow: {
+      review_status: workflow.review_status || null,
+      client_status: workflow.client_status || clientStatus,
+      visibility_status: workflow.visibility_status || null,
+      takedown_status: workflow.takedown_status || null,
+      ai_status: workflow.ai_status || null,
+      alerted_at: toIsoOrNull(workflow.alerted_at),
+    },
+    analysis_results:
+      group.analysis_results && typeof group.analysis_results === 'object' ? group.analysis_results : {},
+    client_notes: Array.isArray(group.client_notes) ? group.client_notes : [],
+  };
+}
+
+/** Reviewer signal present on a group (drives the Summary "Reviewed" metric only). */
+function isTelegramGroupReviewed(group) {
+  if (!group) return false;
+  if (String(group?.workflow?.review_status || '').toLowerCase() === 'reviewed') return true;
+  const list = group?.list || {};
+  return Boolean(list.reviewed_at || group?.review_details?.reviewed_at);
+}
+
+/** True when the group carries an AI analysis dossier (`analysis_results`). */
+function hasTelegramGroupAiAnalysis(group) {
+  const analysis = group?.analysis_results;
+  return Boolean(analysis && typeof analysis === 'object' && Object.keys(analysis).length > 0);
+}
+
+/** Threat score from a raw or normalized group; `null` when no signal exists. */
+function telegramGroupThreatScore(group) {
+  const review = group?.review || {};
+  const rawReview = group?.review_details || {};
+  const list = group?.list || {};
+  const analysis = group?.analysis_results || {};
+  const score =
+    review.threat_score ??
+    rawReview.threat_score ??
+    list.review_threat_score ??
+    list.effective_threat_score ??
+    list.ai_threat_score ??
+    analysis.threat_score ??
+    analysis.risk_score ??
+    null;
+  return typeof score === 'number' && Number.isFinite(score) ? score : null;
+}
+
 function adThreatScore(ad) {
   const review = ad?.review_details || {};
   const list = ad?.list || {};
@@ -1156,6 +1628,7 @@ module.exports = {
   normalizeAd,
   normalizeAdProfile,
   normalizeApp,
+  normalizeTelegramGroup,
   normalizeLegalCodes,
   adSourceLinkLabel,
   appSourceLabel,
@@ -1166,6 +1639,11 @@ module.exports = {
   resolveAppThumbUrl,
   resolveAppScreenshotUrls,
   resolveAppEvidenceImageEntries,
+  resolveTelegramGroupPhotoUrl,
+  resolveTelegramMessageImageUrl,
+  normalizeTelegramGroupAiAnalysis,
+  collectTelegramGroupFlaggedMessageIds,
+  resolveTelegramGroupImageEntries,
   isAppImageMedia,
   pickMediaUrl,
   extractHostname,
@@ -1174,7 +1652,10 @@ module.exports = {
   isAdReviewed,
   isAdProfileReviewed,
   isAppReviewed,
+  isTelegramGroupReviewed,
+  hasTelegramGroupAiAnalysis,
   appThreatScore,
+  telegramGroupThreatScore,
   sortAdsForProfileReport,
   sliceAdsForProfileReport,
   groupAdsAndDomainsByProfile,
@@ -1188,6 +1669,11 @@ module.exports = {
   DOMAINS_SUPPORTED_REPORT_TYPES,
   AD_PROFILES_SUPPORTED_REPORT_TYPES,
   APPS_SUPPORTED_REPORT_TYPES,
+  TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES,
+  MAX_TG_FLAGGED_MESSAGES,
+  MAX_TG_EVIDENCE_IMAGES,
+  MAX_TG_BATCH_SUMMARIES,
+  MAX_TG_PROMOTED_SERVICES,
   MAX_PROFILE_REPORT_ADS,
   MAX_APP_SCREENSHOTS,
   MAX_APP_EVIDENCE_IMAGES,

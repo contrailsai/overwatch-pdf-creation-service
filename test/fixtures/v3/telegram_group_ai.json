@@ -1,0 +1,175 @@
+{
+  "_id": "6ac3729d5d4e962a3ab4d8c6",
+  "schema_version": 1,
+  "platform": "telegram",
+  "chat_id": -1001795254586,
+  "title": "FREE OPTION TRADING™",
+  "username": "free_option_trading_nifty_stock",
+  "type": "channel",
+  "about": "Disclaimer: This telegram group is created for educational purposes only. I am not a SEBI registered analyst.",
+  "original_url": "https://t.me/free_option_trading_nifty_stock",
+  "participants_count": 153091,
+  "members_visible": false,
+  "verified": false,
+  "restricted": false,
+  "scam": false,
+  "fake": false,
+  "broadcast": true,
+  "megagroup": false,
+  "linked_chat_id": null,
+  "username_list": ["free_option_trading_nifty_stock"],
+  "photo": {
+    "s3_key": "telegram/groups/-1001795254586/photo.jpg",
+    "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/telegram/groups/-1001795254586/photo.jpg"
+  },
+  "telegram": {
+    "backfill": {
+      "status": "done",
+      "lookback": "60d",
+      "cutoff": "2026-08-06T09:49:17.833Z",
+      "started_at": "2026-10-05T09:49:17.833Z",
+      "finished_at": "2026-10-05T09:50:18.611Z",
+      "messages_seen": 250,
+      "last_error": null
+    },
+    "last_message_id": 286550,
+    "last_message_at": "2026-10-05T09:36:35.000Z"
+  },
+  "workflow": {
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "available",
+    "takedown_status": "none",
+    "alerted_at": null,
+    "ai_status": "completed"
+  },
+  "list": {
+    "ai_threat_score": 90,
+    "review_threat_score": null,
+    "effective_threat_score": 90,
+    "risk_rank": "medium",
+    "threat_types": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "violation_flags": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "message_count": 250,
+    "participant_count": 153091,
+    "last_message_at": "2026-10-05T09:36:35.000Z",
+    "first_seen_at": "2026-10-05T09:49:17.774Z",
+    "reviewed_at": null,
+    "poi_detected": false
+  },
+  "analysis_results": {
+    "verdict": "takedown",
+    "threat_score": 90,
+    "confidence": 1,
+    "violations": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "threat_types": ["UNREGISTERED INVESTMENT ADVICE", "FRAUD"],
+    "risk_level": "High",
+    "recommended_action": "Telegram abuse report + takedown of channel and admin handle",
+    "case_summary": "The operator of the 'FREE OPTION TRADING™' Telegram channel is illegally providing paid investment advice while stating they are not SEBI registered.",
+    "analysis": "The Telegram channel 'FREE OPTION TRADING™' actively promotes and sells paid investment advisory services for NIFTY, BANKNIFTY, FINNIFTY and stock options. The operator explicitly states in the group's 'about' section that they are not a SEBI registered analyst.",
+    "legal_codes": [
+      {
+        "code": "SEBI (IA) Regulations - Reg 3",
+        "description": "The operator is acting as an investment adviser by offering paid trading calls without SEBI registration."
+      },
+      {
+        "code": "BNS - Sec 318",
+        "description": "The operator is dishonestly inducing people to pay for unregistered investment advice."
+      }
+    ],
+    "media_basis": "text_and_12_images",
+    "organization": "sebi",
+    "reviewed_at": "2026-10-08T09:55:20.651755+00:00",
+    "operator_involvement": {
+      "present": true,
+      "how": "The operator directly runs the broadcast channel and directs users to a payment link and a contact handle.",
+      "handles": ["@Option_analyzer2"],
+      "payment_channels": ["https://cosmofeed.com/vig/6476f874a5e1ac0020b734b0"],
+      "evidence_message_ids": [286305, 286309]
+    },
+    "promoted_services": [
+      {
+        "name": "https://cosmofeed.com/vig/6476f874a5e1ac0020b734b0",
+        "service": "paid access to a 'premium group' for investment advice and trade calls",
+        "monetised": true,
+        "price_mentions": ["₹3499", "₹4999"],
+        "evidence_message_ids": [286305]
+      }
+    ],
+    "promoted_handles": [
+      {
+        "handle": "@Option_analyzer2",
+        "type": "telegram_account",
+        "what": ["contact for queries about paid investment advice"],
+        "monetised": true,
+        "message_ids": [286373]
+      }
+    ],
+    "flagged_actors": [
+      {
+        "actor_key": "operator",
+        "username_or_name": "operator",
+        "role": "paid_service_operator",
+        "violations": ["UNREGISTERED INVESTMENT ADVICE"],
+        "why": "The operator directly offers and profits from unregistered investment advice.",
+        "evidence_message_ids": [286305, 286309]
+      }
+    ],
+    "media_evidence": [
+      {
+        "message_id": 286309,
+        "finding": "The image shows a screenshot of a Telegram chat from 'TRADING HOUSE (VIP)' used to promote performance."
+      }
+    ],
+    "image_findings": [
+      {
+        "message_id": 286309,
+        "finding": "The image shows a screenshot of a Telegram chat from 'TRADING HOUSE (VIP)' used to promote performance."
+      }
+    ],
+    "message_analysis": {
+      "batches": 4,
+      "batch_summaries": [
+        {
+          "batch": 1,
+          "summary": "This batch primarily consists of the operator promoting a paid 'premium group' for investment advice and trade calls."
+        },
+        {
+          "batch": 2,
+          "summary": "This batch consists entirely of image-only messages showing trading profits."
+        }
+      ],
+      "flagged_messages": [
+        {
+          "message_id": 286305,
+          "actor_key": "operator",
+          "violations": ["UNREGISTERED INVESTMENT ADVICE"],
+          "severity": "high",
+          "quote": "हमारा पैड ग्रुप ज्वाइन करने का सुनहरा अवसर केवल 3499 ₹ रुपिया में।",
+          "english": "Golden opportunity to join our paid group for only ₹3499.",
+          "finding": "The message offers a paid subscription to a 'premium group' for investment advice."
+        },
+        {
+          "message_id": 286309,
+          "actor_key": "operator",
+          "violations": ["UNREGISTERED INVESTMENT ADVICE"],
+          "severity": "medium",
+          "quote": "LOOK LOOK OUR PREMIUM GROUP PERFORMANCE. TOTAL TRADE - 13, TARGET - 11.",
+          "english": "Look at our premium group performance. Total trades - 13, target - 11.",
+          "finding": "The message promotes a paid 'premium group' by showcasing performance."
+        }
+      ]
+    }
+  },
+  "client_notes": [],
+  "ingestion": {
+    "type": "telegram",
+    "source_url": "https://t.me/free_option_trading_nifty_stock",
+    "ingested_at": "2026-10-05T09:49:17.774Z"
+  },
+  "system": {
+    "created_at": "2026-10-05T09:49:17.774Z",
+    "updated_at": "2026-10-08T09:55:20.652Z",
+    "s3_stored": true
+  }
+}

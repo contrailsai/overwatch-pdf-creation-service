@@ -28,6 +28,8 @@ Two layers decide the outcome:
 | `ad_profiles` | `Summary` | **layout switch** — see below | ❌ PDF only |
 | `apps` | `Summary` | `AppsSummaryReportDocument` | ❌ PDF only |
 | `apps` | `Detailed` | `AppsDetailedReportDocument` | ❌ PDF only |
+| `telegram_groups` | `Summary` | `TelegramGroupsSummaryReportDocument` | ❌ PDF only |
+| `telegram_groups` | `Detailed` | `TelegramGroupsDetailedReportDocument` | ❌ PDF only |
 
 ### Ad-profile layout switch
 
@@ -63,8 +65,8 @@ So `reportType: "Summary"` with one `adProfileIds` entry is a different document
 | --- | --- | --- |
 | `projectId` | ✅ string | Branding + telemetry attribute; part of the hash |
 | `database_name` | ✅ string | Mongo database to read |
-| `entityType` | optional | `posts` (default), `ads`, `domains`, `ad_profiles`, `apps`. Singular forms (`ad`, `domain`, `post`, `app`) are normalized. Inferred from `adProfileIds` / `domainIds` / `adIds` / `appIds` when omitted |
-| entity IDs | ✅ non-empty array | `postIds` for posts; `adIds` / `domainIds` / `adProfileIds` / `appIds` for the others. `postIds` also works as a fallback for any entity type. Must be 24-char Mongo ObjectId strings |
+| `entityType` | optional | `posts` (default), `ads`, `domains`, `ad_profiles`, `apps`, `telegram_groups`. Singular forms (`ad`, `domain`, `post`, `app`, `telegram_group`) are normalized. Inferred from `adProfileIds` / `domainIds` / `adIds` / `appIds` / `telegramGroupIds` when omitted |
+| entity IDs | ✅ non-empty array | `postIds` for posts; `adIds` / `domainIds` / `adProfileIds` / `appIds` / `telegramGroupIds` for the others. `postIds` also works as a fallback for any entity type. Must be 24-char Mongo ObjectId strings |
 | `reportType` | ✅ | `Detailed \| Single \| Profile \| SimpleProfile \| SimpleCase \| Summary` |
 | `reportFormat` | optional | `pdf` (default) or `docx`. Lowercased before comparison |
 | `project` | recommended | Object **or** array-of-one row. A stringified `project_details` is `JSON.parse`d. Using an array is legacy but tolerated |
@@ -81,6 +83,7 @@ So `reportType: "Summary"` with one `adProfileIds` entry is a different document
 | `domains` | `domainIds` |
 | `ad_profiles` | `adProfileIds` |
 | `apps` | `appIds` |
+| `telegram_groups` | `telegramGroupIds` |
 
 ---
 
@@ -95,7 +98,8 @@ Enforced by `validatePayload`; a failure throws `INVALID_PAYLOAD` and the SQS re
 - `docx` is only allowed for `entityType: posts`, and only for `Detailed | Single | Profile | SimpleProfile | SimpleCase` — **not** `Summary`.
 - `SimpleProfile` and `SimpleCase` **must** be `docx`; a `pdf` request is rejected.
 - `ads`, `domains`, `ad_profiles`, and `apps` are **PDF only** — any `docx` request is rejected.
-- Ads and domains support `Summary | Detailed`; ad profiles support `Summary` only; apps support `Summary | Detailed`.
+- `telegram_groups` is **PDF only**.
+- Ads and domains support `Summary | Detailed`; ad profiles support `Summary` only; apps support `Summary | Detailed`; Telegram groups support `Summary | Detailed`.
 
 The constants live in `src/core-utils.js`:
 
@@ -108,6 +112,7 @@ ADS_SUPPORTED_REPORT_TYPES        = Summary, Detailed
 DOMAINS_SUPPORTED_REPORT_TYPES    = Summary, Detailed
 AD_PROFILES_SUPPORTED_REPORT_TYPES = Summary
 APPS_SUPPORTED_REPORT_TYPES       = Summary, Detailed
+TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES = Summary, Detailed
 MAX_PROFILE_REPORT_ADS            = 20
 MAX_APP_SCREENSHOTS               = 6
 MAX_APP_EVIDENCE_IMAGES           = 10
@@ -126,6 +131,7 @@ MAX_APP_PERMISSION_ITEMS          = 10
 | `domains` | `Domains` (capital D) | — | `isDomainReviewed` — unreviewed domains are dropped; if none remain the job **fails** |
 | `ad_profiles` | `Ad_profiles` (capital A) | `Ads` via `ad_profile_id` **and** `list.reviewed_at != null`; `Domains` via the ads' `linked_domain_ids` | `isAdProfileReviewed` on profiles, `isAdReviewed` on ads, `isDomainReviewed` on domains. If no reviewed profile remains the job **fails** |
 | `apps` | `Apps` (capital A) | `App_developers` via `developer_id`; `case_events` where `entity_type` ∈ `['app','apps']` | none — unreviewed apps render with an "Unreviewed" badge. If none of the requested IDs exist the job **fails** |
+| `telegram_groups` | `Telegram_groups` (capital `T`, lowercase `g`) | `case_events` where `entity_type: 'telegram_group'`; `Telegram_messages` for the **flagged message ids only** referenced by `analysis_results` | none — unreviewed groups render with an "Unreviewed" badge. If none of the requested IDs exist the job **fails**. The AI dossier (`analysis_results`) supplies the review narrative and flagged messages; the whole message history is never read |
 
 Request order is always preserved: rows are re-ordered to match the incoming ID array (`orderPostsByRequestedIds`), and missing IDs are silently dropped.
 
@@ -146,6 +152,7 @@ All branches download from S3 to a local cache, resize to **800 px wide max**, a
 | `domains` | `/tmp/images` | Lander screenshot per domain | `Detailed` only |
 | `ad_profiles` | `/tmp/images` | One thumb per ad, one lander per linked domain, one profile picture per profile | Always on — evidence hero (portrait ≈9:16) + gallery slices for every domain |
 | `apps` | `/tmp/images` | `Summary`: one icon thumb per app (`icon` → `header` → first screenshot). `Detailed`: up to 6 screenshots and up to 10 evidence images (4 per section). Header banners are never fetched. Videos (`.mp4`, …) and non-image media are skipped before download | — |
+| `telegram_groups` | `/tmp/images` | One `photo.s3_url` group picture per group (`<id>_group_photo.jpg`), plus one thumbnail per flagged message (`fm_<messageId>`) and per AI media-evidence finding (`ev_<messageId>`). Missing/S3-failed images render a placeholder | — |
 
 `IMAGE_CACHE_DIR` overrides the cache directory (default `/tmp/images`). Lambda only guarantees `/tmp`, so that is intentional.
 
@@ -170,8 +177,10 @@ All branches download from S3 to a local cache, resize to **800 px wide max**, a
 | `No reviewed domains found for the requested IDs` | All `domainIds` failed `isDomainReviewed` |
 | `No reviewed ad profiles found for the requested IDs` | All `adProfileIds` failed `isAdProfileReviewed` |
 | `No apps found for the requested IDs` | Every requested `appIds` entry was missing from `Apps` |
+| `No Telegram groups found for the requested IDs` | Every requested `telegramGroupIds` entry was missing from `Telegram_groups` |
 | `Domain PDF report type 'X' is not supported` | `reportType` outside `Summary \| Detailed` reached the renderer |
 | `App PDF report type 'X' is not supported` | `reportType` outside `Summary \| Detailed` reached the apps renderer |
+| `Telegram group PDF report type 'X' is not supported` | `reportType` outside `Summary \| Detailed` reached the Telegram group renderer |
 | `PDF report type 'X' is not supported` | Posts `reportType` not handled by the renderer |
 | `DOCX report type 'X' is not supported` | DOCX `reportType` not handled by the generator |
 | Supabase row never reaches `[100%] Complete` | See [connectivity](./connectivity.md) — missing `SUPABASE_URL`/`SUPABASE_KEY` makes status updates silent no-ops |

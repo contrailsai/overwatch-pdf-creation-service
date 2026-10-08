@@ -12,11 +12,17 @@ const {
   normalizeAd,
   normalizeAdProfile,
   normalizeApp,
+  normalizeTelegramGroup,
   resolvePostMediaUrl,
   resolveAdMediaUrl,
   resolveAdCardMediaUrls,
   resolveAppEvidenceImageEntries,
+  resolveTelegramGroupPhotoUrl,
+  resolveTelegramMessageImageUrl,
+  collectTelegramGroupFlaggedMessageIds,
+  resolveTelegramGroupImageEntries,
   mapCaseEventToUpdateHistory,
+  toIsoOrNull,
   validatePayload,
   orderPostsByRequestedIds,
   isAdReviewed,
@@ -49,6 +55,8 @@ const { AdsProfilesSummaryReportDocument } = require('./components/AdsProfilesSu
 const { AdsProfileReportDocument } = require('./components/AdsProfileReport');
 const { AppsSummaryReportDocument } = require('./components/AppsSummaryReport');
 const { AppsDetailedReportDocument } = require('./components/AppsDetailedReport');
+const { TelegramGroupsSummaryReportDocument } = require('./components/TelegramGroupsSummaryReport');
+const { TelegramGroupsDetailedReportDocument } = require('./components/TelegramGroupsDetailedReport');
 const { generateSingleCaseDocxBuffer } = require('./components/docx/SingleCaseReportDocx');
 const { generateDetailedCasesDocxBuffer } = require('./components/docx/DetailedCasesReportDocx');
 const { generateProfileDocxBuffer } = require('./components/docx/ProfileReportDocx');
@@ -487,6 +495,7 @@ async function runReportJob(client, payload, options = {}) {
   const isDomains = entityType === 'domains';
   const isAdProfiles = entityType === 'ad_profiles';
   const isApps = entityType === 'apps';
+  const isTelegramGroups = entityType === 'telegram_groups';
 
   // Normalize profile before image fetch so v3 enrichment.profile_pic_s3 maps to metadata.profile_pic
   const normalizedProfile = payload.profile ? normalizeProfile(payload.profile) : null;
@@ -923,6 +932,169 @@ async function runReportJob(client, payload, options = {}) {
             );
           }
           throw new Error(`App PDF report type '${reportType}' is not supported`);
+        },
+      );
+
+      await updateReportStatus(reportHash, '[80%] Uploading to Storage');
+
+      const persisted = await persistWatermarkedPdf(pdfStream, { persist, localOutputDir, reportHash });
+      storageUrl = persisted.storageUrl;
+      if (persisted.localPath) localPath = persisted.localPath;
+    } else if (isTelegramGroups) {
+      await updateReportStatus(reportHash, '[10%] Fetching Telegram groups from DB');
+
+      const objectIds = buildObjectIds(entityIds);
+      const groupsFromDb = await db.collection('Telegram_groups').find({ _id: { $in: objectIds } }).toArray();
+      const orderedGroups = orderPostsByRequestedIds(entityIds, groupsFromDb);
+
+      if (orderedGroups.length === 0) {
+        throw new Error('No Telegram groups found for the requested IDs');
+      }
+
+      // Only the messages the AI flagged (plus its media evidence) are read —
+      // never the whole message history.
+      const caseEvents = await db
+        .collection('case_events')
+        .find({
+          entity_type: 'telegram_group',
+          entity_id: { $in: objectIds },
+        })
+        .sort({ occurred_at: 1 })
+        .toArray();
+      const eventsByGroupId = groupCaseEventsByEntityId(caseEvents);
+
+      const flaggedIdsByGroupId = new Map();
+      const allFlaggedIds = new Set();
+      for (const group of orderedGroups) {
+        const ids = collectTelegramGroupFlaggedMessageIds(group);
+        flaggedIdsByGroupId.set(group._id.toString(), ids);
+        for (const id of ids) allFlaggedIds.add(id);
+      }
+
+      const messagesById = new Map();
+      if (allFlaggedIds.size > 0) {
+        const messageDocs = await db
+          .collection('Telegram_messages')
+          .find({ group_id: { $in: objectIds }, message_id: { $in: [...allFlaggedIds] } })
+          .toArray();
+        for (const message of messageDocs) {
+          if (typeof message.message_id !== 'number') continue;
+          messagesById.set(message.message_id, {
+            message_id: message.message_id,
+            date: toIsoOrNull(message.date),
+            views: typeof message.views === 'number' ? message.views : null,
+            text: message.text || '',
+            media_urls: (Array.isArray(message.media) ? message.media : [])
+              .map(resolveTelegramMessageImageUrl)
+              .filter(Boolean)
+              .slice(0, 2),
+          });
+        }
+      }
+
+      const groups = orderedGroups.map((group) =>
+        normalizeTelegramGroup(group, {
+          updateHistory: eventsByGroupId.get(group._id.toString()) || [],
+          messagesById,
+        }),
+      );
+
+      await updateReportStatus(reportHash, '[30%] Processing Images');
+
+      const compressedImages = await withSpan(
+        'process-telegram-group-images',
+        { 'images.count': groups.length, 'entity.type': 'telegram_groups' },
+        async () => {
+          const paths = new Array(groups.length);
+          const concurrency = 10;
+          for (let i = 0; i < groups.length; i += concurrency) {
+            const chunk = groups.slice(i, i + concurrency);
+            const chunkPaths = await Promise.all(
+              chunk.map((group) => processImage(resolveTelegramGroupPhotoUrl(group), group._id, 'group_photo')),
+            );
+            for (let j = 0; j < chunkPaths.length; j += 1) {
+              paths[i + j] = chunkPaths[j];
+            }
+          }
+          return paths;
+        },
+      );
+
+      // Flagged-message and media-evidence images, keyed by stable slot.
+      const messageImagePaths = await withSpan(
+        'process-telegram-message-images',
+        { 'entity.type': 'telegram_groups' },
+        async () => {
+          const maps = groups.map((group) => {
+            const entries = resolveTelegramGroupImageEntries(group);
+            return { group, entries, map: new Map() };
+          });
+          const jobs = [];
+          for (const item of maps) {
+            for (const entry of item.entries) {
+              jobs.push({ item, entry });
+            }
+          }
+          const concurrency = 10;
+          for (let i = 0; i < jobs.length; i += concurrency) {
+            await Promise.all(
+              jobs.slice(i, i + concurrency).map(async ({ item, entry }) => {
+                const localPath = await processImage(
+                  entry.url,
+                  `${item.group._id}_${entry.slot}`,
+                  'tg_msg',
+                );
+                if (localPath) item.map.set(entry.slot, localPath);
+              }),
+            );
+          }
+          return new Map(maps.map((item) => [item.group._id, item.map]));
+        },
+      );
+
+      const groupsForReport = groups.map((group, index) => {
+        const imageMap = messageImagePaths.get(group._id) || new Map();
+        const ai = {
+          ...group.ai,
+          flagged_messages: group.ai.flagged_messages.map((message) => ({
+            ...message,
+            localPath: imageMap.get(`fm_${message.message_id}`) || null,
+          })),
+          media_evidence: group.ai.media_evidence.map((entry) => ({
+            ...entry,
+            localPath: imageMap.get(`ev_${entry.message_id}`) || null,
+          })),
+        };
+        return {
+          ...group,
+          ai,
+          compressedImage: compressedImages[index] || null,
+        };
+      });
+
+      await updateReportStatus(reportHash, '[60%] Generating PDF report');
+
+      const pdfStream = await withSpan(
+        'render-pdf',
+        { 'report.type': reportType, 'telegram_group.count': groups.length, 'entity.type': 'telegram_groups' },
+        async () => {
+          if (reportType === 'Summary') {
+            return await renderToStream(
+              React.createElement(TelegramGroupsSummaryReportDocument, {
+                groups: groupsForReport,
+                project,
+              }),
+            );
+          }
+          if (reportType === 'Detailed') {
+            return await renderToStream(
+              React.createElement(TelegramGroupsDetailedReportDocument, {
+                groups: groupsForReport,
+                project,
+              }),
+            );
+          }
+          throw new Error(`Telegram group PDF report type '${reportType}' is not supported`);
         },
       );
 

@@ -132,14 +132,16 @@ npm run test:unit     # test/unit/**
 npm run test:integration
 ```
 
-The runner is the built-in **`node --test`** — there is no Jest/Mocha. Current suite: **77 tests, 0 failures**, ~2 s (**61 unit + 16 integration**).
+The runner is the built-in **`node --test`** — there is no Jest/Mocha. Current suite: **135 tests, 0 failures**, ~2.5 s (**115 unit + 21 integration**).
 
 | Suite | File | Covers |
 | --- | --- | --- |
-| Unit | `test/unit/core-utils.test.js` | `validatePayload` accept/reject per entity type and format, hash determinism and the `-ads` / `-domains` / `-ad_profiles` suffixes, `normalizePost` / `normalizeAd` / `normalizeAdProfile` mapping, ad sorting and the 20-ad cap, `resolveAdMediaUrl` / `resolveAdCardMediaUrls` fallbacks, POI and source passthrough |
+| Unit | `test/unit/core-utils.test.js` | `validatePayload` accept/reject per entity type and format, hash determinism and the `-ads` / `-domains` / `-ad_profiles` / `-apps` / `-telegram_groups` suffixes, `normalizePost` / `normalizeAd` / `normalizeAdProfile` / `normalizeApp` / `normalizeTelegramGroup` mapping, ad sorting and the 20-ad cap, `resolveAdMediaUrl` / `resolveAdCardMediaUrls` fallbacks, POI and source passthrough |
+| Unit | `test/unit/telegram-group-pdf-shared.test.js` | Group risk tiers, `collectGroupViolations` (project labels, PascalCase/hyphenated flags, threat types), group type/audience/message labels, severity/confidence/flagged-message helpers, `buildGroupReviewModel` and legal-code backfill |
 | Unit | `test/unit/domain-display.test.js` | Lander resolution and fallbacks, `domainHasCloaking`, screenshot slice plans and extract boxes, variant-key filtering, page-content selection |
+| Unit | `test/unit/file-permissions.test.js` | Regression guard for INC-2026-10-06-01 — every build-context file is group/other readable |
 | Integration | `test/integration/report-generation.test.js` | One real PDF stream (Summary) and one real DOCX buffer (Single) — asserts the `%PDF` and `PK` signatures |
-| Integration | `test/integration/report-layouts.test.js` | Every renderer: Detailed/Single/Profile/Summary PDF, Ads Summary/Detailed PDF, Domains Summary/Detailed PDF (incl. the `posts` prop alias), Ads Profiles Summary + single dossier, and all five DOCX generators |
+| Integration | `test/integration/report-layouts.test.js` | Every renderer: Detailed/Single/Profile/Summary PDF, Ads Summary/Detailed PDF, Domains Summary/Detailed PDF (incl. the `posts` prop alias), Ads Profiles Summary + single dossier, Apps Summary/Detailed, Telegram Groups Summary/Detailed, and all five DOCX generators |
 
 Fixtures live in `test/integration/smoke-fixtures.js`:
 
@@ -151,9 +153,10 @@ Fixtures live in `test/integration/smoke-fixtures.js`:
 | `makeNormalizedAd(overrides)` | Ad with a 2-card DPA, `shown_hostname: amazon.in` vs `card_hostnames: ['ilnkarip.com']`, `destination_mismatch: true` |
 | `makeNormalizedDomain(overrides)` | Domain with a `cloak_probe` (bare + a scam variant) and `reportLander` resolved |
 | `makeNormalizedAdProfile(overrides)` | Ad profile with SEBI-style risk, violations, legal codes, verdict |
+| `makeNormalizedTelegramGroup(overrides)` | Telegram group with identity, counts, an `ai` dossier (flagged messages, operator, promoted links, evidence) and backfill metadata |
 | `makeAdProfileReportGroup(overrides)` | The full `{ profile, ads, displayAds, domains, compressed* }` group a renderer expects |
 
-Raw Mongo-shaped fixtures for the unit tests are under `test/fixtures/v3/`: `ad.json`, `case_event.json`, `post.json`, `profile_tinytoontunes.json`.
+Raw Mongo-shaped fixtures for the unit tests are under `test/fixtures/v3/`: `ad.json`, `app.json`, `app_developer.json`, `case_event.json`, `post.json`, `profile_tinytoontunes.json`, `telegram_group.json`, `telegram_group_ai.json`.
 
 **The tests never touch the network** — no Mongo, no S3, no Supabase. They render with `compressedImages: [null, …]`, so they validate layout and signature, not pixel output. They will not catch a wrong image, only a crash or a broken document.
 
