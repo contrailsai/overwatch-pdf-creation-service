@@ -922,6 +922,7 @@ function normalizeApp(app, opts = {}) {
     updated_at: toIsoOrNull(system.updated_at),
     reviewed_at: toIsoOrNull(review.reviewed_at ?? workflow.reviewed_at ?? app.reviewed_at),
     assessment_reviewed: isAppReviewed(app),
+    alerted_at: toIsoOrNull(workflow.alerted_at ?? app.alerted_at),
     update_history: history,
     client_status: clientStatus,
     processed,

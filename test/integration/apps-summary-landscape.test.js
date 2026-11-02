@@ -50,7 +50,7 @@ test('report job delivers a watermarked landscape PDF locally', async () => {
   try { const result = await runReportJob(client, payload, { persist: 'local', localOutputDir: dir }); assert.equal(result.format, 'pdf'); assert.match(result.localPath, /\.pdf$/); assert.match(result.storageUrl, /^local:\/\/.*\.pdf$/); const doc = await PDFDocument.load(fs.readFileSync(result.localPath)); assert.equal(doc.getPageCount(), 6); assert.equal(doc.getPage(0).getSize().width, 960); assert.ok(doc.getPage(0).node.Resources().lookup(PDFName.of('XObject'))); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('landscape app page embeds prepared evidence with its source label', async () => {
+test('landscape app page embeds evidence without filename captions', async () => {
   const sharp = require('sharp');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apps-image-'));
   try {
@@ -64,7 +64,23 @@ test('landscape app page embeds prepared evidence with its source label', async 
     const file = path.join(dir, 'image-report.pdf');
     fs.writeFileSync(file, pdf);
     const text = execFileSync(process.execPath, [path.join(__dirname, '../../scripts/extract-pdf-text.js'), file], { encoding: 'utf8' });
-    assert.match(text, /payment-proof\.png/);
+    assert.doesNotMatch(text, /payment-proof\.png/);
+    assert.match(text, /PAYMENT PORTAL \/ GATEWAY/);
+    assert.match(text, /TRADE INDIAN SECURITIES/);
     assert.match(text, /No supporting image recorded/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('summary uses alert status, lists all signals and developer details, and omits empty unclassified risk', async () => {
+  const app = makeNormalizedApp({ _id: 'alerted', title: 'Alerted App', client_status: 'alerted', alerted_at: '2026-10-14T00:00:00.000Z', developer_id: 'dev', developer: { name: 'Publisher', legal_name: 'Publisher Limited', email: 'test@example.com', website: 'https://example.com', phone: '12345' }, review: { risk_rank: 'high', threat_types: ['Reviewer threat'], legal_codes: [{ code: 'Reviewer law' }], case_summary: 'Case narrative', field_sources: { violations: 'review', legal_codes: 'review', summary: 'review' } }, analysis_results: { threat_types: ['AI threat'], legal_codes: [{ code: 'AI law' }] } });
+  const pdf = await buffer(await renderToStream(React.createElement(AppsSummaryReportDocument, { apps: [app], project: makeProject() })));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apps-alert-'));
+  try {
+    const file = path.join(dir, 'alert.pdf'); fs.writeFileSync(file, pdf);
+    const text = execFileSync(process.execPath, [path.join(__dirname, '../../scripts/extract-pdf-text.js'), file], { encoding: 'utf8' }).toLowerCase().replace(/\s+/g, ' ');
+    for (const expected of ['alerted', 'alert date: 2026-10-14', 'reviewer threat', 'ai threat', 'reviewer law', 'ai law', 'publisher limited', 'test@example.com', 'open play store listing']) assert.ok(text.includes(expected), expected);
+    assert.ok(!/\bunreviewed\b|\breviewed\b/.test(text));
+    assert.doesNotMatch(text.split('===== page 2 =====')[0], /alerted/);
+    assert.ok(!text.includes('not classifed'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
