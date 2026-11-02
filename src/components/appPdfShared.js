@@ -368,27 +368,16 @@ export function buildAppReviewModel(app, project) {
   const reasoning = String(review.reasoning ?? '').trim();
   const reviewerComments = String(review.reviewer_comments || '').trim();
   const verdictLabel = formatVerdictLabel(
-    review.recommended_action ?? review.verdict,
+    review.field_sources?.recommended_action === 'review' ? review.recommended_action : (review.recommended_action ?? review.verdict),
   );
   const violations = collectAppViolations(app, project);
-  const projectCodes = resolveProjectLegalCodes(project);
 
   const legalCodes = (Array.isArray(review.legal_codes) ? review.legal_codes : [])
     .map((item) => {
       if (typeof item === 'string') return { code: item, reasoning: '' };
       return { code: item?.code || item?.name || '', reasoning: item?.reasoning || '' };
     })
-    .filter((item) => item.code)
-    .map((item) => {
-      if (item.reasoning || Object.prototype.hasOwnProperty.call(review, 'legal_codes')) return item;
-      const match = projectCodes.find(
-        (projectCode) =>
-          projectCode.name === item.code ||
-          projectCode.codeName === item.code ||
-          projectCode.name === String(item.code).toUpperCase(),
-      );
-      return { ...item, reasoning: match?.description || '' };
-    });
+    .filter((item) => item.code);
 
   return {
     risk,
@@ -514,7 +503,7 @@ export function buildAppAnalysisModel(app, project) {
 
   return {
     hasAnalysis: Boolean(
-      detailedReasoning ||
+      detailedReasoning || analysis.analysis || analysis.reasoning || analysis.case_summary || analysis.recommended_action || (analysis.threat_types || []).length || (analysis.legal_codes || []).length ||
         reviewerComments ||
         threatTypes.length ||
         findings.length ||
@@ -523,6 +512,11 @@ export function buildAppAnalysisModel(app, project) {
         takedownTargets.length,
     ),
     detailedReasoning,
+    aiSummary: String(analysis.case_summary || '').trim(),
+    aiReasoning: String(analysis.analysis || analysis.reasoning || '').trim(),
+    aiThreatTypes: Array.isArray(analysis.threat_types) ? analysis.threat_types : (Array.isArray(analysis.violations) ? analysis.violations : []),
+    aiLegalCodes: Array.isArray(analysis.legal_codes) ? analysis.legal_codes : [],
+    aiRecommendedAction: String(analysis.recommended_action || '').trim(),
     reasoningSections: parseReasoning(detailedReasoning),
     reviewerComments,
     threatTypes,

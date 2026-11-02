@@ -392,9 +392,11 @@ const AppPublisherCard = ({ app, review }) => {
  * (legal findings, reviewer comments, detailed reasoning) live in the
  * "AI Analysis & Evidence" section instead of bloating the first page.
  */
+const provenanceLabel = (source) => ({ review: 'Reviewer', analysis: 'AI analysis', record: 'Recorded', unknown: 'Source unavailable' })[source] || 'Source unavailable';
+
 const CaseSummaryCard = ({ review, summary }) => (
   <View style={styles.card}>
-    <Text style={styles.cardLabel}>Case Summary</Text>
+    <Text style={styles.cardLabel}>Case Summary · {provenanceLabel(review.sources.summary)}</Text>
 
     {review.caseSummary ? (
       <Text style={styles.caseSummaryText}>{processText(review.caseSummary, 520, 6)}</Text>
@@ -406,7 +408,7 @@ const CaseSummaryCard = ({ review, summary }) => (
 
     {review.threatTypes.length > 0 ? (
       <View style={{ marginTop: 9 }}>
-        <Text style={styles.subLabel}>Violations</Text>
+        <Text style={styles.subLabel}>Violations · {provenanceLabel(review.sources.violations)}</Text>
         <View style={styles.pillRow}>
           {review.threatTypes.slice(0, MAX_HOOK_VIOLATIONS).map((violation) => (
             <View key={violation.name} style={styles.pill}>
@@ -420,7 +422,7 @@ const CaseSummaryCard = ({ review, summary }) => (
 
     {review.legalFindings.length > 0 ? (
       <View style={{ marginTop: 9 }}>
-        <Text style={styles.subLabel}>Legal Violations</Text>
+        <Text style={styles.subLabel}>Legal Violations · {provenanceLabel(review.sources.legal_codes)}</Text>
         {review.legalFindings.slice(0, MAX_HOOK_LEGAL_CODES).map((item, index) => (
           <View key={index} style={styles.legalShell}>
             <View style={styles.legalAccent} />
@@ -440,8 +442,9 @@ const CaseSummaryCard = ({ review, summary }) => (
       </View>
     ) : null}
 
+    {review.verdictLabel ? <View style={{ marginTop: 6 }}><Text style={styles.subLabel}>Recommended Action · {provenanceLabel(review.sources.recommended_action)}</Text><Text style={styles.bodyText}>{review.verdictLabel}</Text></View> : review.sources.recommended_action === 'review' ? <Text style={styles.noteText}>Reviewer recommended action: not recorded.</Text> : null}
     <Text style={styles.noteText}>{summary ? 'Detailed export contains the full recorded review.' : 'Full case summary and legal basis: assessment and reviewed basis.'}</Text>
-    {!review.hasSignal && !review.caseSummary ? (
+    {!review.hasSignal && !review.caseSummary && !review.threatTypes.length && !review.legalFindings.length ? (
       <Text style={[styles.softText, { marginTop: 6 }]}>
         Not yet reviewed. No threat score, violations or legal findings are attached to this app yet.
       </Text>
@@ -457,7 +460,7 @@ const ProofCard = ({ card, summary, caseNumber }) => {
   const missingMedia = source?.media?.[0];
   return (
     <View style={styles.proofCard}>
-      <Text style={styles.cardLabel}>{securities ? 'Buy, Sell & Trade Indian Securities' : 'Payment Portal / Gateway'}</Text>
+      <Text style={styles.cardLabel}>{securities ? 'Indian securities activity' : 'Payment request'}</Text>
       {selected.length ? <View style={{ flexDirection: 'row', gap: 4 }}>
         {selected.map((image, index) => <Image key={image.slot || index} style={[styles.proofImage, { width: selected.length > 1 ? '49%' : '100%', height: 165 }]} src={image.localPath} />)}
       </View> : (
@@ -465,7 +468,7 @@ const ProofCard = ({ card, summary, caseNumber }) => {
           <Text style={styles.softText}>No prepared operational screenshot available{missingMedia?.filename ? `: ${missingMedia.filename}` : '.'}</Text>
         </View>
       )}
-      <Text style={[styles.proofCaption, { fontWeight: 700, fontSize: 8.5 }]}>{securities ? 'This app allows buying, selling and trading of Indian stocks and securities.' : 'This app offers trading in Indian securities and collects payments from users without being registered with SEBI.'}</Text>
+      <Text style={[styles.proofCaption, { fontWeight: 700, fontSize: 8.5 }]}>{source?.description || 'No description recorded for this evidence category.'}</Text>
       <Text style={styles.noteText}>{source?.title || 'No matching evidence section recorded.'}</Text>
       {selected.length ? <Text style={styles.noteText}>{selected.length} of {available.length} prepared images: {selected.map((image) => image.filename || image.label || 'image').join(', ')}</Text> : null}
       <Text style={styles.noteText}>Category based on source label; capture alone does not establish execution.</Text>
@@ -487,7 +490,7 @@ export const AppCaseOverviewPage = ({ app, caseNumber, project, summary = false 
       </View>
       <View style={styles.columns}>
         <View style={styles.leftCol}><CaseSummaryCard review={review} summary={summary} />
-          {!summary && (analysis.hasAnalysis || review.hasSignal || review.caseSummary || review.legalFindings.length) ? <Link src={`#case-${caseNumber}-assessment`} style={styles.kvLink}>Assessment and reviewed basis</Link> : null}
+          {!summary && (analysis.hasAnalysis || review.hasSignal || review.caseSummary || review.legalFindings.length || Object.values(review.sources).includes('review')) ? <Link src={`#case-${caseNumber}-assessment`} style={styles.kvLink}>Assessment and reviewed basis</Link> : null}
         </View>
         <View style={styles.rightCol}><AppPublisherCard app={app} review={review} /></View>
       </View>
@@ -729,7 +732,7 @@ const TakedownTargetsCard = ({ targets }) => {
 const AnalysisPage = ({ app, caseNumber, project }) => {
   const analysis = buildAppAnalysisModel(app, project);
   const review = buildAppReviewModel(app, project);
-  if (!analysis.hasAnalysis && !review.hasSignal && !review.caseSummary && !review.legalFindings.length) return null;
+  if (!analysis.hasAnalysis && !review.hasSignal && !review.caseSummary && !review.legalFindings.length && !Object.values(review.sources).includes('review')) return null;
 
   const reviewedAt = app.reviewed_at ? formatDateTime(app.reviewed_at) : '';
 
@@ -748,11 +751,11 @@ const AnalysisPage = ({ app, caseNumber, project }) => {
       </View>
 
       {review.caseSummary ? <View style={styles.card}>
-        <Text style={styles.cardLabel}>Case Summary</Text>
+        <Text style={styles.cardLabel}>Case Summary · {provenanceLabel(review.sources.summary)}</Text>
         <Text style={styles.bodyText}>{review.caseSummary}</Text>
       </View> : null}
       {analysis.threatTypes.length ? <View style={styles.card}>
-        <Text style={styles.cardLabel}>Violations</Text>
+        <Text style={styles.cardLabel}>Violations · {provenanceLabel(review.sources.violations)}</Text>
         <View style={styles.pillRow}>
           {analysis.threatTypes.map((violation) => <View key={violation.name} style={styles.pill}>
             <Text style={styles.pillText}>{violation.name}</Text>
@@ -760,7 +763,7 @@ const AnalysisPage = ({ app, caseNumber, project }) => {
         </View>
       </View> : null}
       {review.legalFindings.length ? <View style={styles.card}>
-        <Text style={styles.cardLabel}>Legal Violations</Text>
+        <Text style={styles.cardLabel}>Legal Violations · {provenanceLabel(review.sources.legal_codes)}</Text>
         {review.legalFindings.map((item, index) => <View key={index} style={styles.legalShell} wrap={false}>
           <View style={styles.legalAccent} />
           <View style={styles.legalInner}>
@@ -771,7 +774,7 @@ const AnalysisPage = ({ app, caseNumber, project }) => {
       </View> : null}
       {analysis.detailedReasoning || analysis.reviewerComments ? (
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Detailed Reasoning</Text>
+          <Text style={styles.cardLabel}>Detailed Reasoning · {provenanceLabel(review.sources.reasoning)}</Text>
           {analysis.detailedReasoning ? <Text style={styles.bodyText}>{analysis.detailedReasoning}</Text> : null}
           {analysis.reviewerComments ? (
             <View style={{ marginTop: 6 }}>
@@ -782,6 +785,17 @@ const AnalysisPage = ({ app, caseNumber, project }) => {
         </View>
       ) : null}
 
+      {review.sources.reasoning === 'review' && !analysis.detailedReasoning ? <Text style={styles.noteText}>Reviewer reasoning: not recorded.</Text> : null}
+      {review.sources.violations === 'review' && !analysis.threatTypes.length ? <Text style={styles.noteText}>Reviewer violations: none recorded.</Text> : null}
+      {review.sources.legal_codes === 'review' && !review.legalFindings.length ? <Text style={styles.noteText}>Reviewer legal findings: none recorded.</Text> : null}
+      {(review.sources.summary === 'review' && analysis.aiSummary || review.sources.reasoning === 'review' && analysis.aiReasoning || review.sources.violations === 'review' && analysis.aiThreatTypes.length || review.sources.legal_codes === 'review' && analysis.aiLegalCodes.length || review.sources.recommended_action === 'review' && analysis.aiRecommendedAction) ? <View style={styles.card}>
+        <Text style={styles.cardLabel}>Separate AI Analysis</Text>
+        {review.sources.summary === 'review' && analysis.aiSummary ? <Text style={styles.bodyText}>AI case summary: {analysis.aiSummary}</Text> : null}
+        {review.sources.reasoning === 'review' && analysis.aiReasoning ? <Text style={styles.bodyText}>AI reasoning: {analysis.aiReasoning}</Text> : null}
+        {review.sources.violations === 'review' && analysis.aiThreatTypes.length ? <Text style={styles.bodyText}>AI violations: {analysis.aiThreatTypes.join(', ')}</Text> : null}
+        {review.sources.legal_codes === 'review' && analysis.aiLegalCodes.length ? <Text style={styles.bodyText}>AI legal findings: {analysis.aiLegalCodes.map((item) => typeof item === 'string' ? item : item.code || item.name || '').filter(Boolean).join(', ')}</Text> : null}
+        {review.sources.recommended_action === 'review' && analysis.aiRecommendedAction ? <Text style={styles.bodyText}>AI recommended action: {analysis.aiRecommendedAction}</Text> : null}
+      </View> : null}
       <FindingsCard findingsByCategory={analysis.findingsByCategory} />
       <View style={styles.pairRow}>
         <View style={styles.pairCol}>

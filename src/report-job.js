@@ -336,7 +336,7 @@ async function processAndCacheAdImages(ads, { includeAllCards = false, concurren
  * Cache app creatives. Expects **normalized** apps (the evidence image slots the
  * cache keys derive from live on the view model). Summary fetches one thumb per
  * app; Detailed also fetches up to MAX_APP_SCREENSHOTS screenshots and every
- * capped evidence image. App header banners are deliberately not fetched.
+ * eligible evidence image. App header banners are deliberately not fetched.
  *
  * @returns {{
  *   compressedImages: Array<string|null>,
@@ -346,7 +346,7 @@ async function processAndCacheAdImages(ads, { includeAllCards = false, concurren
  */
 async function processAndCacheAppImages(
   apps,
-  { includeScreenshots = false, includeEvidence = false, concurrency = 10 } = {},
+  { includeScreenshots = false, includeEvidence = false, concurrency = 10, imageProcessor = processImage } = {},
 ) {
   const compressedImages = new Array(apps.length);
   const compressedScreenshotImages = new Array(apps.length);
@@ -359,7 +359,7 @@ async function processAndCacheAppImages(
 
       const thumbUrl = app.icon_url || app.header_url || app.screenshots?.[0]?.url || null;
       const thumbSource = appSourceForUrl(app, thumbUrl);
-      compressedImages[slot] = await processImage(
+      compressedImages[slot] = await imageProcessor(
         thumbUrl,
         app._id,
         `app_icon_${sourceImageCacheToken(thumbSource, 'icon')}`,
@@ -371,7 +371,7 @@ async function processAndCacheAppImages(
         compressedScreenshotImages[slot] = await Promise.all(
           shots.map((shot, shotIndex) => {
             const source = appSourceForUrl(app, shot.url);
-            return processImage(
+            return imageProcessor(
               shot.url,
               app._id,
               `app_shot_${sourceImageCacheToken(source, shotIndex)}`,
@@ -390,7 +390,7 @@ async function processAndCacheAppImages(
           const batch = entries.slice(start, start + 4);
           await Promise.all(
             batch.map(async (entry) => {
-              const localPath = await processImage(
+              const localPath = await imageProcessor(
                 entry.url,
                 app._id,
                 `app_ev_${sourceImageCacheToken(entry, entry.slot)}`,

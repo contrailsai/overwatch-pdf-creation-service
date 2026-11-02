@@ -6,8 +6,8 @@ report contract in [the client PRD](../../overwatch_client/docs/prd/app-pdf-repo
 
 ## Reading order
 
-Detailed follows this order: **Case Overview → operational evidence → assessment
-and reviewed basis → supporting evidence → app and developer information**. The
+Detailed follows this order: **Case Overview → Evidence → Assessment & Supporting
+Evidence → App & Developer information**. The
 overview puts the case in context; the operational evidence presents the primary
 captured material before the assessment interprets it.
 

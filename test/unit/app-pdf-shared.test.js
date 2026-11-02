@@ -7,6 +7,8 @@ require('@babel/register')({
   cache: false,
 });
 
+const { normalizeApp } = require('../../src/core-utils');
+
 const {
   appRiskInfo,
   appRiskRank,
@@ -107,33 +109,17 @@ test('collectAppViolations matches project labels against hyphenated flags', () 
   );
 });
 
-test('collectAppThreatTypes merges AI and reviewer signals without duplicates', () => {
-  const project = { project_details: { labels: [{ name: 'Fraud', severity: 'high' }] } };
-  const app = makeApp({
-    review: {
-      threat_types: ['Illegal Forex'],
-      violation_flags: [],
-      flags: { 'unregistered broker': true, fraud: false },
-    },
-    analysis_results: {
-      threat_types: ['ILLEGAL FOREX', 'CONCEALED OPERATOR'],
-      violations: ['UNREGISTERED BROKER'],
-    },
-  });
-  const names = collectAppThreatTypes(app, project)
-    .map((chip) => chip.name)
-    .sort();
-  assert.deepEqual(names, ['CONCEALED OPERATOR', 'ILLEGAL FOREX', 'UNREGISTERED BROKER']);
-  assert.deepEqual(collectAppThreatTypes(makeApp(), project), []);
+test('normalized reviewer threats remain separate from AI threats', () => {
+  const app = normalizeApp({ _id: 'app', review_details: { threat_types: ['Illegal Forex'] }, analysis_results: { threat_types: ['CONCEALED OPERATOR'] } });
+  assert.deepEqual(collectAppThreatTypes(app, {}).map((chip) => chip.name), ['Illegal Forex']);
+  assert.deepEqual(buildAppAnalysisModel(app, {}).aiThreatTypes, ['CONCEALED OPERATOR']);
+  assert.equal(app.review.field_sources.violations, 'review');
 });
 
-test('collectAppThreatTypes promotes matching project labels with their severity', () => {
-  const project = { project_details: { labels: [{ name: 'Fraud', severity: 'high' }] } };
-  const app = makeApp({
-    analysis_results: { threat_types: ['fraud'], violations: [] },
-  });
-  const chips = collectAppThreatTypes(app, project);
-  assert.deepEqual(chips, [{ name: 'Fraud', severity: 'high' }]);
+test('AI threats fall back with their provenance and project severity', () => {
+  const app = normalizeApp({ _id: 'app', analysis_results: { threat_types: ['fraud'] } });
+  assert.deepEqual(collectAppThreatTypes(app, { project_details: { labels: [{ name: 'Fraud', severity: 'high' }] } }), [{ name: 'Fraud', severity: 'high' }]);
+  assert.equal(app.review.field_sources.violations, 'analysis');
 });
 
 test('buildAppAnalysisModel merges findings, operator and targets', () => {
@@ -165,11 +151,11 @@ test('buildAppAnalysisModel merges findings, operator and targets', () => {
   const model = buildAppAnalysisModel(app, {});
 
   assert.equal(model.hasAnalysis, true);
-  assert.equal(model.detailedReasoning, 'Long AI narrative.');
+  assert.equal(model.aiReasoning, 'Long AI narrative.');
   assert.deepEqual(model.findingsByCategory.map((group) => group.category), ['Listing Claims']);
   assert.equal(model.findingsByCategory[0].items.length, 2);
   assert.equal(model.operator.developerAccount, 'Forex Markets');
-  assert.equal(model.recommendedAction, 'Play Store takedown.');
+  assert.equal(model.aiRecommendedAction, 'Play Store takedown.');
   assert.deepEqual(
     model.takedownTargets.map((target) => [target.label, target.items.length]),
     [
@@ -194,35 +180,18 @@ test('buildAppAnalysisModel is empty without AI analysis or review detail', () =
 
 test('buildAppReviewModel prefers the simple reasoning for the case summary', () => {
   const model = buildAppReviewModel(
-    makeApp({ review: { simple_report_description: 'Short version.', case_summary: 'Longer version.' } }),
+    normalizeApp({ _id: 'app', review_details: { simple_report_description: 'Short version.', case_summary: 'Longer version.' } }),
     {},
   );
   assert.equal(model.caseSummary, 'Short version.');
 });
 
-test('buildAppReviewModel merges reviewer and AI legal codes for page 1', () => {
-  const app = makeApp({
-    review: {
-      legal_codes: [{ code: 'IT Rules 2021 - Rule 3(1)(b)(v)', reasoning: 'Misleads users.' }],
-      threat_types: [],
-      flags: {},
-    },
-    analysis_results: {
-      legal_codes: [
-        { code: 'IT Rules - 3(1)(b)(v)', description: 'Misleads users about legitimacy.' },
-        { code: 'SEBI Act - Sec 12(1)', description: 'Unregistered broker.' },
-      ],
-    },
-  });
-  const model = buildAppReviewModel(app, {});
-
-  // The 2021 spelling of the same citation collapses; the crispest label and
-  // longest reasoning both survive.
-  assert.deepEqual(model.legalFindings.map((item) => item.code), [
-    'IT Rules - 3(1)(b)(v)',
-    'SEBI Act - Sec 12(1)',
-  ]);
-  assert.equal(model.legalFindings[0].reasoning, 'Misleads users about legitimacy.');
+test('reviewer legal findings stay separate from AI legal findings', () => {
+  const app = normalizeApp({ _id: 'app', review_details: { legal_codes: [{ code: 'IT Rules', reasoning: '' }] }, analysis_results: { legal_codes: [{ code: 'SEBI Act', description: 'AI finding' }] } });
+  const review = buildAppReviewModel(app, {});
+  assert.deepEqual(review.legalFindings, [{ code: 'IT Rules', reasoning: '' }]);
+  assert.equal(review.sources.legal_codes, 'review');
+  assert.equal(buildAppAnalysisModel(app, {}).aiLegalCodes[0].code, 'SEBI Act');
 });
 
 test('appIsAlerted follows client status and the processed flag', () => {
@@ -290,8 +259,8 @@ test('buildAppReviewModel normalises verdicts, violations and legal codes', () =
   assert.equal(review.verdictLabel, 'Page Takedown');
   assert.deepEqual(review.violations.map((v) => v.name), ['Fraud']);
   assert.equal(review.legalCodes.length, 2);
-  // Project legal-code description is backfilled when the reviewer left none.
-  assert.equal(review.legalCodes[0].reasoning, 'Cheating by personation');
+  // An empty recorded explanation remains empty.
+  assert.equal(review.legalCodes[0].reasoning, '');
   assert.equal(review.legalCodes[1].reasoning, '');
   assert.equal(review.reasoningSections.length, 2);
   assert.equal(review.reasoningSections[0].label, 'Overview');
@@ -376,4 +345,30 @@ test('flattenKeyValues renders unknown analysis shapes', () => {
   ]);
   assert.equal(flattenKeyValues({ tags: ['a', 'b'] })[0].value, 'a, b');
   assert.equal(flattenKeyValues({ a: 1, b: 2, c: 3 }, { limit: 2 }).length, 2);
+});
+
+test('explicitly empty reviewer fields do not inherit AI values', () => {
+  const app = normalizeApp({ _id: 'app', review_details: { simple_report_description: '', reasoning: '', threat_types: [], legal_codes: [], recommended_action: '' }, analysis_results: { case_summary: 'AI summary', analysis: 'AI reasoning', threat_types: ['AI threat'], legal_codes: [{ code: 'AI law' }], recommended_action: 'AI action' } });
+  const review = buildAppReviewModel(app, {});
+  const analysis = buildAppAnalysisModel(app, {});
+  assert.equal(review.caseSummary, '');
+  assert.equal(review.reasoning, '');
+  assert.deepEqual(review.threatTypes, []);
+  assert.deepEqual(review.legalFindings, []);
+  assert.equal(review.verdictLabel, '');
+  assert.deepEqual(['summary', 'reasoning', 'violations', 'legal_codes', 'recommended_action'].map((key) => review.sources[key]), Array(5).fill('review'));
+  assert.equal(analysis.aiSummary, 'AI summary');
+  assert.equal(analysis.aiReasoning, 'AI reasoning');
+  assert.equal(analysis.aiRecommendedAction, 'AI action');
+});
+
+test('AI-only app fields retain analysis provenance through the report models', () => {
+  const app = normalizeApp({ _id: 'ai-app', analysis_results: { case_summary: 'AI summary', analysis: 'AI reasoning', threat_types: ['AI threat'], legal_codes: [{ code: 'AI law', description: 'AI explanation' }], recommended_action: 'review_listing' } });
+  const review = buildAppReviewModel(app, {});
+  assert.equal(review.caseSummary, 'AI summary');
+  assert.equal(review.reasoning, 'AI reasoning');
+  assert.deepEqual(review.threatTypes.map((item) => item.name), ['AI Threat']);
+  assert.equal(review.legalFindings[0].code, 'AI law');
+  assert.equal(review.verdictLabel, 'Review Listing');
+  assert.deepEqual(['summary', 'reasoning', 'violations', 'legal_codes', 'recommended_action'].map((key) => review.sources[key]), Array(5).fill('analysis'));
 });

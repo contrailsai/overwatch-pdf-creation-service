@@ -597,7 +597,7 @@ test('normalizeApp flattens object-shaped store categories', () => {
   assert.deepEqual(normalized.store.categories, ['Finance', 'Business']);
 });
 
-test('normalizeApp merges joined App_developers and caps media', () => {
+test('normalizeApp caps screenshots and retains evidence slots', () => {
   const joined = normalizeApp(v3App, { joinedDeveloper: v3AppDeveloper });
   assert.equal(joined.developer.app_count, 2);
   assert.equal(joined.store.app_count, 2);
@@ -631,7 +631,8 @@ test('normalizeApp merges joined App_developers and caps media', () => {
   const normalized = normalizeApp(manyShots);
   assert.equal(normalized.screenshots.length, MAX_APP_SCREENSHOTS);
   assert.equal(normalized.total_screenshots, 20);
-  assert.equal(normalized.evidence.sections[0].images.length, 4);
+  assert.equal(normalized.evidence.sections[0].images.length, 30);
+  assert.deepEqual(resolveAppEvidenceImageEntries(normalized).map((item) => item.slot), Array.from({ length: 30 }, (_, i) => `0:${i}`));
   assert.equal(normalized.evidence.totalImages, 30);
   assert.equal(normalized.evidence.sections[0].totalImages, 30);
 });

@@ -460,3 +460,27 @@ test('SimpleCase DOCX renders with fixture post', async () => {
   assert.ok(docxBuffer.length > 100);
   assert.equal(docxBuffer.slice(0, 2).toString('utf8'), 'PK');
 });
+
+test('Apps Detailed PDF preserves reviewer and AI provenance and unavailable evidence', async () => {
+  const { normalizeApp } = require('../../src/core-utils');
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const app = normalizeApp({
+    _id: 'provenance-app', content: { title: 'Provenance fixture' },
+    review_details: { simple_report_description: 'Reviewer case summary', reasoning: '', threat_types: ['Reviewer threat'], legal_codes: [], recommended_action: 'review_action' },
+    analysis_results: { case_summary: 'AI case summary', analysis: 'AI narrative', threat_types: ['AI threat'], legal_codes: [{ code: 'AI code' }], recommended_action: 'AI action' },
+    evidence: { sections: [{ title: 'Payment request', media: [{ type: 'image', s3_url: 'https://example.com/missing.png', filename: 'missing.png' }] }] },
+  });
+  const buffer = await streamToBuffer(await renderToStream(React.createElement(AppsDetailedReportDocument, { apps: [app], project: makeProject() })));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-report-test-'));
+  try {
+    const file = path.join(dir, 'report.pdf');
+    fs.writeFileSync(file, buffer);
+    const text = execFileSync(process.execPath, [path.join(__dirname, '../../scripts/extract-pdf-text.js'), file], { encoding: 'utf8' }).replace(/\s+/g, ' ');
+    for (const expected of ['Reviewer case summary', 'Reviewer Threat', 'Recommended Action', 'Review Action', 'Reviewer reasoning: not recorded.', 'none recorded.', 'Separate AI Analysis', 'AI case summary', 'AI narrative', 'AI threat', 'AI code', 'AI action', 'unavailable']) assert.ok(text.toLowerCase().includes(expected.toLowerCase()), `Missing ${expected} in PDF`);
+    assert.ok(!text.includes('without being registered with SEBI'));
+    assert.ok(text.toLowerCase().indexOf('2. evidence') < text.toLowerCase().indexOf('3. assessment'));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
