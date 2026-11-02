@@ -484,3 +484,21 @@ test('Apps Detailed PDF preserves reviewer and AI provenance and unavailable evi
     assert.ok(text.toLowerCase().indexOf('2. evidence') < text.toLowerCase().indexOf('3. assessment'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('Apps Detailed first page embeds the prepared app logo', async () => {
+  const sharp = require('sharp');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { PDFName } = require('pdf-lib');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-logo-'));
+  try {
+    const logo = path.join(dir, 'logo.png');
+    await sharp({ create: { width: 48, height: 48, channels: 3, background: '#3489ce' } }).png().toFile(logo);
+    const app = makeNormalizedApp({ compressedImage: logo, evidence: { sections: [] }, screenshots: [], compressedScreenshots: [] });
+    const buffer = await streamToBuffer(await renderToStream(React.createElement(AppsDetailedReportDocument, { apps: [app], project: makeProject() })));
+    const document = await PDFDocument.load(buffer);
+    const images = document.getPage(0).node.Resources().lookup(PDFName.of('XObject'));
+    assert.ok(images && images.entries().length > 0, 'expected the logo on the first page');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

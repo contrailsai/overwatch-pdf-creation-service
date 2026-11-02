@@ -341,7 +341,12 @@ const AppPublisherCard = ({ app, review }) => {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardLabel}>App &amp; Publisher</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <Text style={[styles.cardLabel, { marginBottom: 0 }]}>App &amp; Publisher</Text>
+        {app.compressedImage ? (
+          <Image src={app.compressedImage} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+        ) : null}
+      </View>
       {hasAppReviewSignal(app) ? (
         <View style={styles.riskRow}>
           <Text style={[styles.kvLabel, { marginBottom: 0 }]}>Risk</Text>
