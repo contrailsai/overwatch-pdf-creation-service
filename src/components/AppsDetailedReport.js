@@ -462,7 +462,6 @@ const ProofCard = ({ card, summary, caseNumber }) => {
   const source = card.sources.find((item) => (item.images || []).some((image) => image.localPath)) || card.sources[0];
   const available = (source?.images || []).filter((item) => item.localPath);
   const selected = summary ? available.slice(0, 1) : card.key === 'payment' && available.length > 1 ? [available[0], available[available.length - 1]] : available.slice(0, 2);
-  const missingMedia = source?.media?.[0];
   return (
     <View style={styles.proofCard}>
       <Text style={styles.cardLabel}>{securities ? 'Indian securities activity' : 'Payment request'}</Text>
@@ -470,13 +469,11 @@ const ProofCard = ({ card, summary, caseNumber }) => {
         {selected.map((image, index) => <Image key={image.slot || index} style={[styles.proofImage, { width: selected.length > 1 ? '49%' : '100%', height: 165 }]} src={image.localPath} />)}
       </View> : (
         <View style={[styles.proofImage, { justifyContent: 'center', padding: 10 }]}>
-          <Text style={styles.softText}>No prepared operational screenshot available{missingMedia?.filename ? `: ${missingMedia.filename}` : '.'}</Text>
+          <Text style={styles.softText}>No prepared operational screenshot available.</Text>
         </View>
       )}
       <Text style={[styles.proofCaption, { fontWeight: 700, fontSize: 8.5 }]}>{source?.description || 'No description recorded for this evidence category.'}</Text>
       <Text style={styles.noteText}>{source?.title || 'No matching evidence section recorded.'}</Text>
-      {selected.length ? <Text style={styles.noteText}>{selected.length} of {available.length} prepared images: {selected.map((image) => image.filename || image.label || 'image').join(', ')}</Text> : null}
-      <Text style={styles.noteText}>Category based on source label; capture alone does not establish execution.</Text>
       {summary ? <Text style={styles.noteText}>Detailed export contains the evidence dossier.</Text> : <Link src={`#case-${caseNumber}-evidence-${card.key}`} style={styles.kvLink}>See this evidence category</Link>}
     </View>
   );
@@ -499,6 +496,7 @@ export const AppCaseOverviewPage = ({ app, caseNumber, project, summary = false 
         </View>
         <View style={styles.rightCol}><AppPublisherCard app={app} review={review} /></View>
       </View>
+      <Text style={[styles.cardLabel, { marginTop: 8, marginBottom: 4 }]}>Evidence Highlights</Text>
       <View style={styles.proofRow}>
         {proofCards.map((card) => <ProofCard key={card.key} card={card} summary={summary} caseNumber={caseNumber} />)}
       </View>
