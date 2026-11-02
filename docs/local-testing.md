@@ -122,6 +122,19 @@ curl -X POST http://localhost:3847/ -H "Authorization: Bearer secret" \
 - **Supabase is silent.** Without `SUPABASE_URL`/`SUPABASE_KEY` you will see `[Supabase] Skipping status update …` for every milestone. That is expected, not a failure.
 - **`REPORT_DEV_PORT` collisions.** The port is not auto-incremented; a stale server will make your new one fail to bind.
 
+### Bulk window batches
+
+`scripts/generate-domains-batch.js` renders **one Domains Detailed PDF per reviewed domain** in a time window, straight through `runReportJob` (no HTTP server):
+
+```bash
+node scripts/generate-domains-batch.js \
+  --db SEBI-Data-Search --project-id SEBI \
+  --since 2026-10-13T00:00:00.000Z --until 2026-10-16T00:00:00.000Z \
+  --out local-reports/output/sebi-domains
+```
+
+Files are named `NN-<slug>-<id>.pdf` (same convention as `sebi-apps`) and a `manifest.json` records the window, per-domain status and hashes. `--dry-run` lists the set without writing; `--limit`, `--concurrency` and `--force` control a run. The script deletes `SUPABASE_URL`/`SUPABASE_KEY` before loading `report-job`, so a bulk run never writes report rows to Supabase.
+
 ---
 
 ## 3. Automated tests
@@ -132,7 +145,7 @@ npm run test:unit     # test/unit/**
 npm run test:integration
 ```
 
-The runner is the built-in **`node --test`** — there is no Jest/Mocha. Current suite: **135 tests, 0 failures**, ~2.5 s (**115 unit + 21 integration**).
+The runner is the built-in **`node --test`** — there is no Jest/Mocha. Current suite: **149 tests, 0 failures**, ~3 s (**128 unit + 21 integration**).
 
 | Suite | File | Covers |
 | --- | --- | --- |

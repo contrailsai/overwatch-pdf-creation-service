@@ -131,6 +131,7 @@ const styles = StyleSheet.create({
   },
   colIndex: { width: '6%', paddingRight: 4, alignItems: 'center' },
   colDomain: { width: '46%', paddingRight: 8 },
+  colDomainWide: { width: '54%', paddingRight: 8 },
   colRisk: { width: '13%', paddingRight: 4 },
   colCloak: { width: '13%', paddingRight: 6 },
   colThreat: { width: '14%', paddingRight: 6 },
@@ -254,18 +255,18 @@ const MetricsSection = ({ domains }) => {
   );
 };
 
-const TableHeader = () => (
+const TableHeader = ({ showAds = true }) => (
   <View style={styles.tableHeader} fixed>
     <Text style={[styles.tableHeaderCell, styles.colIndex]}>#</Text>
-    <Text style={[styles.tableHeaderCell, styles.colDomain]}>Domain</Text>
+    <Text style={[styles.tableHeaderCell, showAds ? styles.colDomain : styles.colDomainWide]}>Domain</Text>
     <Text style={[styles.tableHeaderCell, styles.colRisk]}>Risk</Text>
     <Text style={[styles.tableHeaderCell, styles.colCloak]}>Cloaked</Text>
     <Text style={[styles.tableHeaderCell, styles.colThreat]}>Violations</Text>
-    <Text style={[styles.tableHeaderCell, styles.colAds]}>Ads</Text>
+    {showAds ? <Text style={[styles.tableHeaderCell, styles.colAds]}>Ads</Text> : null}
   </View>
 );
 
-const TableRow = ({ domain, compressedImage, caseNumber }) => {
+const TableRow = ({ domain, compressedImage, caseNumber, showAds = true }) => {
   const riskInfo = domainRiskInfo(domain);
   const visitUrl = domainVisitUrl(domain);
   const cloaked = domainHasCloaking(domain);
@@ -273,6 +274,7 @@ const TableRow = ({ domain, compressedImage, caseNumber }) => {
   const violations = collectDomainViolations(domain).slice(0, 3);
   const imageUrl = compressedImage || null;
   const cloakCaption = processText(domainLanderCaption(domain), 18);
+  const adsCount = domainAdsCount(domain);
 
   return (
     <View style={styles.tableRow} wrap={false}>
@@ -280,7 +282,7 @@ const TableRow = ({ domain, compressedImage, caseNumber }) => {
         <Text style={styles.indexText}>{caseNumber}</Text>
       </View>
 
-      <View style={styles.colDomain}>
+      <View style={showAds ? styles.colDomain : styles.colDomainWide}>
         {imageUrl ? (
           <View style={styles.thumbFrame} wrap={false}>
             <Image style={styles.thumb} src={imageUrl} />
@@ -337,11 +339,13 @@ const TableRow = ({ domain, compressedImage, caseNumber }) => {
         </View>
       </View>
 
-      <View style={styles.colAds}>
-        <Text style={styles.adsCount} wrap={false}>
-          {domainAdsCount(domain).toLocaleString()}
-        </Text>
-      </View>
+      {showAds ? (
+        <View style={styles.colAds}>
+          <Text style={styles.adsCount} wrap={false}>
+            {adsCount > 0 ? adsCount.toLocaleString() : '—'}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -349,6 +353,7 @@ const TableRow = ({ domain, compressedImage, caseNumber }) => {
 export const DomainsSummaryReportDocument = (props) => {
   const domains = reportDomains(props);
   const compressedImages = props.compressedImages;
+  const showAds = domains.some((domain) => domainAdsCount(domain) > 0);
 
   return (
     <Document title="Domains_Summary_Report">
@@ -357,13 +362,14 @@ export const DomainsSummaryReportDocument = (props) => {
         <MetricsSection domains={domains} />
         <View>
           <Text style={styles.sectionTitle}>Domain List Analysis</Text>
-          <TableHeader />
+          <TableHeader showAds={showAds} />
           {domains.map((domain, idx) => (
             <TableRow
               key={domain._id || idx}
               domain={domain}
               compressedImage={compressedImages?.[idx]}
               caseNumber={idx + 1}
+              showAds={showAds}
             />
           ))}
         </View>

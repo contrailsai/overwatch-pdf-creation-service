@@ -26,6 +26,9 @@ const {
   groupTotalFlaggedMessages,
   groupMediaEvidence,
   groupPromotedLinks,
+  groupActorsForPromotedLink,
+  groupActorRoleLabel,
+  isTelegramGroupPhotoRef,
   buildGroupReviewModel,
 } = require('../../src/components/telegramGroupPdfShared');
 
@@ -235,4 +238,35 @@ test('group flagged/AI accessors expose totals, slices and de-duplicated links',
     links.map((link) => link.name),
     ['svc', '@op'],
   );
+});
+
+test('groupActorRoleLabel title-cases reviewer/AI role keys', () => {
+  assert.equal(groupActorRoleLabel('unauthorized_agent'), 'Unauthorized Agent');
+  assert.equal(groupActorRoleLabel('payment-processor'), 'Payment Processor');
+  assert.equal(groupActorRoleLabel(null), '');
+});
+
+test('groupActorsForPromotedLink matches actors on shared evidence ids', () => {
+  const group = makeGroup({
+    ai: {
+      present: true,
+      flagged_actors: [
+        { actor_key: 'operator', name: 'Operator A', evidence_message_ids: [1, 2] },
+        { actor_key: 'other', name: 'Operator B', evidence_message_ids: [9] },
+      ],
+    },
+  });
+  const matched = groupActorsForPromotedLink(group, { message_ids: [2, 3] });
+  assert.deepEqual(matched.map((actor) => actor.name), ['Operator A']);
+
+  // No linked messages: fall back to every flagged actor.
+  const fallback = groupActorsForPromotedLink(group, { message_ids: [] });
+  assert.deepEqual(fallback.map((actor) => actor.name), ['Operator A', 'Operator B']);
+});
+
+test('isTelegramGroupPhotoRef only matches the non-numeric group-photo pseudo-id', () => {
+  assert.equal(isTelegramGroupPhotoRef('group_photo'), true);
+  assert.equal(isTelegramGroupPhotoRef('profile-photo'), true);
+  assert.equal(isTelegramGroupPhotoRef(286309), false);
+  assert.equal(isTelegramGroupPhotoRef(null), false);
 });

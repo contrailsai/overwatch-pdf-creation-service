@@ -274,6 +274,32 @@ export function groupPromotedLinks(group) {
   });
 }
 
+/** `unauthorized_agent` → "Unauthorized Agent". */
+export function groupActorRoleLabel(role) {
+  return titleCase(String(role || '').replace(/[-_]+/g, ' '));
+}
+
+/**
+ * Flagged actors tied to a promoted service/handle: the ones whose evidence
+ * message ids overlap the link's linked messages. Falls back to every actor
+ * when the link carries no message ids, so the monetisation block still names
+ * the operator instead of silently dropping the context.
+ */
+export function groupActorsForPromotedLink(group, link) {
+  const actors = Array.isArray(group?.ai?.flagged_actors) ? group.ai.flagged_actors : [];
+  const ids = new Set((link?.message_ids || []).map(String));
+  if (ids.size === 0) return actors;
+  return actors.filter((actor) =>
+    (actor.evidence_message_ids || []).some((id) => ids.has(String(id))),
+  );
+}
+
+/** True when a media-evidence entry points at the group's own profile photo. */
+export function isTelegramGroupPhotoRef(messageId) {
+  if (messageId == null || typeof messageId === 'number') return false;
+  return /group[_\s-]?photo|profile[_\s-]?photo/i.test(String(messageId));
+}
+
 /**
  * Everything the Review Details block needs, in one place. Legal codes get
  * project-code descriptions backfilled when the reviewer left only the code.

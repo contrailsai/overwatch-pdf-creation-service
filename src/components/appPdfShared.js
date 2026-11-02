@@ -172,6 +172,53 @@ export function collectAppViolations(app, project) {
   );
 }
 
+/** Threat chips use the effective reviewer-authored or fallback values. */
+export function collectAppThreatTypes(app, project) {
+  const review = app?.review || {};
+  const flags = review.flags && typeof review.flags === 'object' ? review.flags : {};
+  const projectLabels = Array.isArray(project?.project_details?.labels)
+    ? project.project_details.labels
+    : [];
+
+  const sources = [
+    ...(Array.isArray(review.threat_types) ? review.threat_types : []),
+    ...(Array.isArray(review.violation_flags) ? review.violation_flags : []),
+    ...Object.keys(flags).filter((key) => flags[key] === true),
+  ];
+
+  const chips = [];
+  const seen = new Set();
+  const push = (name, severity) => {
+    const label = String(name || '').trim();
+    const key = normalizeViolationKey(label);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    chips.push({ name: label, severity: SEVERITY_ORDER[severity] ? severity : 'medium' });
+  };
+
+  // Project labels win when they match an effective signal, so severity and
+  // the project's display spelling are preserved.
+  const sourceKeys = new Set(sources.map(normalizeViolationKey).filter(Boolean));
+  for (const label of projectLabels) {
+    if (label?.name && sourceKeys.has(normalizeViolationKey(label.name))) {
+      push(label.name, label.severity);
+    }
+  }
+
+  for (const [flag, name] of Object.entries(LEGACY_FLAG_LABELS)) {
+    if (flags[flag] === true) push(name, 'medium');
+  }
+
+  for (const raw of sources) {
+    if (!raw || String(raw).toLowerCase() === 'safe') continue;
+    push(titleCase(String(raw).replace(/[_-]+/g, ' ')), 'medium');
+  }
+
+  return chips.sort(
+    (a, b) => (SEVERITY_ORDER[a.severity] || 4) - (SEVERITY_ORDER[b.severity] || 4),
+  );
+}
+
 /** 1250000 → "1.3M", 50000 → "50K", 259 → "259". */
 export function compactNumber(value) {
   const num = Number(value);
@@ -310,17 +357,19 @@ export function resolveProjectLegalCodes(project) {
     .filter((item) => item.name || item.codeName);
 }
 
-/**
- * Everything the Review Details block needs, in one place. Legal codes get
- * project-code descriptions backfilled when the reviewer left only the code.
- */
+/** Page-1 review model using the normalized effective review values. */
 export function buildAppReviewModel(app, project) {
   const review = app?.review || {};
   const risk = appRiskInfo(app);
-  const caseSummary = review.case_summary || '';
-  const reasoning = review.reasoning || '';
+  // The normalizer resolves reviewer precedence, including explicit empty values.
+  const caseSummary = String(
+    review.case_summary ?? '',
+  ).trim();
+  const reasoning = String(review.reasoning ?? '').trim();
   const reviewerComments = String(review.reviewer_comments || '').trim();
-  const verdictLabel = formatVerdictLabel(review.recommended_action || review.verdict);
+  const verdictLabel = formatVerdictLabel(
+    review.recommended_action ?? review.verdict,
+  );
   const violations = collectAppViolations(app, project);
   const projectCodes = resolveProjectLegalCodes(project);
 
@@ -331,7 +380,7 @@ export function buildAppReviewModel(app, project) {
     })
     .filter((item) => item.code)
     .map((item) => {
-      if (item.reasoning) return item;
+      if (item.reasoning || Object.prototype.hasOwnProperty.call(review, 'legal_codes')) return item;
       const match = projectCodes.find(
         (projectCode) =>
           projectCode.name === item.code ||
@@ -344,6 +393,8 @@ export function buildAppReviewModel(app, project) {
   return {
     risk,
     hasSignal: hasAppReviewSignal(app),
+    reviewed: Boolean(app?.assessment_reviewed),
+    sources: review.field_sources || {},
     status: app?.client_status || 'open',
     reviewedAt: app?.reviewed_at || review.reviewed_at || null,
     caseSummary,
@@ -352,7 +403,134 @@ export function buildAppReviewModel(app, project) {
     reviewerComments,
     verdictLabel,
     violations,
+    threatTypes: collectAppThreatTypes(app, project),
     legalCodes,
+    // Effective legal findings retain the chosen review reasoning.
+    legalFindings: legalCodes,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * AI analysis model                                                   *
+ * ------------------------------------------------------------------ */
+
+const TAKEDOWN_TARGET_LABELS = [
+  ['play_store', 'Play Store'],
+  ['domains', 'Domains'],
+  ['upi_ids', 'UPI IDs'],
+  ['bank_accounts', 'Bank Accounts'],
+  ['phone_numbers', 'Phone Numbers'],
+  ['emails', 'Emails'],
+  ['social', 'Social'],
+];
+
+function nonEmptyStrings(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => (item == null ? '' : String(item).trim()))
+    .filter(Boolean);
+}
+
+/**
+ * Group the AI `findings` by category, preserving document order, so the renderer
+ * can draw one sub-section per category instead of a flat list.
+ */
+function groupFindings(findings) {
+  const groups = [];
+  const byCategory = new Map();
+  for (const finding of findings) {
+    const key = finding.category || '';
+    let group = byCategory.get(key);
+    if (!group) {
+      group = { category: finding.category || 'Findings', items: [] };
+      byCategory.set(key, group);
+      groups.push(group);
+    }
+    group.items.push(finding);
+  }
+  return groups;
+}
+
+/**
+ * Everything the "AI Analysis & Evidence" section needs. Deliberately excludes
+ * scoring metadata (threat score, confidence, verdict word, media basis) — this
+ * section reports the substantive review, threat types and findings instead.
+ *
+ * @returns {{
+ *   hasAnalysis: boolean,
+ *   detailedReasoning: string,
+ *   reasoningSections: Array<{ label: string, content: string }>,
+ *   reviewerComments: string,
+ *   threatTypes: Array<{ name: string, severity: string }>,
+ *   findings: object[],
+ *   findingsByCategory: Array<{ category: string, items: object[] }>,
+ *   operator: object|null,
+ *   recommendedAction: string,
+ *   takedownTargets: Array<{ label: string, items: string[] }>,
+ * }}
+ */
+export function buildAppAnalysisModel(app, project) {
+  const analysis =
+    app?.analysis_results && typeof app.analysis_results === 'object' ? app.analysis_results : {};
+  const review = app?.review || {};
+
+  const detailedReasoning = String(review.reasoning ?? '').trim();
+  const reviewerComments = String(review.reviewer_comments || '').trim();
+
+  const resolveSource = createAppPdfSourceResolver(app);
+  const findings = (Array.isArray(analysis.findings) ? analysis.findings : [])
+    .map((item) => {
+      if (typeof item === 'string') return { category: 'Findings', finding: item.trim(), source: '' };
+      return {
+        category: titleCase(String(item?.category || '').replace(/[_-]+/g, ' ').trim()) || 'Findings',
+        finding: String(item?.finding || '').trim(),
+        source: titleCase(String(item?.source || '').replace(/[_-]+/g, ' ').trim()),
+        references: (Array.isArray(item?.media_ids) ? item.media_ids : []).map(resolveSource),
+      };
+    })
+    .filter((item) => item.finding);
+
+  const rawOperator = analysis.operator && typeof analysis.operator === 'object' ? analysis.operator : null;
+  const operator = rawOperator
+    ? {
+        developerAccount: String(rawOperator.developer_account || '').trim(),
+        legalEntities: nonEmptyStrings(rawOperator.legal_entities),
+        countries: nonEmptyStrings(rawOperator.countries),
+        concealment: String(rawOperator.concealment || '').trim(),
+      }
+    : null;
+  const hasOperator = Boolean(
+    operator && (operator.developerAccount || operator.legalEntities.length || operator.countries.length || operator.concealment),
+  );
+
+  const takedownTargets = TAKEDOWN_TARGET_LABELS.map(([key, label]) => ({
+    label,
+    items: nonEmptyStrings(analysis.takedown_targets?.[key]),
+  })).filter((target) => target.items.length > 0);
+
+  const threatTypes = collectAppThreatTypes(app, project);
+  const recommendedAction = String(
+    review.recommended_action ?? '',
+  ).trim();
+
+  return {
+    hasAnalysis: Boolean(
+      detailedReasoning ||
+        reviewerComments ||
+        threatTypes.length ||
+        findings.length ||
+        hasOperator ||
+        recommendedAction ||
+        takedownTargets.length,
+    ),
+    detailedReasoning,
+    reasoningSections: parseReasoning(detailedReasoning),
+    reviewerComments,
+    threatTypes,
+    findings,
+    findingsByCategory: groupFindings(findings),
+    operator: hasOperator ? operator : null,
+    recommendedAction,
+    takedownTargets,
   };
 }
 
@@ -466,6 +644,7 @@ export function buildAppEvidenceModel(app) {
 
     if (images.length > 0) {
       media.push({
+        key: section.key,
         title,
         description,
         images,
@@ -528,4 +707,83 @@ export function buildEvidenceFieldRows(items) {
   }
   if (pending) rows.push([pending]);
   return rows;
+}
+
+/** Categories describe where evidence was filed, not whether a claim is proven. */
+export function appEvidenceCategory(title) {
+  const value = String(title || '').toLowerCase().replace(/[_-]/g, ' ');
+  if (/payment|deposit|upi.*screenshot|funding/.test(value)) return 'payment';
+  if (/indian securit|nse|nifty|sensex|stock.*(screenshot|trading)|securities.*(screenshot|activity)/.test(value)) return 'securities';
+  return 'other';
+}
+
+export function buildAppProofCards(app) {
+  const sections = Array.isArray(app?.evidence?.sections) ? app.evidence.sections : [];
+  return [
+    { key: 'payment', title: 'Payment request' },
+    { key: 'securities', title: 'Indian securities activity' },
+  ].map((card) => {
+    const matching = sections.filter((section) => appEvidenceCategory(section.title) === card.key);
+    const withMedia = matching.filter((section) => (section.media || []).length > 0);
+    const sources = withMedia.length ? withMedia : matching;
+    const mediaCount = sources.reduce((count, section) => count + (section.media || []).length, 0);
+    return { ...card, sources, mediaCount, status: mediaCount ? 'Supporting media available' : 'No supporting media available' };
+  });
+}
+
+function appSourceLocator(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  try {
+    const url = new URL(raw);
+    let bucket; let key;
+    if (url.protocol === 's3:') { bucket = url.hostname; key = url.pathname.slice(1); }
+    else {
+      const host = url.hostname.match(/^(.+)\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/i);
+      if (host) { bucket = host[1]; key = url.pathname.slice(1); }
+      else if (/^s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/i.test(url.hostname)) {
+        const parts = url.pathname.slice(1).split('/'); bucket = parts.shift(); key = parts.join('/');
+      }
+    }
+    if (bucket && key) return `s3://${bucket.toLowerCase()}/${decodeURIComponent(key)}`;
+    url.hash = ''; return url.href;
+  } catch { return raw.trim(); }
+}
+
+function appMediaVersion(media) {
+  if (media?.version_id) return String(media.version_id);
+  try { return new URL(media?.s3_url || media?.original_url || media?.url).searchParams.get('versionId') || ''; } catch { return ''; }
+}
+function appMediaChecksum(media) { return String(media?.sha256 || media?.checksum_sha256 || ''); }
+function appMediaLocator(media) { return appSourceLocator(media?.s3_url || media?.original_url || media?.url); }
+
+/** Resolve only against the analysis run's manifest or an unambiguous explicit identity. */
+export function createAppPdfSourceResolver(app) {
+  const sources = [];
+  for (const section of app?.evidence?.sections || []) {
+    for (const media of section.media || []) if (media) sources.push({ kind: 'evidence', media, sectionTitle: section.title, label: media.label || media.filename || section.title || 'Evidence' });
+  }
+  for (const media of app?.source_media || []) if (media) sources.push({ kind: 'store', media, label: media.label || media.filename || 'Store media' });
+  const manifest = app?.analysis_results?.source_manifest;
+  const entries = manifest?.schema_version === 1 && Array.isArray(manifest.media) ? manifest.media : [];
+  const unique = (matches, recorded) => {
+    if (matches.length === 1) return matches[0];
+    if (!matches.length || matches.some((match) => !appMediaLocator(match.media).startsWith('s3://'))) return null;
+    const identities = new Set(matches.map((match) => JSON.stringify([match.kind, appMediaLocator(match.media), appMediaVersion(match.media), appMediaChecksum(match.media)])));
+    return identities.size === 1 ? (matches.find((match) => recorded?.section_title && match.sectionTitle === recorded.section_title) || matches[0]) : null;
+  };
+  return (reference) => {
+    const id = typeof reference === 'string' ? reference.trim() : '';
+    const recorded = id ? entries.filter((entry) => (entry?.media_id && String(entry.media_id) === id) || (entry?.source_id && String(entry.source_id) === id)) : [];
+    if (recorded.length) {
+      const identities = new Set(recorded.map((entry) => JSON.stringify([entry.kind, entry.source_id || '', appMediaLocator(entry), appMediaVersion(entry), appMediaChecksum(entry)])));
+      if (identities.size !== 1) return { id, match: null, status: 'ambiguous', label: '' };
+      const original = recorded[0]; const locator = appMediaLocator(original);
+      const matches = locator ? sources.filter((source) => source.kind === original.kind && appMediaLocator(source.media) === locator && appMediaVersion(source.media) === appMediaVersion(original) && appMediaChecksum(source.media) === appMediaChecksum(original)) : [];
+      const match = unique(matches, original);
+      return { id, match: match || null, status: match ? 'matched' : matches.length ? 'ambiguous' : 'source_removed', label: match?.label || original.section_title || '', observed: original.selected === false ? false : Array.isArray(manifest.observed_media_ids) ? manifest.observed_media_ids.includes(original.media_id) : null };
+    }
+    const matches = /^(?:ev|store)_\d+$/i.test(id) || !id ? [] : sources.filter(({ media }) => [media.source_id, media.media_id, media.id, media.s3_url, media.original_url, media.url].some((value) => value && String(value) === id));
+    const match = unique(matches);
+    return { id, match: match || null, status: match ? 'matched' : matches.length ? 'ambiguous' : manifest?.schema_version === 1 ? 'unknown_reference' : 'missing_manifest', label: match?.label || '' };
+  };
 }

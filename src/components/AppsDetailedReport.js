@@ -11,20 +11,18 @@ import {
   appInstallCountLabel,
   appPlatformLabel,
   buildAppReviewModel,
+  buildAppAnalysisModel,
   buildAppEvidenceModel,
+  buildAppProofCards,
   buildEvidenceFieldRows,
-  flattenKeyValues,
 } from './appPdfShared';
 
 registerFonts();
 
 /** Page-1 hook caps keep the first page to a single sheet. */
-const MAX_HOOK_SHOTS = 6;
-const MAX_HOOK_LEGAL_CODES = 3;
 const MAX_HOOK_VIOLATIONS = 8;
+const MAX_HOOK_LEGAL_CODES = 4;
 /** Section caps keep the whole dossier inside ~4 pages. */
-const MAX_MEDIA_IMAGES_PER_SECTION = 6;
-const MAX_OTHER_SECTIONS = 6;
 
 const styles = StyleSheet.create({
   page: {
@@ -78,7 +76,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.9,
   },
-  sectionHeadingMeta: { fontSize: 6.5, color: Theme.MUTED },
+  sectionHeadingMeta: { fontSize: 8, color: Theme.MUTED },
   /* ---- hook ---- */
   hookHeading: {
     flexDirection: 'row',
@@ -89,8 +87,8 @@ const styles = StyleSheet.create({
   },
   hookTitle: { fontSize: 16, fontWeight: 700, color: Theme.INK, flex: 1, lineHeight: 1.2 },
   columns: { flexDirection: 'row', gap: 10 },
-  leftCol: { width: '57%' },
-  rightCol: { width: '43%' },
+  leftCol: { flexGrow: 57, flexBasis: 0, minWidth: 0 },
+  rightCol: { flexGrow: 43, flexBasis: 0, minWidth: 0 },
   /* ---- cards ---- */
   card: {
     borderWidth: 0.5,
@@ -101,15 +99,15 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.SURFACE,
   },
   cardLabel: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: 900,
     color: Theme.PRIMARY_BLUE,
     textTransform: 'uppercase',
     letterSpacing: 0.9,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   subLabel: {
-    fontSize: 6.5,
+    fontSize: 8,
     fontWeight: 900,
     color: Theme.MUTED,
     textTransform: 'uppercase',
@@ -118,32 +116,23 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   /* ---- key/value ---- */
-  kvGridRow: { flexDirection: 'row', gap: 12, marginBottom: 5 },
+  kvGridRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
   kvHalf: { flex: 1 },
   kvFull: { width: '100%' },
   pairRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
-  pairCol: { width: '50%' },
+  pairCol: { flex: 1, minWidth: 0 },
   kvLabel: {
-    fontSize: 6,
+    fontSize: 7.5,
     color: Theme.MUTED,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 1,
   },
-  kvValue: { fontSize: 8, color: Theme.INK, fontWeight: 700, lineHeight: 1.3 },
-  kvValueSoft: { fontSize: 8, color: Theme.INK_SOFT, lineHeight: 1.3 },
-  kvLink: { fontSize: 7.5, color: Theme.LINK, fontWeight: 700, textDecoration: 'none', lineHeight: 1.3 },
+  kvValue: { fontSize: 9.5, color: Theme.INK, fontWeight: 700, lineHeight: 1.42 },
+  kvValueSoft: { fontSize: 9.5, color: Theme.INK_SOFT, lineHeight: 1.42 },
+  kvLink: { fontSize: 8.5, color: Theme.LINK, fontWeight: 700, textDecoration: 'none', lineHeight: 1.4 },
   divider: { height: 0.5, backgroundColor: Theme.LINE, marginVertical: 6 },
   /* ---- risk / violations ---- */
-  riskBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    borderWidth: 0.5,
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  riskText: { fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.7 },
   riskRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 7 },
   riskPill: {
     paddingHorizontal: 8,
@@ -175,8 +164,54 @@ const styles = StyleSheet.create({
   legalInner: { flex: 1, paddingVertical: 4, paddingHorizontal: 7 },
   legalCode: { fontSize: 7.5, fontWeight: 900, color: Theme.RISK_HIGH, marginBottom: 1 },
   legalReason: { fontSize: 7.5, color: Theme.INK_SOFT, lineHeight: 1.35 },
+  /* ---- analysis ---- */
+  caseSummaryText: { fontSize: 12.5, fontWeight: 500, color: Theme.INK, lineHeight: 1.38 },
+  findingRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  findingIndex: {
+    width: 18,
+    fontSize: 9,
+    fontWeight: 900,
+    color: Theme.PRIMARY_BLUE,
+    paddingTop: 1,
+  },
+  findingBody: { flex: 1 },
+  findingTagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 1 },
+  findingTag: {
+    fontSize: 7,
+    fontWeight: 900,
+    color: Theme.MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  findingSource: {
+    fontSize: 7,
+    fontWeight: 900,
+    color: Theme.LINK,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  findingText: { fontSize: 9.5, color: Theme.INK_SOFT, lineHeight: 1.5 },
+  operatorRow: { flexDirection: 'row', gap: 9, marginBottom: 8 },
+  operatorLabel: {
+    width: 62,
+    fontSize: 7.5,
+    color: Theme.MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  operatorValue: { flex: 1, fontSize: 9, color: Theme.INK_SOFT, lineHeight: 1.48 },
+  actionText: { fontSize: 8.5, fontWeight: 700, color: Theme.INK, lineHeight: 1.35 },
+  targetRow: { marginBottom: 10 },
+  targetLabel: {
+    fontSize: 7.5,
+    fontWeight: 900,
+    color: Theme.PRIMARY_BLUE,
+    textTransform: 'uppercase',
+    letterSpacing: 0.55,
+    marginBottom: 1,
+  },
+  targetItem: { fontSize: 9, color: Theme.INK_SOFT, lineHeight: 1.5 },
   /* ---- prose ---- */
-  leadText: { fontSize: 11, color: Theme.INK, lineHeight: 1.3 },
   bodyText: { fontSize: 8, color: Theme.INK_SOFT, lineHeight: 1.4 },
   softText: { fontSize: 8, color: Theme.MUTED, lineHeight: 1.4 },
   /* ---- gallery ---- */
@@ -223,9 +258,13 @@ const styles = StyleSheet.create({
   mediaCellOne: { width: '62%', height: 118 },
   mediaCellTwo: { width: '48%', height: 96 },
   mediaCellMany: { width: '32%', height: 80 },
+  proofRow: { flexDirection: 'row', gap: 8, marginTop: 5 },
+  proofCard: { flex: 1, borderWidth: 0.5, borderColor: Theme.LINE, borderRadius: 5, padding: 7, backgroundColor: Theme.BG_SECTION },
+  proofImage: { width: '100%', height: 150, objectFit: 'contain', backgroundColor: Theme.SURFACE },
+  proofCaption: { fontSize: 7, color: Theme.INK_SOFT, lineHeight: 1.3, marginTop: 4 },
   mediaImage: { width: '100%', height: '100%', objectFit: 'contain' },
   evidenceTitle: { fontSize: 9.5, fontWeight: 700, color: Theme.INK, marginBottom: 3, lineHeight: 1.3 },
-  evidenceText: { fontSize: 7.5, color: Theme.INK_SOFT, lineHeight: 1.38 },
+  evidenceText: { fontSize: 9, color: Theme.INK_SOFT, lineHeight: 1.48 },
 });
 
 const displayValue = (value, max = 60) => {
@@ -233,10 +272,6 @@ const displayValue = (value, max = 60) => {
   if (!text) return '—';
   return processText(text, max) || text;
 };
-
-const hasLabelledReasoning = (review) =>
-  review.reasoningSections.length > 1 ||
-  Boolean(review.reasoningSections[0] && review.reasoningSections[0].label);
 
 const Header = ({ app }) => (
   <View style={styles.header} fixed>
@@ -259,12 +294,6 @@ const Footer = () => (
   </View>
 );
 
-const RiskBadge = ({ risk }) => (
-  <View style={[styles.riskBadge, { backgroundColor: risk.bg, borderColor: risk.border }]}>
-    <Text style={[styles.riskText, { color: risk.color }]}>{risk.label}</Text>
-  </View>
-);
-
 const FieldGrid = ({ items }) => {
   const rows = buildEvidenceFieldRows(items);
   return (
@@ -274,7 +303,7 @@ const FieldGrid = ({ items }) => {
           {row.map((item, cellIndex) => (
             <View key={`${item.label}-${cellIndex}`} style={row.length === 1 ? styles.kvFull : styles.kvHalf}>
               <Text style={styles.kvLabel}>{item.label}</Text>
-              <Text style={styles.kvValue}>{displayValue(item.value, item.width === 'full' ? 130 : 60)}</Text>
+              <Text style={styles.kvValue}>{String(item.value || '—')}</Text>
             </View>
           ))}
         </View>
@@ -290,7 +319,7 @@ const MetaRow = ({ label, children }) => (
   </View>
 );
 
-const AppPublisherCard = ({ app }) => {
+const AppPublisherCard = ({ app, review }) => {
   const store = app.store || {};
   const developer = app.developer || {};
   const risk = appRiskInfo(app);
@@ -300,7 +329,7 @@ const AppPublisherCard = ({ app }) => {
     ['Genre', store.genre],
     ['Content rating', store.content_rating],
     ['Installs', appInstallCountLabel(app)],
-    ['Ratings', store.ratings != null ? Number(store.ratings).toLocaleString('en-IN') : null],
+    ['Store rating', [store.rating_score != null ? `${Number(store.rating_score).toFixed(1)}/5` : null, store.ratings != null ? `${Number(store.ratings).toLocaleString('en-IN')} ratings` : null].filter(Boolean).join(' · ')],
     ['Store listing', app.original_url],
   ];
   const publisherRows = [
@@ -323,7 +352,7 @@ const AppPublisherCard = ({ app }) => {
       ) : null}
       <View style={styles.kvGridRow}>
         <View style={styles.kvHalf}>
-          <Text style={[styles.subLabel, { marginTop: 0 }]}>Application</Text>
+          <Text style={[styles.cardLabel, { fontSize: 10, marginTop: 3, marginBottom: 8, color: Theme.INK }]}>Application</Text>
           {appRows.map(([label, value]) => (
             <View key={label} style={{ marginBottom: 4 }}>
               <Text style={styles.kvLabel}>{label}</Text>
@@ -338,7 +367,7 @@ const AppPublisherCard = ({ app }) => {
           ))}
         </View>
         <View style={styles.kvHalf}>
-          <Text style={[styles.subLabel, { marginTop: 0 }]}>Publisher</Text>
+          <Text style={[styles.cardLabel, { fontSize: 10, marginTop: 3, marginBottom: 8, color: Theme.INK }]}>Publisher</Text>
           {publisherRows.map(([label, value]) => (
             <View key={label} style={{ marginBottom: 4 }}>
               <Text style={styles.kvLabel}>{label}</Text>
@@ -357,161 +386,114 @@ const AppPublisherCard = ({ app }) => {
   );
 };
 
-/** Review Details — case summary, violations, legal codes, reviewer comments. */
-const ReviewCard = ({ review }) => (
+/**
+ * Page-1 hook card. Shows the short "simple reasoning" as the Case Summary in a
+ * larger face, then the detected violations. The long-form review details
+ * (legal findings, reviewer comments, detailed reasoning) live in the
+ * "AI Analysis & Evidence" section instead of bloating the first page.
+ */
+const CaseSummaryCard = ({ review, summary }) => (
   <View style={styles.card}>
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-      <Text style={styles.cardLabel}>Review Details</Text>
-      <RiskBadge risk={review.risk} />
-    </View>
+    <Text style={styles.cardLabel}>Case Summary</Text>
 
     {review.caseSummary ? (
-      <View style={{ marginBottom: 5 }}>
-        <Text style={[styles.subLabel, { marginTop: 0 }]}>Case Summary</Text>
-        <Text style={styles.leadText}>{processText(review.caseSummary, 420, 5)}</Text>
-      </View>
-    ) : null}
+      <Text style={styles.caseSummaryText}>{processText(review.caseSummary, 520, 6)}</Text>
+    ) : (
+      <Text style={styles.softText}>
+        No case summary recorded yet. See assessment and reviewed basis for recorded details.
+      </Text>
+    )}
 
-    {review.violations.length > 0 ? (
-      <View style={{ marginBottom: 4 }}>
-        <Text style={styles.subLabel}>Detected Violations</Text>
+    {review.threatTypes.length > 0 ? (
+      <View style={{ marginTop: 9 }}>
+        <Text style={styles.subLabel}>Violations</Text>
         <View style={styles.pillRow}>
-          {review.violations.slice(0, MAX_HOOK_VIOLATIONS).map((violation) => (
+          {review.threatTypes.slice(0, MAX_HOOK_VIOLATIONS).map((violation) => (
             <View key={violation.name} style={styles.pill}>
               <Text style={styles.pillText}>{processText(violation.name, 26)}</Text>
             </View>
           ))}
         </View>
+        {review.threatTypes.length > MAX_HOOK_VIOLATIONS ? <Text style={styles.noteText}>Additional recorded violations appear in the detailed assessment.</Text> : null}
       </View>
     ) : null}
 
-    {review.legalCodes.length > 0 ? (
-      <View style={{ marginBottom: 2 }}>
+    {review.legalFindings.length > 0 ? (
+      <View style={{ marginTop: 9 }}>
         <Text style={styles.subLabel}>Legal Violations</Text>
-        {review.legalCodes.slice(0, MAX_HOOK_LEGAL_CODES).map((item, index) => (
+        {review.legalFindings.slice(0, MAX_HOOK_LEGAL_CODES).map((item, index) => (
           <View key={index} style={styles.legalShell}>
             <View style={styles.legalAccent} />
             <View style={styles.legalInner}>
-              <Text style={styles.legalCode}>{processText(item.code, 80)}</Text>
+              <Text style={styles.legalCode}>{processText(item.code, 90)}</Text>
               {item.reasoning ? (
-                <Text style={styles.legalReason}>{processText(item.reasoning, 160, 3)}</Text>
+                <Text style={styles.legalReason}>{processText(item.reasoning, 85, 1)}</Text>
               ) : null}
             </View>
           </View>
         ))}
+        {review.legalFindings.length > MAX_HOOK_LEGAL_CODES ? (
+          <Text style={styles.noteText}>
+            + {review.legalFindings.length - MAX_HOOK_LEGAL_CODES} more legal finding(s)
+          </Text>
+        ) : null}
       </View>
     ) : null}
 
-    {review.reviewerComments ? (
-      <View>
-        <Text style={styles.subLabel}>Reviewer Comments</Text>
-        <Text style={styles.bodyText}>{processText(review.reviewerComments, 220, 3)}</Text>
-      </View>
-    ) : null}
-
-    {!review.hasSignal ? (
-      <Text style={styles.softText}>
+    <Text style={styles.noteText}>{summary ? 'Detailed export contains the full recorded review.' : 'Full case summary and legal basis: assessment and reviewed basis.'}</Text>
+    {!review.hasSignal && !review.caseSummary ? (
+      <Text style={[styles.softText, { marginTop: 6 }]}>
         Not yet reviewed. No threat score, violations or legal findings are attached to this app yet.
       </Text>
-    ) : null}
-
-    {review.reasoning ? (
-      <View style={{ marginTop: 2 }}>
-        <Text style={styles.subLabel}>Detailed Reasoning</Text>
-        {hasLabelledReasoning(review) ? (
-          review.reasoningSections.map((section, index) => (
-            <View key={index} style={{ marginBottom: 3 }}>
-              {section.label ? <Text style={styles.kvValue}>{processText(section.label, 60)}</Text> : null}
-              <Text style={styles.bodyText}>{processText(section.content, 520, 6)}</Text>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.bodyText}>{processText(review.reasoning, 640, 8)}</Text>
-        )}
-      </View>
     ) : null}
   </View>
 );
 
-function appPackageLine(app) {
-  const parts = [appPlatformLabel(app), app?.store?.genre].filter(Boolean);
-  return parts.join(' · ') || app?.package_id || '';
-}
-
-const GalleryColumn = ({ app }) => {
-  const shots = (app.compressedScreenshots || []).slice(0, MAX_HOOK_SHOTS);
-  const totalShots = app.total_screenshots || shots.length;
-
+const ProofCard = ({ card, summary, caseNumber }) => {
+  const securities = card.key === 'securities';
+  const source = card.sources.find((item) => (item.images || []).some((image) => image.localPath)) || card.sources[0];
+  const available = (source?.images || []).filter((item) => item.localPath);
+  const selected = summary ? available.slice(0, 1) : card.key === 'payment' && available.length > 1 ? [available[0], available[available.length - 1]] : available.slice(0, 2);
+  const missingMedia = source?.media?.[0];
   return (
-    <View>
-      <View style={styles.iconRow}>
-        <View style={styles.iconWell}>
-          {app.compressedImage ? (
-            <Image style={styles.iconImage} src={app.compressedImage} />
-          ) : (
-            <Text style={styles.iconPlaceholder}>No{'\n'}icon</Text>
-          )}
-        </View>
-        <View style={styles.iconMeta}>
-          <Text style={styles.iconMetaTitle}>{processText(app.title || 'Unknown app', 40)}</Text>
-          <Text style={styles.iconMetaSub}>{processText(appPackageLine(app), 44)}</Text>
-        </View>
-      </View>
-
-      {shots.length > 0 ? (
-        <View style={styles.galleryGrid}>
-          {shots.map((src, index) => (
-            <View key={index} style={styles.galleryCell}>
-              {src ? (
-                <Image style={styles.galleryImage} src={src} />
-              ) : (
-                <View style={styles.galleryPlaceholder}>
-                  <Text style={styles.galleryPlaceholderText}>Shot {index + 1}</Text>
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Screenshots</Text>
-          <Text style={styles.softText}>No screenshots captured.</Text>
+    <View style={styles.proofCard}>
+      <Text style={styles.cardLabel}>{securities ? 'Buy, Sell & Trade Indian Securities' : 'Payment Portal / Gateway'}</Text>
+      {selected.length ? <View style={{ flexDirection: 'row', gap: 4 }}>
+        {selected.map((image, index) => <Image key={image.slot || index} style={[styles.proofImage, { width: selected.length > 1 ? '49%' : '100%', height: 165 }]} src={image.localPath} />)}
+      </View> : (
+        <View style={[styles.proofImage, { justifyContent: 'center', padding: 10 }]}>
+          <Text style={styles.softText}>No prepared operational screenshot available{missingMedia?.filename ? `: ${missingMedia.filename}` : '.'}</Text>
         </View>
       )}
-
-      {totalShots > shots.length ? (
-        <Text style={styles.noteText}>+ {totalShots - shots.length} more screenshot(s) captured</Text>
-      ) : null}
+      <Text style={[styles.proofCaption, { fontWeight: 700, fontSize: 8.5 }]}>{securities ? 'This app allows buying, selling and trading of Indian stocks and securities.' : 'This app offers trading in Indian securities and collects payments from users without being registered with SEBI.'}</Text>
+      <Text style={styles.noteText}>{source?.title || 'No matching evidence section recorded.'}</Text>
+      {selected.length ? <Text style={styles.noteText}>{selected.length} of {available.length} prepared images: {selected.map((image) => image.filename || image.label || 'image').join(', ')}</Text> : null}
+      <Text style={styles.noteText}>Category based on source label; capture alone does not establish execution.</Text>
+      {summary ? <Text style={styles.noteText}>Detailed export contains the evidence dossier.</Text> : <Link src={`#case-${caseNumber}-evidence-${card.key}`} style={styles.kvLink}>See this evidence category</Link>}
     </View>
   );
 };
 
-/* ------------------------------------------------------------------ *
- * Page 1 — the hook                                                   *
- * ------------------------------------------------------------------ */
-
-const HookPage = ({ app, caseNumber, project }) => {
+export const AppCaseOverviewPage = ({ app, caseNumber, project, summary = false }) => {
   const review = buildAppReviewModel(app, project);
+  const analysis = buildAppAnalysisModel(app, project);
+  const proofCards = buildAppProofCards(app).sort((a, b) => (a.key === 'securities' ? -1 : b.key === 'securities' ? 1 : 0));
   return (
     <Page size="A4" style={styles.page}>
       <Header app={app} />
-
       <View style={styles.hookHeading} wrap={false}>
-        <Text style={styles.hookTitle}>
-          {caseNumber}. {processText(app.title || 'Unknown app', 60)}
-        </Text>
+        <Text style={styles.hookTitle}>{caseNumber}. {processText(app.title || 'Unknown app', 80)}</Text>
+        <Text style={styles.sectionHeadingMeta}>{review.reviewedAt ? `Reviewed · ${formatDateTime(review.reviewedAt)}` : 'Assessment pending'}</Text>
       </View>
-
       <View style={styles.columns}>
-        <View style={styles.leftCol}>
-          <AppPublisherCard app={app} />
-          <ReviewCard review={{ ...review, sourcedAt: app.sourced_at }} />
+        <View style={styles.leftCol}><CaseSummaryCard review={review} summary={summary} />
+          {!summary && (analysis.hasAnalysis || review.hasSignal || review.caseSummary || review.legalFindings.length) ? <Link src={`#case-${caseNumber}-assessment`} style={styles.kvLink}>Assessment and reviewed basis</Link> : null}
         </View>
-        <View style={styles.rightCol}>
-          <GalleryColumn app={app} />
-        </View>
+        <View style={styles.rightCol}><AppPublisherCard app={app} review={review} /></View>
       </View>
-
+      <View style={styles.proofRow}>
+        {proofCards.map((card) => <ProofCard key={card.key} card={card} summary={summary} caseNumber={caseNumber} />)}
+      </View>
       <Footer />
     </Page>
   );
@@ -576,21 +558,6 @@ const PermissionsCard = ({ app }) => {
   );
 };
 
-const AnalysisCard = ({ app }) => {
-  const rows = flattenKeyValues(app?.analysis_results);
-  if (rows.length === 0) return null;
-  return (
-    <View style={styles.card}>
-      <Text style={styles.cardLabel}>Automated Analysis</Text>
-      {rows.map((row) => (
-        <MetaRow key={row.label} label={row.label}>
-          <Text style={styles.kvValueSoft}>{displayValue(row.value, 180)}</Text>
-        </MetaRow>
-      ))}
-    </View>
-  );
-};
-
 const InfoPage = ({ app, caseNumber, project }) => {
   const store = app.store || {};
   const developer = app.developer || {};
@@ -625,7 +592,7 @@ const InfoPage = ({ app, caseNumber, project }) => {
       <Header app={app} />
 
       <View style={styles.sectionHeading} wrap={false}>
-        <Text style={styles.sectionHeadingText}>{caseNumber}. App &amp; Developer</Text>
+        <Text style={styles.sectionHeadingText}>4. App &amp; Developer</Text>
         <Text style={styles.sectionHeadingMeta}>{processText(app.title || '', 46)}</Text>
       </View>
 
@@ -652,7 +619,6 @@ const InfoPage = ({ app, caseNumber, project }) => {
       </View>
 
       <PermissionsCard app={app} />
-      <AnalysisCard app={app} />
 
       <Footer />
     </Page>
@@ -660,7 +626,180 @@ const InfoPage = ({ app, caseNumber, project }) => {
 };
 
 /* ------------------------------------------------------------------ *
- * Section 2 — evidence                                                *
+ * Section 2 — AI analysis & evidence                                  *
+ * ------------------------------------------------------------------ */
+
+const ThreatTypesCard = ({ threatTypes }) => (
+  <View style={styles.card}>
+    <Text style={styles.cardLabel}>Detected Threat Types</Text>
+    {threatTypes.length > 0 ? (
+      <View style={styles.pillRow}>
+        {threatTypes.map((threat) => (
+          <View key={threat.name} style={styles.pill}>
+            <Text style={styles.pillText}>{processText(threat.name, 34)}</Text>
+          </View>
+        ))}
+      </View>
+    ) : (
+      <Text style={styles.softText}>No threat types recorded.</Text>
+    )}
+  </View>
+);
+
+const OperatorCard = ({ operator }) => {
+  if (!operator) return null;
+  const rows = [
+    ['Developer account', operator.developerAccount],
+    ['Legal entities', operator.legalEntities.join(', ')],
+    ['Countries', operator.countries.join(', ')],
+    ['Concealment', operator.concealment],
+  ].filter(([, value]) => value);
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardLabel}>Operator Profile</Text>
+      {rows.map(([label, value]) => (
+        <View key={label} style={styles.operatorRow}>
+          <Text style={styles.operatorLabel}>{label}</Text>
+          <Text style={styles.operatorValue}>{processText(value, 220, 4)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const FindingsCard = ({ findingsByCategory }) => {
+  if (findingsByCategory.length === 0) return null;
+  let index = 0;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardLabel}>Analysis findings</Text>
+      {findingsByCategory.map((group) => (
+        <View key={group.category} style={{ marginBottom: 4 }}>
+          {group.items.map((item, itemIndex) => {
+            index += 1;
+            return (
+              <View key={itemIndex} wrap={false}>
+                {itemIndex === 0 ? <Text style={styles.subLabel}>{processText(group.category, 60)}</Text> : null}
+                <View style={styles.findingRow}>
+                <Text style={styles.findingIndex}>{index}</Text>
+                <View style={styles.findingBody}>
+                  {item.source ? (
+                    <View style={styles.findingTagRow}>
+                      <Text style={styles.findingSource}>{processText(item.source, 40)}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.findingText}>{item.finding}</Text>
+                  {(item.references || []).some((reference) => reference.status === 'missing_manifest') ? <Text style={styles.noteText}>Unresolved analysis references: {(item.references || []).filter((reference) => reference.status === 'missing_manifest').map((reference) => reference.id).join(', ')} (original source map unavailable)</Text> : null}
+                  {(item.references || []).filter((reference) => reference.status !== 'missing_manifest').map((reference, referenceIndex) => (
+                    <Text key={referenceIndex} style={styles.noteText}>
+                      {reference.label || 'Source reference'} · {({ matched: 'source identified', source_removed: 'source no longer available', ambiguous: 'source identity ambiguous', unknown_reference: 'source reference unknown', missing_manifest: 'run manifest unavailable' })[reference.status] || 'source status unavailable'}{reference.observed === true ? ' · recorded as observed in run' : reference.observed === false ? ' · not observed in run' : ''}
+                    </Text>
+                  ))}
+                </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const TakedownTargetsCard = ({ targets }) => {
+  if (targets.length === 0) return null;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardLabel}>Analysis targets · verify before action</Text>
+      {targets.map((target) => (
+        <View key={target.label} style={styles.targetRow}>
+          <Text style={styles.targetLabel}>{target.label}</Text>
+          {target.items.map((item, index) => (
+            <Text key={index} style={styles.targetItem}>
+              • {processText(item, 120)}
+            </Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const AnalysisPage = ({ app, caseNumber, project }) => {
+  const analysis = buildAppAnalysisModel(app, project);
+  const review = buildAppReviewModel(app, project);
+  if (!analysis.hasAnalysis && !review.hasSignal && !review.caseSummary && !review.legalFindings.length) return null;
+
+  const reviewedAt = app.reviewed_at ? formatDateTime(app.reviewed_at) : '';
+
+  return (
+    <Page size="A4" style={styles.page}>
+      <Header app={app} />
+
+      <View style={styles.sectionHeading} wrap={false}>
+        <Text id={`case-${caseNumber}-assessment`} style={styles.sectionHeadingText}>
+          3. Assessment &amp; Supporting Evidence
+        </Text>
+        <Text style={styles.sectionHeadingMeta}>
+          {analysis.findings.length > 0 ? `${analysis.findings.length} finding(s)` : ''}
+          {reviewedAt ? `${analysis.findings.length > 0 ? ' · ' : ''}Reviewed ${reviewedAt}` : ''}
+        </Text>
+      </View>
+
+      {review.caseSummary ? <View style={styles.card}>
+        <Text style={styles.cardLabel}>Case Summary</Text>
+        <Text style={styles.bodyText}>{review.caseSummary}</Text>
+      </View> : null}
+      {analysis.threatTypes.length ? <View style={styles.card}>
+        <Text style={styles.cardLabel}>Violations</Text>
+        <View style={styles.pillRow}>
+          {analysis.threatTypes.map((violation) => <View key={violation.name} style={styles.pill}>
+            <Text style={styles.pillText}>{violation.name}</Text>
+          </View>)}
+        </View>
+      </View> : null}
+      {review.legalFindings.length ? <View style={styles.card}>
+        <Text style={styles.cardLabel}>Legal Violations</Text>
+        {review.legalFindings.map((item, index) => <View key={index} style={styles.legalShell} wrap={false}>
+          <View style={styles.legalAccent} />
+          <View style={styles.legalInner}>
+            <Text style={styles.legalCode}>{item.code}</Text>
+            {item.reasoning ? <Text style={styles.legalReason}>{item.reasoning}</Text> : null}
+          </View>
+        </View>)}
+      </View> : null}
+      {analysis.detailedReasoning || analysis.reviewerComments ? (
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Detailed Reasoning</Text>
+          {analysis.detailedReasoning ? <Text style={styles.bodyText}>{analysis.detailedReasoning}</Text> : null}
+          {analysis.reviewerComments ? (
+            <View style={{ marginTop: 6 }}>
+              <Text style={styles.subLabel}>Reviewer Comments</Text>
+              <Text style={styles.bodyText}>{analysis.reviewerComments}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <FindingsCard findingsByCategory={analysis.findingsByCategory} />
+      <View style={styles.pairRow}>
+        <View style={styles.pairCol}>
+          <TakedownTargetsCard targets={analysis.takedownTargets} />
+        </View>
+        <View style={styles.pairCol}>
+          {analysis.operator ? <OperatorCard operator={analysis.operator} /> : null}
+        </View>
+      </View>
+
+      <SupportingEvidenceContent app={app} />
+      <Footer />
+    </Page>
+  );
+};
+
+/* ------------------------------------------------------------------ *
+ * Section 3 — evidence                                                *
  * ------------------------------------------------------------------ */
 
 const EvidenceFieldGroup = ({ group }) => (
@@ -670,28 +809,23 @@ const EvidenceFieldGroup = ({ group }) => (
   </View>
 );
 
-const MediaSubSection = ({ section }) => {
-  const images = section.images.slice(0, MAX_MEDIA_IMAGES_PER_SECTION);
-  const total = section.totalImages || section.images.length;
-  const cellStyle =
-    images.length === 1 ? styles.mediaCellOne : images.length === 2 ? styles.mediaCellTwo : styles.mediaCellMany;
-
+const MediaSubSection = ({ section, category, anchor }) => {
+  const images = section.images || [];
+  const rows = [];
+  for (let i = 0; i < images.length; i += 2) rows.push(images.slice(i, i + 2));
   return (
-    <View style={[styles.card, styles.cardTight]} wrap={false}>
-      <Text style={styles.evidenceTitle}>{processText(section.title, 90)}</Text>
-      {section.description ? (
-        <Text style={styles.evidenceText}>{processText(section.description, 320, 4)}</Text>
-      ) : null}
-      <View style={styles.mediaGrid}>
-        {images.map((image, index) => (
-          <View key={image.slot || index} style={[styles.mediaCell, cellStyle]}>
-            <Image style={styles.mediaImage} src={image.localPath || image.url} />
-          </View>
-        ))}
-      </View>
-      {total > images.length ? (
-        <Text style={styles.noteText}>+ {total - images.length} more image(s) captured</Text>
-      ) : null}
+    <View style={styles.card}>
+      {category ? <Text id={anchor} style={styles.cardLabel} minPresenceAhead={290}>{category} · Evidence category</Text> : null}
+      <Text style={styles.evidenceTitle} minPresenceAhead={270}>{section.title || 'Evidence'}</Text>
+      {section.description ? <Text style={styles.evidenceText}>{section.description}</Text> : null}
+      {rows.map((row, rowIndex) => <View key={rowIndex} style={{ flexDirection: 'row', gap: 8, marginTop: 7 }} wrap={false}>
+        {row.map((image, index) => <View key={image.slot || index} style={{ width: '49%' }}>
+          {image.localPath ? <Image style={{ width: '100%', height: 240, objectFit: 'contain', backgroundColor: Theme.SURFACE_ALT }} src={image.localPath} /> :
+            <Text style={styles.softText}>Image unavailable in this export.</Text>}
+          <Text style={styles.noteText}>{image.filename || image.label || `Image ${rowIndex * 2 + index + 1}`}</Text>
+        </View>)}
+      </View>)}
+      {section.totalImages > images.length ? <Text style={styles.noteText}>Additional recorded images are unavailable in this export.</Text> : null}
     </View>
   );
 };
@@ -699,51 +833,91 @@ const MediaSubSection = ({ section }) => {
 const OtherSubSection = ({ section }) => (
   <View style={styles.card} wrap={false}>
     {section.title ? <Text style={styles.evidenceTitle}>{processText(section.title, 90)}</Text> : null}
-    <Text style={styles.evidenceText}>{processText(section.description, 700, 10)}</Text>
+    <Text style={styles.evidenceText}>{section.description}</Text>
   </View>
 );
 
 const EvidencePage = ({ app, caseNumber }) => {
   const evidence = buildAppEvidenceModel(app);
-  if (!evidence.hasEvidence) return null;
+  const proofGroups = buildAppProofCards(app);
+  const proofKeys = new Set(proofGroups.flatMap((card) => card.sources.map((source) => source.key)));
+  const otherSections = evidence.media.filter((section) => !proofKeys.has(section.key));
 
   return (
     <Page size="A4" style={styles.page}>
       <Header app={app} />
 
       <View style={styles.sectionHeading} wrap={false}>
-        <Text style={styles.sectionHeadingText}>{caseNumber}. Evidence</Text>
+        <Text style={styles.sectionHeadingText}>2. Evidence</Text>
         <Text style={styles.sectionHeadingMeta}>
           {evidence.totalImages > 0 ? `${evidence.totalImages} captured image(s)` : 'No captures'}
         </Text>
       </View>
 
+      {proofGroups.map((card, groupIndex) => {
+        const keys = new Set(card.sources.map((source) => source.key));
+        const sections = evidence.media.filter((section) => keys.has(section.key));
+        return <View key={card.key} break={groupIndex > 0}>
+          {sections.length ? sections.map((section, index) => <MediaSubSection key={index} section={section} category={index === 0 ? card.title : null} anchor={index === 0 ? `case-${caseNumber}-evidence-${card.key}` : undefined} />) :
+            <Text style={styles.softText}>No prepared images in this category.</Text>}
+        </View>;
+      })}
+      <Footer />
+    </Page>
+  );
+};
+
+const SupportingEvidenceContent = ({ app }) => {
+  const evidence = buildAppEvidenceModel(app);
+  const proofKeys = new Set(buildAppProofCards(app).flatMap((card) => card.sources.map((source) => source.key)));
+  const otherSections = evidence.media.filter((section) => !proofKeys.has(section.key));
+  return (<View break>
+    <View style={[styles.sectionHeading, { marginTop: 13 }]} wrap={false}><Text style={[styles.sectionHeadingText, { fontSize: 10 }]}>Source record &amp; captured fields</Text></View>
       {evidence.lead.map((section, index) => (
         <View key={`lead-${index}`} style={styles.card}>
-          <Text style={styles.cardLabel}>Executive Summary</Text>
-          <Text style={styles.bodyText}>{processText(section.description, 620, 8)}</Text>
+          <Text style={styles.cardLabel} minPresenceAhead={100}>Captured investigation summary</Text>
+          <Text style={styles.bodyText}>{section.description}</Text>
         </View>
       ))}
 
       {evidence.fieldsByGroup.length > 0 ? (
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Captured Fields</Text>
+          <Text style={styles.cardLabel}>Captured fields · evidence record</Text>
           {evidence.fieldsByGroup.map((group) => (
             <EvidenceFieldGroup key={group.id} group={group} />
           ))}
         </View>
       ) : null}
 
-      {evidence.media.map((section, index) => (
-        <MediaSubSection key={`media-${index}`} section={section} />
-      ))}
+      {otherSections.map((section, index) => <MediaSubSection key={`media-${index}`} section={section} />)}
 
-      {evidence.other.slice(0, MAX_OTHER_SECTIONS).map((section, index) => (
+      {(app.evidence?.sections || []).map((section, index) => {
+        const otherMedia = (section.media || []).filter((item, mediaIndex) => item && !(section.images || []).some((image) => image.slot === `${index}:${mediaIndex}` && image.localPath));
+        if (!otherMedia.length && ((section.images || []).length || section.description)) return null;
+        return <View key={`media-record-${index}`} style={styles.card}>
+          <Text style={styles.evidenceTitle}>{section.title || 'Evidence media'} · Media record</Text>
+          {!otherMedia.length ? <Text style={styles.softText}>No description or media available in this section.</Text> : null}
+          {otherMedia.map((item, mediaIndex) => <Text key={mediaIndex} style={styles.bodyText}>
+            {item.filename || item.label || item.type || `Media ${mediaIndex + 1}`} · {item.localPath ? 'Prepared attachment' : 'Recorded attachment; preview unavailable'}
+          </Text>)}
+        </View>;
+      })}
+      {evidence.other.map((section, index) => (
         <OtherSubSection key={`other-${index}`} section={section} />
       ))}
 
-      <Footer />
-    </Page>
+      {(app.compressedScreenshots || []).length ? <View style={styles.card}>
+        <Text style={styles.cardLabel} minPresenceAhead={220}>Store listing screenshots</Text>
+        <Text style={styles.softText}>Store listing media; not labelled as operational proof.</Text>
+        {Array.from({ length: Math.ceil(app.compressedScreenshots.length / 2) }, (_, rowIndex) => <View key={rowIndex} style={{ flexDirection: 'row', gap: 8, marginTop: 6 }} wrap={false}>
+          {app.compressedScreenshots.slice(rowIndex * 2, rowIndex * 2 + 2).map((src, index) => src ? <View key={index} style={{ width: '49%' }}>
+            <Image style={{ width: '100%', height: 200, objectFit: 'contain', backgroundColor: Theme.SURFACE_ALT }} src={src} />
+            <Text style={styles.noteText}>Store screenshot {rowIndex * 2 + index + 1}</Text>
+          </View> : null)}
+        </View>)}
+        {app.total_screenshots > app.compressedScreenshots.length ? <Text style={styles.noteText}>Additional store screenshots were recorded but are unavailable in this export.</Text> : null}
+      </View> : null}
+    </View>
   );
 };
 
@@ -753,9 +927,10 @@ export const AppsDetailedReportDocument = ({ apps: appsProp, posts, project }) =
     <Document>
       {apps.map((app, index) => (
         <React.Fragment key={app._id}>
-          <HookPage app={app} caseNumber={index + 1} project={project} />
-          <InfoPage app={app} caseNumber={index + 1} project={project} />
+          <AppCaseOverviewPage app={app} caseNumber={index + 1} project={project} />
           <EvidencePage app={app} caseNumber={index + 1} />
+          <AnalysisPage app={app} caseNumber={index + 1} project={project} />
+          <InfoPage app={app} caseNumber={index + 1} project={project} />
         </React.Fragment>
       ))}
     </Document>

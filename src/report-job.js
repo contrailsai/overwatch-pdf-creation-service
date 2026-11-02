@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const sharp = require('sharp');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { ObjectId } = require('mongodb');
 const { renderToStream } = require('@react-pdf/renderer');
 const React = require('react');
@@ -39,7 +41,7 @@ const {
   SCREENSHOT_GALLERY_RATIO,
   SCREENSHOT_EVIDENCE_RATIO,
 } = require('./domain-display');
-const { uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
+const { s3Client, uploadBufferToS3, fetchImageFromS3Url } = require('./s3');
 const { watermarkPdfStream } = require('./pdf-watermark');
 const { supabase, supabaseEnabled } = require('./supabase');
 
@@ -72,6 +74,7 @@ const pdfGenerationDuration = meter.createHistogram('generate_pdf_duration_secon
 
 /** Lambda uses `/tmp/images`; override with IMAGE_CACHE_DIR if needed. */
 const IMAGE_CACHE_DIR = process.env.IMAGE_CACHE_DIR || '/tmp/images';
+const APP_IMAGE_FETCH_TIMEOUT_MS = Number(process.env.IMAGE_FETCH_TIMEOUT_MS || 8000);
 
 function ensureImageCacheDir() {
   if (!fs.existsSync(IMAGE_CACHE_DIR)) {
@@ -135,7 +138,7 @@ async function updateReportStatus(reportHash, statusText, extraFields = {}) {
   }
 }
 
-async function processImage(imageUrl, id, suffix = 'processed') {
+async function processImage(imageUrl, id, suffix = 'processed', options = {}) {
   ensureImageCacheDir();
   if (!imageUrl) return null;
 
@@ -145,9 +148,11 @@ async function processImage(imageUrl, id, suffix = 'processed') {
   if (!fs.existsSync(cachedPath)) {
     let buffer;
     try {
-      buffer = await fetchImageFromS3Url(imageUrl);
+      buffer = options.fetcher
+        ? await options.fetcher(options.source || imageUrl)
+        : await fetchImageFromS3Url(imageUrl);
     } catch (error) {
-      console.error(`Failed to fetch image ${imageUrl} for ${id}:`, error.message);
+      console.error('Failed to fetch image:', options.fetcher ? 'app media unavailable' : error.message);
       return null;
     }
 
@@ -158,7 +163,7 @@ async function processImage(imageUrl, id, suffix = 'processed') {
         .toFile(cachedPath);
     } catch (sharpError) {
       const magicBytes = buffer.toString('hex', 0, 4).toLowerCase();
-      if (magicBytes.startsWith('ffd8') || magicBytes.startsWith('8950')) {
+      if (options.allowRawFallback !== false && (magicBytes.startsWith('ffd8') || magicBytes.startsWith('8950'))) {
         console.warn(
           `[Fallback Triggered] Sharp failed, but recognized valid JPEG/PNG magic bytes (${magicBytes}) for ${id}. Saving raw file. Reason: ${sharpError.message}`,
         );
@@ -166,13 +171,120 @@ async function processImage(imageUrl, id, suffix = 'processed') {
         return cachedPath;
       }
       console.error(
-        `[Irrecoverable] Failed to process image ${imageUrl} for ${id}. Magic Bytes: ${magicBytes} - Error:`,
+        `[Irrecoverable] Failed to process image. Magic Bytes: ${magicBytes} - Error:`,
         sharpError.message,
       );
       return null;
     }
   }
   return cachedPath;
+}
+
+function appS3Object(source) {
+  const rawUrl = String(source?.s3_url || source?.original_url || source?.url || '').trim();
+  let bucket = source?.s3_bucket || source?.bucket || '';
+  let key = source?.s3_key || source?.key || '';
+  let urlVersion = '';
+  let region = source?.s3_region || source?.region || '';
+  const metadataVersion = source?.version_id == null ? '' : String(source.version_id);
+  if (rawUrl) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.protocol === 's3:') {
+        bucket ||= parsed.hostname;
+        key ||= decodeURIComponent(parsed.pathname.slice(1));
+        urlVersion = parsed.searchParams.get('versionId') || '';
+      } else if (parsed.protocol === 'https:') {
+        urlVersion = parsed.searchParams.get('versionId') || '';
+        const virtual = parsed.hostname.match(/^(.+)\.s3(?:[.-]([a-z0-9-]+))?\.amazonaws\.com(?:\.cn)?$/i);
+        if (virtual) {
+          bucket ||= virtual[1];
+          key ||= decodeURIComponent(parsed.pathname.slice(1));
+          region = virtual[2] || '';
+        } else {
+          const pathStyle = parsed.hostname.match(/^s3(?:[.-]([a-z0-9-]+))?\.amazonaws\.com(?:\.cn)?$/i);
+          if (!pathStyle) throw new Error('Unsupported S3 URL host');
+          const parts = decodeURIComponent(parsed.pathname.slice(1)).split('/');
+          bucket ||= parts.shift() || '';
+          key ||= parts.join('/');
+          region = pathStyle[1] || '';
+        }
+      }
+    } catch {
+      // Non-URL identifiers may still be supplied through s3_bucket/s3_key.
+    }
+  }
+  if (!bucket || !key) {
+    if (metadataVersion || urlVersion) throw new Error('Versioned app media must identify an S3 object');
+    return null;
+  }
+  if (metadataVersion && urlVersion && metadataVersion !== urlVersion) {
+    throw new Error('App media version_id disagrees with URL versionId');
+  }
+  return { bucket, key, versionId: metadataVersion || urlVersion, region };
+}
+
+const appS3Clients = new Map();
+function appS3Client(region) {
+  const resolvedRegion = region || process.env.AWS_REGION || 'ap-south-1';
+  if (resolvedRegion === (process.env.AWS_REGION || 'ap-south-1')) return s3Client;
+  if (!appS3Clients.has(resolvedRegion)) appS3Clients.set(resolvedRegion, new S3Client({ region: resolvedRegion }));
+  return appS3Clients.get(resolvedRegion);
+}
+
+async function streamToBuffer(body, timeoutMs = APP_IMAGE_FETCH_TIMEOUT_MS) {
+  const chunks = [];
+  let timeoutId;
+  const readBody = (async () => {
+    for await (const chunk of body) chunks.push(Buffer.from(chunk));
+    return Buffer.concat(chunks);
+  })();
+  const timeout = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(`App media stream timed out after ${timeoutMs}ms`);
+      body.destroy?.(error);
+      reject(error);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([readBody, timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/** App-only exact-source fetch; non-S3 URLs use the existing bounded HTTP fetch. */
+async function fetchAppImageFromSource(source) {
+  const object = appS3Object(source);
+  let buffer;
+  if (object) {
+    const result = await appS3Client(object.region).send(
+      new GetObjectCommand({
+        Bucket: object.bucket,
+        Key: object.key,
+        ...(object.versionId ? { VersionId: object.versionId } : {}),
+      }),
+      { abortSignal: AbortSignal.timeout(APP_IMAGE_FETCH_TIMEOUT_MS) },
+    );
+    if (!result.Body) throw new Error('App media source returned an empty body');
+    buffer = await streamToBuffer(result.Body);
+  } else {
+    const url = source?.s3_url || source?.original_url || source?.url || source;
+    if (!url) throw new Error('App media source has no fetchable URL or S3 object key');
+    buffer = await fetchImageFromS3Url(url);
+  }
+
+  const expected = String(source?.sha256 || source?.checksum_sha256 || '').replace(/^sha256:/i, '').trim();
+  if (expected) {
+    const actualHex = crypto.createHash('sha256').update(buffer).digest('hex');
+    const normalizedExpected = /^[a-f\d]{64}$/i.test(expected)
+      ? expected.toLowerCase()
+      : Buffer.from(expected, 'base64').toString('hex').toLowerCase();
+    if (!/^[a-f\d]{64}$/.test(normalizedExpected) || actualHex !== normalizedExpected) {
+      throw new Error('App media SHA-256 checksum mismatch');
+    }
+  }
+  return buffer;
 }
 
 async function processAndCacheImages(posts, concurrency = 5) {
@@ -246,14 +358,26 @@ async function processAndCacheAppImages(
       const slot = i + index;
 
       const thumbUrl = app.icon_url || app.header_url || app.screenshots?.[0]?.url || null;
-      compressedImages[slot] = await processImage(thumbUrl, app._id, 'app_icon');
+      const thumbSource = appSourceForUrl(app, thumbUrl);
+      compressedImages[slot] = await processImage(
+        thumbUrl,
+        app._id,
+        `app_icon_${sourceImageCacheToken(thumbSource, 'icon')}`,
+        { fetcher: fetchAppImageFromSource, source: thumbSource, allowRawFallback: false },
+      );
 
       if (includeScreenshots) {
         const shots = (app.screenshots || []).slice(0, MAX_APP_SCREENSHOTS);
         compressedScreenshotImages[slot] = await Promise.all(
-          shots.map((shot, shotIndex) =>
-            processImage(shot.url, app._id, `app_shot_${String(shotIndex).padStart(2, '0')}`),
-          ),
+          shots.map((shot, shotIndex) => {
+            const source = appSourceForUrl(app, shot.url);
+            return processImage(
+              shot.url,
+              app._id,
+              `app_shot_${sourceImageCacheToken(source, shotIndex)}`,
+              { fetcher: fetchAppImageFromSource, source, allowRawFallback: false },
+            );
+          }),
         );
       } else {
         compressedScreenshotImages[slot] = [];
@@ -262,17 +386,20 @@ async function processAndCacheAppImages(
       const evidencePaths = new Map();
       if (includeEvidence) {
         const entries = resolveAppEvidenceImageEntries(app);
-        await Promise.all(
-          entries.map(async (entry) => {
-            const [sectionIndex, mediaIndex] = String(entry.slot).split(':');
-            const localPath = await processImage(
-              entry.url,
-              app._id,
-              `app_ev_${String(sectionIndex).padStart(2, '0')}_${String(mediaIndex).padStart(2, '0')}`,
-            );
-            if (localPath) evidencePaths.set(entry.slot, localPath);
-          }),
-        );
+        for (let start = 0; start < entries.length; start += 4) {
+          const batch = entries.slice(start, start + 4);
+          await Promise.all(
+            batch.map(async (entry) => {
+              const localPath = await processImage(
+                entry.url,
+                app._id,
+                `app_ev_${sourceImageCacheToken(entry, entry.slot)}`,
+                { fetcher: fetchAppImageFromSource, source: entry, allowRawFallback: false },
+              );
+              if (localPath) evidencePaths.set(entry.slot, localPath);
+            }),
+          );
+        }
       }
       compressedEvidenceImages[slot] = evidencePaths;
     });
@@ -280,6 +407,35 @@ async function processAndCacheAppImages(
   }
 
   return { compressedImages, compressedScreenshotImages, compressedEvidenceImages };
+}
+
+/** Source identity + revision prevents positional slots from reusing stale media. */
+function sourceImageCacheToken(image, fallbackIdentity) {
+  const revision = image?.version_id ?? image?.revision ?? image?.updated_at ?? image?.updatedAt ?? '';
+  const checksum = image?.sha256 ?? image?.checksum_sha256 ?? image?.checksum ?? image?.etag ?? '';
+  const identity = [
+    image?.media_id ?? image?.id ?? '',
+    image?.s3_bucket ?? image?.bucket ?? '',
+    image?.s3_key ?? image?.key ?? '',
+    fallbackIdentity ?? '',
+  ].join(':');
+  return crypto
+    .createHash('sha256')
+    .update(`${identity}\n${image?.url || image?.s3_url || image?.original_url || ''}\n${revision}\n${checksum}`)
+    .digest('hex')
+    .slice(0, 24);
+}
+
+function appSourceForUrl(app, url) {
+  if (!url) return { url };
+  const candidates = [
+    ...(app?.source_media || []),
+    ...(app?.screenshots || []),
+    ...(app?.evidence?.sections || []).flatMap((section) => section.images || []),
+  ];
+  return candidates.find((media) =>
+    [media?.s3_url, media?.original_url, media?.url].some((candidate) => candidate === url),
+  ) || { url };
 }
 
 async function writeJpegFromBuffer(buffer, destPath, { width, extract } = {}) {
@@ -506,7 +662,7 @@ async function runReportJob(client, payload, options = {}) {
     entityIds,
     reportType,
     normalizedProfile?._id,
-    reportFormat || 'pdf',
+    validation.normalizedReportFormat,
     entityType,
     isDomains ? payload.variantKeysByDomainId : null,
   );

@@ -115,8 +115,6 @@ APPS_SUPPORTED_REPORT_TYPES       = Summary, Detailed
 TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES = Summary, Detailed
 MAX_PROFILE_REPORT_ADS            = 20
 MAX_APP_SCREENSHOTS               = 6
-MAX_APP_EVIDENCE_IMAGES           = 10
-MAX_APP_EVIDENCE_IMAGES_PER_SECTION = 4
 MAX_APP_PERMISSION_ITEMS          = 10
 ```
 
@@ -151,7 +149,7 @@ All branches download from S3 to a local cache, resize to **800 px wide max**, a
 | `ads` | `/tmp/images` | `Summary`: one thumb per ad (`resolveAdMediaUrl`, falling back to first card). `Detailed`: up to 6 card images per ad | — |
 | `domains` | `/tmp/images` | Lander screenshot per domain | `Detailed` only |
 | `ad_profiles` | `/tmp/images` | One thumb per ad, one lander per linked domain, one profile picture per profile | Always on — evidence hero (portrait ≈9:16) + gallery slices for every domain |
-| `apps` | `/tmp/images` | `Summary`: one icon thumb per app (`icon` → `header` → first screenshot). `Detailed`: up to 6 screenshots and up to 10 evidence images (4 per section). Header banners are never fetched. Videos (`.mp4`, …) and non-image media are skipped before download | — |
+| `apps` | `/tmp/images` | Legacy `Summary`: one icon thumb per app (`icon` → `header` → first screenshot). `Detailed`: up to 6 screenshots and all fetchable evidence images, fetched in batches of four. Header banners are never fetched. Videos (`.mp4`, …) and non-image media are skipped before download | — |
 | `telegram_groups` | `/tmp/images` | One `photo.s3_url` group picture per group (`<id>_group_photo.jpg`), plus one thumbnail per flagged message (`fm_<messageId>`) and per AI media-evidence finding (`ev_<messageId>`). Missing/S3-failed images render a placeholder | — |
 
 `IMAGE_CACHE_DIR` overrides the cache directory (default `/tmp/images`). Lambda only guarantees `/tmp`, so that is intentional.

@@ -157,6 +157,7 @@ function makeNormalizedDomain(overrides = {}) {
   const domain = {
     _id: '6a8be234abdd8b24b75f1761',
     domain_name: 'dlescheit.com',
+    linked_ad_ids: ['ad-1', 'ad-2', 'ad-3'],
     discovery: { cloak_unlocked: true, first_seen_url: 'https://dlescheit.com/' },
     workflow: { client_status: 'open', review_status: 'reviewed' },
     list: {

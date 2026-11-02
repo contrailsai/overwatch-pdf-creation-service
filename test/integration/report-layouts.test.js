@@ -178,6 +178,9 @@ test('Domains Summary PDF renders with fixture domains', async () => {
       _id: '6a8be238abdd8b24b75f1779',
       domain_name: 'ilnkarip.com',
       reportVariantKey: 'bare',
+      // occurrence_count is a discovery-sighting count, not an ads count: with
+      // no linked_ad_ids this row must render the "no ads" path.
+      linked_ad_ids: [],
       list: {
         reviewed_at: '2026-09-03T11:20:17.875Z',
         risk_rank: 'medium',
@@ -278,10 +281,32 @@ test('Apps Detailed PDF renders with fixture apps', async () => {
         legal_codes: [{ code: 'IT-66D', reasoning: 'Cheating by personation.' }],
         reasoning: 'Description: unregistered lending app.',
         case_summary: 'Unregistered lending app.',
+        simple_report_description: 'Unregistered lending app with concealed ownership.',
         verdict: null,
         recommended_action: null,
         reviewer_comments: '',
         reviewed_at: '2026-10-01T00:00:00.000Z',
+      },
+      analysis_results: {
+        verdict: 'takedown',
+        threat_score: 88,
+        confidence: 0.8,
+        media_basis: 'text_only',
+        analysis: 'The app targets Indian borrowers while the operator is registered offshore.',
+        findings: [
+          { category: 'regulatory', finding: 'No RBI registration number is disclosed.', source: 'store_listing' },
+          { category: 'regulatory', finding: 'Privacy policy points at an unrelated domain.', source: 'store_media' },
+        ],
+        threat_types: ['CONCEALED OPERATOR'],
+        legal_codes: [{ code: 'IT-66D', description: 'Cheating by personation.' }],
+        operator: {
+          developer_account: 'Hydroacres',
+          legal_entities: ['HYDROACRES (PRIVATE) LIMITED'],
+          countries: ['Pakistan'],
+          concealment: 'Offshore ownership is not disclosed on the store listing.',
+        },
+        recommended_action: 'Play Store takedown.',
+        takedown_targets: { play_store: ['https://play.google.com/store/apps/details?id=com.hydroacres.nischint'] },
       },
       evidence: { has_evidence: false, totalImages: 0, sections: [] },
     }),
@@ -379,14 +404,15 @@ test('Telegram groups Detailed layers profile, gallery and analysis pages', asyn
   });
   assert.equal(await renderPdfPageCount(minimalDoc), 1);
 
-  // Default fixture: profile page + 1 gallery page + 1 analysis/coverage page.
+  // Default fixture: profile page + 1 gallery page + 1 analysis page.
   const rich = React.createElement(TelegramGroupsDetailedReportDocument, {
     groups: [makeNormalizedTelegramGroup({ compressedImage: null })],
     project,
   });
   assert.equal(await renderPdfPageCount(rich), 3);
 
-  // 5 flagged messages paginate the gallery 4-per-page.
+  // Flagged-message cards flow instead of being forced 4-per-page: the 5
+  // short fixture messages pack into a single gallery page (3 total, not 4).
   const manyMessages = makeNormalizedTelegramGroup({
     compressedImage: null,
     ai: {
@@ -402,7 +428,28 @@ test('Telegram groups Detailed layers profile, gallery and analysis pages', asyn
     groups: [manyMessages],
     project,
   });
-  assert.equal(await renderPdfPageCount(paginated), 4);
+  assert.equal(await renderPdfPageCount(paginated), 3);
+
+  // Long message text still overflows onto extra gallery pages.
+  const longMessages = makeNormalizedTelegramGroup({
+    compressedImage: null,
+    ai: {
+      ...makeNormalizedTelegramGroup().ai,
+      flagged_messages: Array.from({ length: 12 }, (_, i) => ({
+        ...makeNormalizedTelegramGroup().ai.flagged_messages[0],
+        index: i,
+        message_id: 310000 + i,
+        text: 'Long flagged Telegram message. '.repeat(40),
+        english: 'Long explanation. '.repeat(40),
+        finding: 'Long violation reasoning. '.repeat(40),
+      })),
+    },
+  });
+  const overflowing = React.createElement(TelegramGroupsDetailedReportDocument, {
+    groups: [longMessages],
+    project,
+  });
+  assert.ok((await renderPdfPageCount(overflowing)) >= 4);
 });
 
 test('SimpleCase DOCX renders with fixture post', async () => {

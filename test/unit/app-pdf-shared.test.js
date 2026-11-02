@@ -12,6 +12,7 @@ const {
   appRiskRank,
   hasAppReviewSignal,
   collectAppViolations,
+  collectAppThreatTypes,
   compactNumber,
   appInstallCountLabel,
   appPlatformLabel,
@@ -21,6 +22,7 @@ const {
   formatVerdictLabel,
   resolveProjectLegalCodes,
   buildAppReviewModel,
+  buildAppAnalysisModel,
   buildAppEvidenceModel,
   buildEvidenceFieldRows,
   flattenKeyValues,
@@ -103,6 +105,124 @@ test('collectAppViolations matches project labels against hyphenated flags', () 
     chips.map((c) => c.name.toLowerCase()).sort(),
     ['fraud', 'investment scams'],
   );
+});
+
+test('collectAppThreatTypes merges AI and reviewer signals without duplicates', () => {
+  const project = { project_details: { labels: [{ name: 'Fraud', severity: 'high' }] } };
+  const app = makeApp({
+    review: {
+      threat_types: ['Illegal Forex'],
+      violation_flags: [],
+      flags: { 'unregistered broker': true, fraud: false },
+    },
+    analysis_results: {
+      threat_types: ['ILLEGAL FOREX', 'CONCEALED OPERATOR'],
+      violations: ['UNREGISTERED BROKER'],
+    },
+  });
+  const names = collectAppThreatTypes(app, project)
+    .map((chip) => chip.name)
+    .sort();
+  assert.deepEqual(names, ['CONCEALED OPERATOR', 'ILLEGAL FOREX', 'UNREGISTERED BROKER']);
+  assert.deepEqual(collectAppThreatTypes(makeApp(), project), []);
+});
+
+test('collectAppThreatTypes promotes matching project labels with their severity', () => {
+  const project = { project_details: { labels: [{ name: 'Fraud', severity: 'high' }] } };
+  const app = makeApp({
+    analysis_results: { threat_types: ['fraud'], violations: [] },
+  });
+  const chips = collectAppThreatTypes(app, project);
+  assert.deepEqual(chips, [{ name: 'Fraud', severity: 'high' }]);
+});
+
+test('buildAppAnalysisModel merges findings, operator and targets', () => {
+  const app = makeApp({
+    analysis_results: {
+      analysis: 'Long AI narrative.',
+      findings: [
+        { category: 'listing_claims', finding: 'Promises guaranteed returns.', source: 'store_listing' },
+        { category: 'listing_claims', finding: 'Uses fake regulator logos.', source: 'store_media' },
+      ],
+      operator: {
+        developer_account: 'Forex Markets',
+        legal_entities: ['Narwhal Global Trade Limited'],
+        countries: ['Hong Kong'],
+        concealment: 'Offshore entity.',
+      },
+      recommended_action: 'Play Store takedown.',
+      takedown_targets: {
+        play_store: ['https://play.google.com/store/apps/details?id=x'],
+        domains: ['https://x.com'],
+        emails: [],
+      },
+      threat_score: 85,
+      confidence: 0.9,
+      media_basis: 'text_only',
+    },
+  });
+
+  const model = buildAppAnalysisModel(app, {});
+
+  assert.equal(model.hasAnalysis, true);
+  assert.equal(model.detailedReasoning, 'Long AI narrative.');
+  assert.deepEqual(model.findingsByCategory.map((group) => group.category), ['Listing Claims']);
+  assert.equal(model.findingsByCategory[0].items.length, 2);
+  assert.equal(model.operator.developerAccount, 'Forex Markets');
+  assert.equal(model.recommendedAction, 'Play Store takedown.');
+  assert.deepEqual(
+    model.takedownTargets.map((target) => [target.label, target.items.length]),
+    [
+      ['Play Store', 1],
+      ['Domains', 1],
+    ],
+  );
+  // Legal findings live on the page-1 review model, not here.
+  assert.equal(model.legalFindings, undefined);
+  // Scoring metadata is deliberately not surfaced.
+  assert.equal(model.threatScore, undefined);
+  assert.equal(model.confidence, undefined);
+  assert.equal(model.mediaBasis, undefined);
+});
+
+test('buildAppAnalysisModel is empty without AI analysis or review detail', () => {
+  const model = buildAppAnalysisModel(makeApp(), undefined);
+  assert.equal(model.hasAnalysis, false);
+  assert.deepEqual(model.takedownTargets, []);
+  assert.equal(model.operator, null);
+});
+
+test('buildAppReviewModel prefers the simple reasoning for the case summary', () => {
+  const model = buildAppReviewModel(
+    makeApp({ review: { simple_report_description: 'Short version.', case_summary: 'Longer version.' } }),
+    {},
+  );
+  assert.equal(model.caseSummary, 'Short version.');
+});
+
+test('buildAppReviewModel merges reviewer and AI legal codes for page 1', () => {
+  const app = makeApp({
+    review: {
+      legal_codes: [{ code: 'IT Rules 2021 - Rule 3(1)(b)(v)', reasoning: 'Misleads users.' }],
+      threat_types: [],
+      flags: {},
+    },
+    analysis_results: {
+      legal_codes: [
+        { code: 'IT Rules - 3(1)(b)(v)', description: 'Misleads users about legitimacy.' },
+        { code: 'SEBI Act - Sec 12(1)', description: 'Unregistered broker.' },
+      ],
+    },
+  });
+  const model = buildAppReviewModel(app, {});
+
+  // The 2021 spelling of the same citation collapses; the crispest label and
+  // longest reasoning both survive.
+  assert.deepEqual(model.legalFindings.map((item) => item.code), [
+    'IT Rules - 3(1)(b)(v)',
+    'SEBI Act - Sec 12(1)',
+  ]);
+  assert.equal(model.legalFindings[0].reasoning, 'Misleads users about legitimacy.');
 });
 
 test('appIsAlerted follows client status and the processed flag', () => {

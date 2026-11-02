@@ -326,28 +326,29 @@ Both domain renderers import `DomainTheme` (see §7) and accept `domains` **or**
 
 Columns: `#` 6% · `Domain` 46% · `Risk` 13% · `Cloaked` 13% · `Threat` 14% · `Ads` 8%.
 
-Row: **232×144** cover thumbnail (or `No Img`); domain name (42 chars); visit-URL link (46 chars); risk badge; `Y`/`N` plus `N lander(s) · {caption}`; up to 3 violation chips (20 chars each); ads count from `list.occurrence_count`, falling back to `linked_ad_ids.length`.
+Row: **232×144** cover thumbnail (or `No Img`); domain name (42 chars); visit-URL link (46 chars); risk badge; `Y`/`N` plus `N lander(s) · {caption}`; up to 3 violation chips (20 chars each); ads count from `linked_ad_ids.length`.
 
-**Domains Detailed — `DomainsDetailedReportDocument`** — props `{ domains, project, compressedImages, screenshotSlices }`. **One dossier page per domain, plus gallery pages.** Padding `12/14/28`.
+The `Ads` column is **omitted entirely** — header included, `Domain` widened to 54% — when no domain in the report has a linked ad. When at least one does, domains with zero linked ads print `—`.
 
-Dossier structure: inline `BrandHeader` → `N. domain.com` heading + risk badge → info banner (`Lander`, `Visit URL`) → two columns (left 46% / right 54%, gap 8):
+**Domains Detailed — `DomainsDetailedReportDocument`** — props `{ domains, project, compressedImages, screenshotSlices }`. **One dossier page per domain** (dense dossiers may flow to a second page), plus gallery pages. Padding `12/14/26`.
 
-| Region | Content |
-| --- | --- |
-| Left | Hero lander screenshot in a 100% × **210** frame, `objectFit: 'contain'`, `objectPosition: 'top'` (or `No lander screenshot`) |
-| Right | `Page content` card — captured title, description, excerpt and up to 3 headings; falls back to `No captured page title or description.` |
+Dossier structure mirrors the Telegram/Apps page-1 conventions: a **fixed** header (`Overwatch` / `Domain Integrity`, right-aligned domain name + lander caption) with a `#E2E8F0` hairline, then `N. domain.com` at 16 pt, then flow cards. Card labels are 8 pt / 900 `PRIMARY_BLUE` uppercase; cards are flat white with a single `#E2E8F0` hairline; only the semantic fills (risk badge, violation pill, legal card) carry colour.
 
-Then three stacked full-width cards:
+1. **Top row** (left 57% / right 43%, gap 10):
+   - Left: **`Domain Details`** — a two-column key/value grid with the **label above the value** (`Lander`, `Visit URL` link, `Registrar`, `Created`, `Expires`, `Privacy`, `Nameservers`, `Category`). Independent column stacks, so a wrapping value never shifts its neighbour. `Category` is omitted entirely when the value is missing or `unknown` — the key is never printed without a value.
+   - Right: **`Risk Assessment`** — the risk badge plus a risk-tinted hero (3 px left accent) showing the risk tier in 19 pt. No threat score or category is shown here.
+2. **`Lander Evidence`** — hero lander screenshot (left 46%) in a **150** pt frame, `objectFit: 'contain'`, `objectPosition: 'top'` (or `No lander screenshot`), beside the `Page Content` column: captured title, description, excerpt and up to 3 headings; falls back to `No captured page title or description.`
+3. **`Review Details`** — risk badge on the card head, then two columns: left carries `Case Summary` (9.5 pt / 360 chars / 4 lines), `Detected Violations` pills (cap 10, tinted by project severity) and reviewer comments; right carries up to **4** legal-code cards with red accent bar and reasoning (180 chars / 2 lines), plus `+ N more recorded` when capped.
+4. **`Infrastructure`** — a two-column key/value grid: **hosting** (provider, country, IP · ASN, up to 3 A records) and **network** (first 5 redirects joined with `→`, SSL issuer, valid-to, valid yes/no) plus a `Linked Ads` chip in the card head.
+5. **`Other Landers`** (conditional) — up to two-per-row links for other client-visible lander URLs; last card, no bottom margin.
 
-1. `Legal / Reasoning` — up to 2 legal codes with reasoning (140 chars), reviewer reasoning (520 chars / 7 lines), up to 6 violation chips.
-2. `Infrastructure` — an `Ads count` chip plus three columns: **registrar/whois** (registrar, created, expires, privacy, up to 3 nameservers), **hosting** (provider, country, IP · ASN, up to 3 A records, first 5 redirects joined with `→`), **SSL** (issuer, valid-to, valid yes/no).
-3. `Other landers` (conditional) — up to two-per-row links for other client-visible lander URLs.
+`Linked Ads` (and every other ads count in the Domains family) comes from `domainAdsCount()` — the length of `linked_ad_ids`. `list.occurrence_count` is a **discovery-sighting** count (`discovery.occurrences`) and must never be used as an ads count. The chip is not rendered at all when the count is 0.
 
 **Gallery pages** follow each dossier when slices exist:
 
+- Same fixed header as the dossier, then a section heading `Website Capture` with an `N captures` / `N of M` meta line.
 - 12 cells per page (`SLICE_PAGE_SIZE = 12`), laid out **column-major** in 3 columns × 4 rows.
 - Cell height 186; each cell is `objectFit: 'cover'`, `objectPosition: 'top'`, with a numbered badge top-left.
-- Header `Website Capture — {domain}` with `label · N of M` meta only when there is more than one page.
 
 ### 6.4 Ad profiles
 
@@ -379,7 +380,7 @@ The ads table caps display at **20** rows and, when capped, prints `Showing N of
 
 Both apps renderers import `DomainTheme` (as `AppTheme`) and share the pure helpers in `appPdfShared.js`. There is **no review filter** — every requested app renders, with an `Unreviewed` badge when no reviewer signal exists.
 
-**Apps Summary — `AppsSummaryReportDocument`** — props `{ apps, project }`. Single flowing A4 page, padding `30/30/40`, fixed header `OVERWATCH` / `App Integrity Report` + IST timestamp, uppercase footer.
+**Apps Summary — `AppsSummaryReportDocument`** — props `{ apps, project }`. Legacy export; its existing layout is unchanged. One flowing A4 page, padding `30/30/40`, fixed header `OVERWATCH` / `App Integrity Report` + IST timestamp, uppercase footer.
 
 | Section | Content |
 | --- | --- |
@@ -390,31 +391,21 @@ Columns: `#` 5% · `App` 27% · `Developer` 16% · `Store` 19% · `Violations` 1
 
 Row: **45×45** icon (`objectFit: 'contain'` on a `#F8FAFC` well, 8 px radius) or `No Img`; app title (2 lines); package id; platform plus a **store link** (`Play Store` / `App Store`, `app.original_url`) underneath; developer name + legal name + a `Developer page` link; store facts one per line (`installs`, genre, `N ratings`, price); up to 3 violation chips or `—`; risk badge; `Sourced` / `Reviewed` dates.
 
-**Apps Detailed — `AppsDetailedReportDocument`** — props `{ apps, project }`. Each app renders as **three page groups**: the page-1 hook, then `App & Developer`, then `Evidence`. All three share a **fixed** header (`Overwatch` / `App Integrity`, right-aligned app title + package) and a fixed `Page X of Y` footer. The `Evidence` group is omitted entirely when an app has no evidence.
+**Apps Detailed — `AppsDetailedReportDocument`** — props `{ apps, project }`. Detailed is the revised report contract. Each app is rendered in this order: **Case Overview → Assessment & reviewed basis → Evidence → App & Developer information**. The assessment page is omitted when no analysis/review content exists. All pages share a fixed `Overwatch` / `App Integrity` header, right-aligned app title + package, and `Page X of Y` footer.
 
-**Page 1 — the hook.** Everything needed to decide whether to keep reading; nothing else.
+**Case Overview (page 1).** Includes the case summary, detected violations, recorded legal findings, recommended action, store and publisher facts, and store listing link. Two proof cards always appear: `Payment request` and `Indian securities activity`. Their sections are classified by title aliases; a category label describes the source section and does not establish that the activity occurred. Each card shows one prepared image when available or an explicit missing-media state, with the source title and caption.
 
-1. Heading `N. {title}`.
-2. Two columns (left 57% / right 43%):
-   - Left: **`App & Publisher`** card — when the app has a review signal, a **`Risk` key/value pill** (coloured risk badge) is the first item; then a two-column grid (Application: package, platform, genre, content rating, installs, ratings, **store listing link**; Publisher: developer, legal name, email, website) — then **`Review Details`**: risk badge, `Case Summary` lead (11 pt), `Detected Violations` pills, `Legal Violations` cards (red accent bar, up to 3), `Reviewer Comments`, and **`Detailed Reasoning`** directly beneath. Reviewed apps show the content; unreviewed apps read `Not yet reviewed…`.
-   - Right: a **gallery column** — 58×58 icon well, then up to **6** screenshots in a 2-across grid (148 pt high, `objectFit: 'cover'`, `objectPosition: 'top'`) plus a `+ N more screenshot(s) captured` note.
+**Assessment & reviewed basis.** Includes case summary/legal findings, detailed review and reviewer comments, AI findings with source-reference resolution status, violations, operator details, and recommended action. Reviewer provenance is shown from `field_sources` and `assessment_reviewed`; AI analysis remains distinguished from reviewer-entered fields.
 
-**Section 1 — `App & Developer`.** Store + publisher first, side by side, then description:
+**Evidence.** Shows the evidence executive summary and captured fields, then the fixed payment and Indian securities categories, other evidence sections, media records, and store screenshots. Unsupported video and unavailable image previews are identified as unavailable. Store listing screenshots are labelled separately from operational evidence.
+
+**App & Developer information.** Store + publisher first, side by side, then description:
 
 1. `Store Details` (50%) and `Publisher Details` (50%) cards in a two-column row.
 2. `Description` — summary lead + description truncated to 950 chars / 10 lines.
 3. `Permissions & Data Safety` — a two-column card (Data Safety | Permissions) to keep its height down.
-4. `Automated Analysis` (conditional) — any non-empty `analysis_results`, flattened generically.
 
-**Section 2 — `Evidence`.** Deterministic buckets rather than raw document order:
-
-1. `Executive Summary` prose card (620 chars / 8 lines).
-2. `Captured Fields` card — the fixed, effectively-constant evidence titles rendered as a configured multi-column grid: **Listing & Contact** (App Name, Package Name, Email, Website, UPI ID, Associated Numbers, Associated Address, Bank/IFSC, socials…) and **Developer Details** (Company Name, Email, Website, Instagram, Facebook, Phone number, Address, GST). Half-width fields pack two per row; long values take a full row. Titles ending in `(Developer Details)` are grouped into the Developer bucket; short unrecognised text values fall in as fields too.
-3. **Image sub-sections** — one card per section that has images: title, description (320 chars / 4 lines), and a grid of up to 4 images. Cell size adapts to the count (1 → 62% wide, 2 → 48%, 3+ → 32%). Cards are atomic (`wrap={false}`) so a grid never splits across pages.
-4. **Other sections** — prose that is neither the executive summary nor a media capture (e.g. redirect notices), rendered as title + wrapped text. Capped at 6.
-5. Video-only captures are dropped entirely; there is no video rendering.
-
-Caps (`src/core-utils.js`): `MAX_APP_SCREENSHOTS = 6`, `MAX_APP_EVIDENCE_IMAGES = 10`, `MAX_APP_EVIDENCE_IMAGES_PER_SECTION = 4`, `MAX_APP_PERMISSION_ITEMS = 10`. Evidence images are addressed by a stable `slot` (`sectionIndex:mediaIndex`) that is also the image-cache key, so the pipeline and the renderer agree without re-walking the tree.
+The evidence and dossier sections are uncapped by the normalization step. Screenshot gallery retrieval is capped at 6, permission items at 10, and image downloads run in batches of four. Stable `slot` values map source media to rendered paths, while cache filenames also include source identity, URL, version and checksum metadata so reordered sources cannot reuse another image's cached path.
 
 Cards use flat white fills with a single `#E2E8F0` hairline border — no tinted or gradient chrome. Only the semantic fills (risk badge, violation pill, legal card) carry colour.
 
@@ -433,20 +424,24 @@ Columns: `#` 5% · `Group` 24% · `Audience` 12% · `Messages` 8% · `Flagged` 8
 
 Row: **45×45** group photo (`objectFit: 'contain'` on a `#F8FAFC` well, 8 px radius) or `No Img`; group title (2 lines); `@username`; type (`CHANNEL` / `GROUP`); a `View Channel` / `Open in Telegram` link; participant count (compact, e.g. `153.1K`) under a `PARTICIPANTS` label plus any of `Verified` / `Scam` / `Fake` / `Restricted`; message count under `MESSAGES`; AI flagged-message count under `FLAGGED`; up to 3 violation chips or `—`; risk badge; `Sourced` / `Reviewed` dates.
 
-**Telegram Groups Detailed — `TelegramGroupsDetailedReportDocument`** — props `{ groups, project }`. Each group renders as a sequence of page groups: **Profile & Review** (1 page), **Flagged Messages** (0–3 pages of 4 cards), **AI Analysis & Evidence** (0–2 pages), and an optional **Client Notes** page.
+**Telegram Groups Detailed — `TelegramGroupsDetailedReportDocument`** — props `{ groups, project }`. Each group renders as a sequence of page groups: **Profile & Review** (1 page), **Flagged Messages** (flowing, 1+ pages), **AI Analysis & Evidence** (flowing, 1–2 pages), and an optional **Client Notes** page.
 
 **1. Profile & Review (page 1).** Everything about the group and its review, on one sheet.
 
 - Heading `N. {title}`.
 - Two columns (left 57% / right 43%):
   - Left: **`Group Details`** — a two-column key/value grid (Type, Username, Chat ID, Linked chat ID, Username list, Participants, Messages, First seen, Last message, Telegram link), a `Channel Flags` pill row, and the `About` description (420 chars / 6 lines).
-  - Right: **`Verdict`** — risk badge + a 3-cell stat strip (`Risk tier`, `Threat score`, `Flagged msgs`), then Verdict, Recommended action, AI confidence, Media basis, AI reviewed at, Review status and AI status; then **`Flagged Actors`** (name, role, violations, rationale).
-- **`Review Details`** — full-width, two columns: the left column carries `Case Summary` (11 pt), `Detected Violations` pills (cap 10) and reviewer comments; the right column carries **every legal code with its reasoning** (cap 8, remainder deferred to the AI section). Unreviewed groups with no AI dossier read `Not yet reviewed…`. Each legal card is atomic (`wrap={false}`).
+  - Right: **`Verdict`** — the group's single risk indicator (coloured risk badge, e.g. `HIGH RISK`) plus a risk-tinted **verdict hero**: the verdict in large type (`TAKEDOWN`) with the **Recommended action** directly beneath it. No stat strip, AI confidence, media basis, review timestamp or AI status is shown. **`Flagged Actors`** is embedded in the same card: name, title-cased role, violation chips and rationale per actor.
+- **`Review Details`** — full-width, two columns: the left column carries `Case Summary` (9.5 pt / 7 lines), `Detected Violations` pills (cap 10, tinted by severity) and reviewer comments; the right column carries **every legal code with its reasoning** (cap 8, remainder deferred to the AI section). Unreviewed groups with no AI dossier read `Not yet reviewed…`. Each legal card is atomic (`wrap={false}`).
 - **`Operator Involvement`** — the AI's `how` narrative plus handle pills (payment links are shown on the analysis page under Monetisation).
 
-**2. Flagged Messages (gallery).** Telegram-format cards, 2 per row × 2 rows per page (`GALLERY_PER_PAGE = 4`), up to `MAX_GALLERY_MESSAGES = 12`. Each card: channel avatar + `@username`, message date · views · `#message_id`, a severity badge (High/Medium/Low), the message text in a Telegram-style bubble, a blue-ruled `English` translation, the message image thumbnail when the joined message has one, an `AI finding` block, and violation chips. The heading shows `page / total` and `showing N of trueTotal`.
+**2. Flagged Messages (gallery, section `1`).** Telegram-format cards, 2 per row, up to `MAX_GALLERY_MESSAGES = 12`. Cards **flow and paginate as they fit** — no fixed 4-per-page chunking — and never split mid-card (`wrap={false}`). Each card: channel avatar + `@username`, message date · views · `#message_id`, a severity badge (High/Medium/Low), the message text in a Telegram-style bubble, a blue-ruled `Explanation` block (the AI English rendering), the message image thumbnail when the joined message has one, a `Violation Reasoning` block, and violation chips.
 
-**3. AI Analysis & Evidence.** `Detailed AI Analysis` (the full `analysis_results.analysis`, 2600 chars / 40 lines), `Message Batch Summaries` (cap 8), `Monetisation & Promoted Handles` (name, what, monetised, price mentions, linked-message count), `Image Evidence` (2-across grid, cap 8, each with date, `#message_id` and the AI finding), and `Collection Coverage` (backfill status, lookback, messages seen, last error).
+**3. AI Analysis & Evidence (section `2`).** `Detailed AI Analysis` (the full `analysis_results.analysis`, 2600 chars / 40 lines), `Message Batch Summaries` (cap 8), `Image Evidence`, then `Monetisation & Promoted Handles`.
+
+- **`Image Evidence`** (2-across grid, cap 8): cards with a stored image show the thumbnail plus the channel profile name (`@username`), date · views · `#message_id`, the joined message text and the AI image finding. `group_photo` entries resolve to the channel picture. Entries whose image was never stored are listed compactly under `Additional image findings (no stored image)` instead of rendering an empty image well.
+- **`Monetisation & Promoted Handles`** (cap 6): each promoted service/handle is its own spaced card with a monetised tag, `what` narrative, fact chips (type, linked-message count, payout/price mentions) and a `Linked flagged actor` block resolving the flagged actor(s) whose evidence ids overlap the link's messages.
+- `Collection Coverage` was removed from the detailed report.
 
 **4. Client Notes** — emitted only when the group has client notes.
 

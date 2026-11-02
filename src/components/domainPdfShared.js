@@ -139,12 +139,144 @@ export function domainLanderCaption(domain) {
   return landerLabel(domainLander(domain));
 }
 
+/**
+ * Ads genuinely attached to the domain: the `linked_ad_ids` array is the source
+ * of truth. `list.occurrence_count` is the number of *discovery* sightings (it
+ * tracks `discovery.occurrences`), not ads, so it must never drive this count.
+ */
 export function domainAdsCount(domain) {
-  const count = domain?.list?.occurrence_count;
-  if (typeof count === 'number' && Number.isFinite(count)) return count;
   const linked = domain?.linked_ad_ids;
-  if (Array.isArray(linked)) return linked.length;
-  return 0;
+  return Array.isArray(linked) ? linked.length : 0;
+}
+
+const SEVERITY_ORDER = { high: 0, medium: 1, low: 2, info: 3 };
+
+/** Severity palette for a violation chip. */
+export function domainSeverityInfo(severity) {
+  const rank = String(severity || '').toLowerCase();
+  if (rank === 'high') {
+    return { color: DomainTheme.RISK_HIGH, bg: DomainTheme.RISK_HIGH_BG, border: DomainTheme.RISK_HIGH_BORDER };
+  }
+  if (rank === 'low') {
+    return { color: DomainTheme.RISK_LOW, bg: DomainTheme.RISK_LOW_BG, border: DomainTheme.RISK_LOW_BORDER };
+  }
+  if (rank === 'medium') {
+    return { color: DomainTheme.RISK_MEDIUM, bg: DomainTheme.RISK_MEDIUM_BG, border: DomainTheme.RISK_MEDIUM_BORDER };
+  }
+  return { color: DomainTheme.SECONDARY_GRAY, bg: DomainTheme.BG_SECTION, border: DomainTheme.BORDER_LIGHT };
+}
+
+function normalizeViolationKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[-_\s]+/g, ' ')
+    .trim();
+}
+
+function titleCaseWords(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Violation chips for the dossier: project labels first (matched on true flags
+ * and threat types), then remaining true flags, then threat types / declared
+ * violation flags. Each chip carries the project severity when one is known.
+ * Legal codes are intentionally excluded — they render as their own cards.
+ */
+export function collectDomainViolationChips(domain, project = null) {
+  const review = domain?.review_details || {};
+  const list = domain?.list || {};
+  const flags = review.flags && typeof review.flags === 'object' ? review.flags : {};
+  const projectLabels = Array.isArray(project?.project_details?.labels)
+    ? project.project_details.labels
+    : [];
+  const threatTypes = [
+    ...(Array.isArray(review.threat_types) ? review.threat_types : []),
+    ...(Array.isArray(list.threat_types) ? list.threat_types : []),
+    ...(Array.isArray(list.violation_flags) ? list.violation_flags : []),
+  ];
+
+  const chips = [];
+  const seen = new Set();
+  const push = (name, severity) => {
+    const label = String(name || '').trim();
+    const key = normalizeViolationKey(label);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    chips.push({ name: label, severity: SEVERITY_ORDER[severity] !== undefined ? severity : 'medium' });
+  };
+
+  const trueFlagKeys = Object.keys(flags).filter((key) => flags[key] === true);
+  const declaredKeys = new Set(
+    [...trueFlagKeys, ...threatTypes].map(normalizeViolationKey).filter(Boolean),
+  );
+
+  for (const label of projectLabels) {
+    if (!label?.name) continue;
+    if (declaredKeys.has(normalizeViolationKey(label.name))) push(label.name, label.severity);
+  }
+
+  for (const key of trueFlagKeys) {
+    if (!key || String(key).toLowerCase() === 'safe') continue;
+    push(titleCaseWords(String(key).replace(/[-_]+/g, ' ')), 'medium');
+  }
+
+  for (const type of threatTypes) {
+    if (!type || String(type).toLowerCase() === 'safe') continue;
+    push(titleCaseWords(String(type).replace(/[-_]+/g, ' ')), 'medium');
+  }
+
+  return chips.sort(
+    (a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4),
+  );
+}
+
+/** Numeric threat score, or null when no reviewer/AI score exists. */
+export function domainThreatScore(domain) {
+  const candidates = [
+    domain?.review_details?.threat_score,
+    domain?.list?.effective_threat_score,
+    domain?.list?.review_threat_score,
+    domain?.list?.ai_threat_score,
+  ];
+  for (const candidate of candidates) {
+    const score = Number(candidate);
+    if (candidate != null && Number.isFinite(score)) return score;
+  }
+  return null;
+}
+
+/** Everything the dossier's review + risk blocks need, in one place. */
+export function buildDomainReviewModel(domain, project = null) {
+  const review = domain?.review_details || {};
+  const pageContent = domainPageContent(domain);
+  const legalCodes = (Array.isArray(review.legal_codes) ? review.legal_codes : [])
+    .map((item) => {
+      if (typeof item === 'string') return { code: item, reasoning: '' };
+      return { code: item?.code || item?.name || '', reasoning: item?.reasoning || '' };
+    })
+    .filter((item) => item.code);
+
+  const caseSummary = String(
+    review.reasoning || pageContent.excerpt || pageContent.description || '',
+  ).trim();
+  const violations = collectDomainViolationChips(domain, project);
+
+  return {
+    risk: domainRiskInfo(domain),
+    threatScore: domainThreatScore(domain),
+    category: domain?.list?.category || review.category || '',
+    caseSummary,
+    reviewerComments: String(review.reviewer_comments || '').trim(),
+    violations,
+    legalCodes,
+    hasSignal: Boolean(caseSummary || legalCodes.length || violations.length),
+  };
 }
 
 export function domainHostingCountry(domain) {

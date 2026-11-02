@@ -1585,7 +1585,9 @@ export const DomainsTable = ({ domains, compressedDomainImages }) => {
               </View>
             </View>
             <View style={sharedStyles.colDomAds}>
-              <Text style={sharedStyles.adsCount}>{domainAdsCount(domain).toLocaleString()}</Text>
+              <Text style={sharedStyles.adsCount}>
+                {domainAdsCount(domain) > 0 ? domainAdsCount(domain).toLocaleString() : '—'}
+              </Text>
             </View>
           </View>
         );

@@ -12,8 +12,6 @@ const APPS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
 const TELEGRAM_GROUPS_SUPPORTED_REPORT_TYPES = new Set(['Summary', 'Detailed']);
 const MAX_PROFILE_REPORT_ADS = 20;
 const MAX_APP_SCREENSHOTS = 6;
-const MAX_APP_EVIDENCE_IMAGES = 10;
-const MAX_APP_EVIDENCE_IMAGES_PER_SECTION = 4;
 const MAX_APP_PERMISSION_ITEMS = 10;
 
 function entityIdFieldName(entityType) {
@@ -104,7 +102,7 @@ function validatePayload(payload) {
   }
 
   const { projectId, reportType, reportFormat, database_name } = payload;
-  const normalizedReportFormat = (reportFormat || 'pdf').toLowerCase();
+  const normalizedReportFormat = typeof reportFormat === 'string' ? reportFormat.toLowerCase() : (reportFormat == null ? 'pdf' : '');
   const entityType = resolveEntityType(payload);
   const entityIds = resolveEntityIds(payload);
 
@@ -661,6 +659,10 @@ function isAdReviewed(ad) {
 
 const VIDEO_MEDIA_EXT_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|#|$)/i;
 
+function appMediaUrl(item) {
+  return mediaItemUrl(item) || (typeof item?.url === 'string' ? item.url : null);
+}
+
 function hasVideoExtension(url) {
   return typeof url === 'string' && VIDEO_MEDIA_EXT_RE.test(url.trim());
 }
@@ -673,13 +675,13 @@ function isAppImageMedia(item) {
   if (!item || typeof item !== 'object') return false;
   const type = item.type == null || item.type === '' ? 'image' : String(item.type).toLowerCase();
   if (type !== 'image') return false;
-  const url = mediaItemUrl(item);
+  const url = appMediaUrl(item);
   return Boolean(url) && !hasVideoExtension(url);
 }
 
 function appMediaImageUrls(mediaItems) {
   if (!Array.isArray(mediaItems)) return [];
-  return mediaItems.filter(isAppImageMedia).map(mediaItemUrl).filter(Boolean);
+  return mediaItems.filter(isAppImageMedia).map(appMediaUrl).filter(Boolean);
 }
 
 /** First image URL for an app media role (`icon`, `header`, `screenshot`). */
@@ -689,14 +691,14 @@ function resolveAppMediaByRole(app, role) {
   const match = media.find(
     (item) => isAppImageMedia(item) && String(item.role || '').toLowerCase() === wanted,
   );
-  return match ? mediaItemUrl(match) : null;
+  return match ? appMediaUrl(match) : null;
 }
 
 function resolveAppScreenshotUrls(app, limit = MAX_APP_SCREENSHOTS) {
   const media = Array.isArray(app?.content?.media) ? app.content.media : [];
   return media
     .filter((item) => isAppImageMedia(item) && String(item.role || '').toLowerCase() === 'screenshot')
-    .map(mediaItemUrl)
+    .map(appMediaUrl)
     .filter(Boolean)
     .slice(0, Math.max(0, limit));
 }
@@ -727,7 +729,7 @@ function normalizeLegalCodes(value) {
       if (typeof item === 'string') return { code: item, reasoning: '' };
       return {
         code: item?.code || item?.name || '',
-        reasoning: item?.reasoning || '',
+        reasoning: item?.reasoning ?? item?.description ?? '',
       };
     })
     .filter((item) => item.code);
@@ -738,29 +740,45 @@ function normalizeAppReviewDetails(app) {
   const review = app?.review_details && typeof app.review_details === 'object' ? app.review_details : {};
   const analysis =
     app?.analysis_results && typeof app.analysis_results === 'object' ? app.analysis_results : {};
+  const own = (key) => Object.prototype.hasOwnProperty.call(review, key);
   const reviewThreatTypes = Array.isArray(review.threat_types) ? review.threat_types : [];
-  const listThreatTypes = Array.isArray(list.threat_types) ? list.threat_types : [];
+  const listThreatTypes = Array.isArray(analysis.threat_types) ? analysis.threat_types : (Array.isArray(analysis.violations) ? analysis.violations : (Array.isArray(list.threat_types) ? list.threat_types : []));
   const reviewFlags = Array.isArray(review.violation_flags) ? review.violation_flags : [];
   const listFlags = Array.isArray(list.violation_flags) ? list.violation_flags : [];
+  const riskRank = own('risk_rank') ? review.risk_rank : (own('risk') ? review.risk : (list.risk_rank ?? null));
+  // A selected rank is the displayed risk signal, so its provenance wins over
+  // any score. Only the explicit reviewer fields and review score are review-sourced.
+  const riskSource =
+    own('risk_rank') || own('risk') ? 'review'
+      : list.risk_rank != null ? 'record'
+        : own('threat_score') || list.review_threat_score != null ? 'review'
+          : list.effective_threat_score != null ? 'record'
+            : list.ai_threat_score != null || analysis.risk_score != null ? 'analysis'
+              : 'unknown';
 
   return {
     ...review,
-    threat_score:
-      review.threat_score ??
-      list.review_threat_score ??
-      list.effective_threat_score ??
-      list.ai_threat_score ??
-      analysis.risk_score ??
-      null,
-    risk_rank: list.risk_rank ?? review.risk_rank ?? review.risk ?? null,
-    threat_types: reviewThreatTypes.length > 0 ? reviewThreatTypes : listThreatTypes,
-    violation_flags: reviewFlags.length > 0 ? reviewFlags : listFlags,
-    flags: review.flags && typeof review.flags === 'object' ? review.flags : {},
-    legal_codes: normalizeLegalCodes(review.legal_codes),
-    reasoning: review.reasoning || '',
-    case_summary: review.case_summary || '',
-    verdict: review.verdict || null,
-    recommended_action: review.recommended_action || null,
+    field_sources: {
+      summary: own('simple_report_description') || own('case_summary') ? 'review' : 'analysis',
+      reasoning: own('reasoning') ? 'review' : 'analysis',
+      violations: own('threat_types') || own('flags') || own('violation_flags') ? 'review' : 'analysis',
+      legal_codes: own('legal_codes') ? 'review' : 'analysis',
+      risk: riskSource,
+      recommended_action: own('recommended_action') ? 'review' : 'analysis',
+    },
+    threat_score: own('threat_score') ? review.threat_score : (
+      list.review_threat_score ?? list.effective_threat_score ?? list.ai_threat_score ?? analysis.risk_score ?? null
+    ),
+    risk_rank: riskRank,
+    threat_types: own('threat_types') ? reviewThreatTypes : (own('flags') || own('violation_flags') ? [] : listThreatTypes),
+    violation_flags: own('violation_flags') ? reviewFlags : (own('threat_types') || own('flags') ? [] : listFlags),
+    flags: !own('threat_types') && review.flags && typeof review.flags === 'object' ? review.flags : {},
+    legal_codes: normalizeLegalCodes(own('legal_codes') ? review.legal_codes : analysis.legal_codes),
+    reasoning: own('reasoning') ? review.reasoning : (analysis.analysis || analysis.reasoning || ''),
+    // "Simple reasoning" first, then any explicit case summary, then the AI one.
+    case_summary: own('simple_report_description') ? review.simple_report_description : (own('case_summary') ? review.case_summary : (analysis.case_summary || '')),
+    verdict: review.verdict || analysis.verdict || null,
+    recommended_action: own('recommended_action') ? review.recommended_action : (analysis.recommended_action || null),
     reviewer_comments: review.reviewer_comments || '',
     reviewed_at: review.reviewed_at ?? list.reviewed_at ?? null,
   };
@@ -785,14 +803,13 @@ function normalizeAppPermissions(permissions, maxItems = MAX_APP_PERMISSION_ITEM
 }
 
 /**
- * Evidence sections with image-only media, capped per section and per app.
+ * Preserve all evidence media, preparing every fetchable image for the pipeline.
  * Every image carries a stable `slot` (`sectionIndex:mediaIndex`) that the image
  * pipeline re-uses as its cache key so the renderer can zip paths back by slot.
  */
 function normalizeAppEvidence(app) {
   const evidence = app?.evidence && typeof app.evidence === 'object' ? app.evidence : {};
   const rawSections = Array.isArray(evidence.sections) ? evidence.sections : [];
-  let remainingImages = MAX_APP_EVIDENCE_IMAGES;
   let totalImages = 0;
   const sections = [];
 
@@ -801,33 +818,35 @@ function normalizeAppEvidence(app) {
     const imageItems = rawMedia.filter(isAppImageMedia);
     totalImages += imageItems.length;
 
-    const limit = Math.min(MAX_APP_EVIDENCE_IMAGES_PER_SECTION, Math.max(0, remainingImages));
     const images = [];
-    for (let mediaIndex = 0; mediaIndex < rawMedia.length && images.length < limit; mediaIndex += 1) {
+    for (let mediaIndex = 0; mediaIndex < rawMedia.length; mediaIndex += 1) {
       const item = rawMedia[mediaIndex];
       if (!isAppImageMedia(item)) continue;
-      const url = mediaItemUrl(item);
+      const url = appMediaUrl(item);
       if (!url) continue;
       images.push({
+        ...item,
         slot: `${sectionIndex}:${mediaIndex}`,
         url,
         filename: item.filename || '',
       });
-      remainingImages -= 1;
     }
 
-    sections.push({
+    sections[sectionIndex] = {
+      ...section,
+      key: section?.section_id || section?.id || `section-${sectionIndex}`,
+      media: rawMedia,
       title: section?.title || '',
       description: section?.description || '',
       images,
       totalImages: imageItems.length,
-    });
+    };
   });
 
   return {
     has_evidence:
       Boolean(evidence.has_evidence) ||
-      sections.some((section) => section.description || section.images.length > 0),
+      sections.some((section) => section.title || section.description || section.media.length > 0),
     sections,
     totalImages,
   };
@@ -840,7 +859,7 @@ function resolveAppEvidenceImageEntries(normalizedApp) {
   sections.forEach((section, sectionIndex) => {
     for (const image of section.images || []) {
       if (!image?.url) continue;
-      entries.push({ slot: image.slot, url: image.url, sectionIndex });
+      entries.push({ ...image, slot: image.slot, url: image.url, sectionIndex });
     }
   });
   return entries;
@@ -897,7 +916,8 @@ function normalizeApp(app, opts = {}) {
     created_at: toIsoOrNull(system.created_at ?? app.ingestion?.ingested_at),
     sourced_at: toIsoOrNull(list.sourced_at ?? app.ingestion?.ingested_at),
     updated_at: toIsoOrNull(system.updated_at),
-    reviewed_at: toIsoOrNull(review.reviewed_at),
+    reviewed_at: toIsoOrNull(review.reviewed_at ?? workflow.reviewed_at ?? app.reviewed_at),
+    assessment_reviewed: isAppReviewed(app),
     update_history: history,
     client_status: clientStatus,
     processed,
@@ -907,6 +927,7 @@ function normalizeApp(app, opts = {}) {
     icon_url: resolveAppMediaByRole(app, 'icon'),
     header_url: resolveAppMediaByRole(app, 'header'),
     screenshots: screenshots.map((url) => ({ url })),
+    source_media: Array.isArray(content.media) ? content.media : (Array.isArray(app.media) ? app.media : []),
     total_screenshots: screenshots.length === 0
       ? 0
       : Array.isArray(content.media)
@@ -919,6 +940,7 @@ function normalizeApp(app, opts = {}) {
       min_installs: typeof list.min_installs === 'number' ? list.min_installs : null,
       real_installs: typeof store.real_installs === 'number' ? store.real_installs : null,
       ratings: typeof list.ratings === 'number' ? list.ratings : null,
+      rating_score: typeof list.score === 'number' ? list.score : null,
       genre: list.genre || store.genre_id || '',
       content_rating: list.content_rating || '',
       version: store.version || '',
@@ -977,7 +999,7 @@ function isAppReviewed(app) {
   if (!app) return false;
   if (String(app?.workflow?.review_status || '').toLowerCase() === 'reviewed') return true;
   const list = app?.list || {};
-  return Boolean(list.reviewed_at || app?.review_details?.reviewed_at || app?.reviewed_at);
+  return Boolean(list.reviewed_at || app?.workflow?.reviewed_at || app?.review_details?.reviewed_at || app?.reviewed_at);
 }
 
 /** Threat score from a raw or normalized app; `null` when no signal exists. */
@@ -1022,6 +1044,12 @@ const MAX_TG_FLAGGED_MESSAGES = 24;
 const MAX_TG_EVIDENCE_IMAGES = 16;
 const MAX_TG_BATCH_SUMMARIES = 8;
 const MAX_TG_PROMOTED_SERVICES = 8;
+
+/** True when an AI media-evidence id refers to the group's own profile photo. */
+function isTelegramGroupPhotoRef(messageId) {
+  if (messageId == null || typeof messageId === 'number') return false;
+  return /group[_\s-]?photo|profile[_\s-]?photo/i.test(String(messageId));
+}
 
 /** First fetchable image URL on a Telegram_messages `media[]` item. */
 function resolveTelegramMessageImageUrl(mediaItem) {
@@ -1231,7 +1259,9 @@ function resolveTelegramGroupImageEntries(normalizedGroup) {
   }
   for (const entry of normalizedGroup?.ai?.media_evidence || []) {
     if (entry.message_id == null) continue;
-    push(`ev_${entry.message_id}`, (entry.media_urls || [])[0]);
+    // `group_photo` entries point at the channel's own picture, not a message.
+    const fallback = isTelegramGroupPhotoRef(entry.message_id) ? normalizedGroup?.photo_url : null;
+    push(`ev_${entry.message_id}`, (entry.media_urls || [])[0] || fallback);
   }
 
   return entries;
@@ -1249,8 +1279,9 @@ function normalizeTelegramGroupReviewDetails(group) {
     group?.review_details && typeof group.review_details === 'object' ? group.review_details : {};
   const analysis =
     group?.analysis_results && typeof group.analysis_results === 'object' ? group.analysis_results : {};
+  const own = (key) => Object.prototype.hasOwnProperty.call(review, key);
   const reviewThreatTypes = Array.isArray(review.threat_types) ? review.threat_types : [];
-  const listThreatTypes = Array.isArray(list.threat_types) ? list.threat_types : [];
+  const listThreatTypes = Array.isArray(analysis.threat_types) ? analysis.threat_types : (Array.isArray(analysis.violations) ? analysis.violations : (Array.isArray(list.threat_types) ? list.threat_types : []));
   const aiThreatTypes = Array.isArray(analysis.threat_types) ? analysis.threat_types : [];
   const reviewFlags = Array.isArray(review.violation_flags) ? review.violation_flags : [];
   const listFlags = Array.isArray(list.violation_flags) ? list.violation_flags : [];
@@ -1275,11 +1306,11 @@ function normalizeTelegramGroupReviewDetails(group) {
       reviewFlags.length > 0 ? reviewFlags : listFlags.length > 0 ? listFlags : aiFlags,
     flags: review.flags && typeof review.flags === 'object' ? review.flags : {},
     legal_codes: humanLegalCodes.length > 0 ? humanLegalCodes : normalizeAiLegalCodes(analysis.legal_codes),
-    reasoning: review.reasoning || analysis.analysis || '',
+    reasoning: own('reasoning') ? review.reasoning : (analysis.analysis || analysis.reasoning || ''),
     case_summary:
       review.simple_report_description || review.case_summary || analysis.case_summary || '',
     verdict: review.verdict || analysis.verdict || null,
-    recommended_action: review.recommended_action || analysis.recommended_action || null,
+    recommended_action: own('recommended_action') ? review.recommended_action : (analysis.recommended_action || null),
     reviewer_comments: review.reviewer_comments || '',
     confidence: typeof analysis.confidence === 'number' ? analysis.confidence : null,
     media_basis: analysis.media_basis || '',
@@ -1359,6 +1390,7 @@ function normalizeTelegramGroup(group, opts = {}) {
       ...entry,
       date: joined?.date || null,
       views: joined?.views ?? null,
+      text: joined?.text || '',
       media_urls: joined?.media_urls || [],
     };
   });
@@ -1676,8 +1708,6 @@ module.exports = {
   MAX_TG_PROMOTED_SERVICES,
   MAX_PROFILE_REPORT_ADS,
   MAX_APP_SCREENSHOTS,
-  MAX_APP_EVIDENCE_IMAGES,
-  MAX_APP_EVIDENCE_IMAGES_PER_SECTION,
   MAX_APP_PERMISSION_ITEMS,
   buildDomainHashExtra,
   entityIdFieldName,
