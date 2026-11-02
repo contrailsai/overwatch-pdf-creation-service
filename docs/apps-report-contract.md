@@ -29,10 +29,10 @@ captured material before the assessment interprets it.
 4. **Supporting evidence:** show captured fields, category sections, other
    available source media, and media limitations.
 5. **App and developer information:** show the full store and publisher record.
-   Summary remains the legacy concise listing export.
+   Summary is the landscape executive presentation described below.
 
 This uses the established executive-summary → evidence → basis → appendix reading
-pattern for Detailed reports. Summary remains the existing concise listing report;
+pattern for Detailed reports. Summary is a landscape executive presentation;
 this contract applies only to Detailed PDFs and does not require a paired deployment,
 request/hash change, or client UI change. For plain-language and audience-first guidance, see the [CDC Clear
 Communication Index user guide](https://www.cdc.gov/ccindex/pdf/clear-communication-user-guide.pdf)
@@ -63,7 +63,7 @@ The worker reads the tenant `Apps` record, joins `App_developers`, and loads app
 `case_events` for update history. `normalizeApp` exposes store/publisher values,
 `review_details`, `analysis_results`, evidence sections, reviewed state/provenance,
 and stable per-image slots. Detailed reports fetch screenshots and evidence
-images. Summary retains its original data and rendering behavior. Image paths are mapped back by the
+images. Summary uses the same normalized records and renders a landscape presentation. Image paths are mapped back by the
 original slot, while the cache token
 includes source identity, URL, and any source revision/checksum metadata. This
 avoids reusing a warm `/tmp/images` entry merely because a different source later
@@ -84,12 +84,15 @@ not.
 
 ## Cache and rollout
 
-The existing app request and hash contract is unchanged. Existing completed
-artifacts keep their current cache identity; operationally regenerate a completed
-artifact when a Detailed PDF needs to reflect the revised presentation.
+The request schema is unchanged. Detailed PDFs retain their existing cache identity; regenerate an existing Detailed artifact when it needs the revised presentation. Apps Summary uses a versioned cache identity, coordinated between the client and worker.
 
 The Lambda image is built for `linux/arm64` and manually published to ECR before
 updating `overwatch-report-generation`; see [deployment.md](./deployment.md). The
 worker's local `/tmp/images` cache is source-keyed for app screenshot/evidence
 media. This cache is per Lambda environment and does not affect non-app media
 pipelines.
+
+
+## Apps Summary presentation
+
+Apps Summary PDF requests produce a branded 16:9 landscape presentation: risk overview, violation signals, app catalog, developer profiles, and one analysis page per app. Duplicate IDs are removed in request order. Evidence coverage counts recorded images; unavailable previews are disclosed. The report uses a versioned cache identity so older portrait summary PDFs are not reused.

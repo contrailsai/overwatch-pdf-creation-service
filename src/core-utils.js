@@ -85,9 +85,13 @@ function generateReportHash(
   entityType = 'posts',
   variantKeysByDomainId = null,
 ) {
-  const sortedIds = [...postIds].sort();
+  const isAppsSummaryPdf = entityType === 'apps' && reportType === 'Summary' && String(reportFormat).toLowerCase() === 'pdf';
+  const sortedIds = isAppsSummaryPdf ? [...new Set(postIds.map(String))] : [...postIds].sort();
   const entitySuffix = entityType && entityType !== 'posts' ? `-${entityType}` : '';
   const rawString = `${projectId}-${sortedIds.join(',')}-${reportType}-${profileId}-${reportFormat}${entitySuffix}`;
+  if (isAppsSummaryPdf) {
+    return crypto.createHash('sha256').update(`${rawString}-landscape-summary-v1`).digest('hex');
+  }
   if (entityType === 'domains') {
     const extra = buildDomainHashExtra(postIds, variantKeysByDomainId);
     return crypto.createHash('sha256').update(`${rawString}-${extra}`).digest('hex');
@@ -182,7 +186,7 @@ function validatePayload(payload) {
     errors,
     normalizedReportFormat,
     entityType,
-    entityIds: Array.isArray(entityIds) ? entityIds : [],
+    entityIds: Array.isArray(entityIds) ? (entityType === 'apps' && reportType === 'Summary' && normalizedReportFormat === 'pdf' ? [...new Set(entityIds.map(String))] : entityIds) : [],
   };
 }
 

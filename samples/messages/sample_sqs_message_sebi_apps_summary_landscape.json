@@ -1,0 +1,20 @@
+{
+  "projectId": "SEBI",
+  "entityType": "apps",
+  "appIds": [
+    "6ab65e0648deed136101ed92",
+    "6aba02597a7005070a1e2955",
+    "6aba08cc342100ac99b1408d",
+    "6aba0a20c74ff738381ad7a9",
+    "6abb7224aab0d2c6e039b89b",
+    "6abb72ea946b5d8928f97243"
+  ],
+  "database_name": "SEBI-Data-Search",
+  "reportType": "Summary",
+  "reportFormat": "pdf",
+  "project": {
+    "project_name": "SEBI",
+    "project_details": { "labels": [], "legal_codes": [] }
+  },
+  "profile": null
+}

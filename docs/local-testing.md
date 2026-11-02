@@ -94,6 +94,9 @@ curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samp
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_domains_summary.json
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_domains_detailed.json
 curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_domains_detailed_bare.json
+
+# Apps — landscape summary PDF
+curl -X POST http://localhost:3847/ -H "Content-Type: application/json" -d @samples/messages/sample_sqs_message_sebi_apps_summary_landscape.json
 ```
 
 > The `sample_sqs_message_sebi_ad_profiles_detailed.json` filename is misleading — its `reportType` is `Summary` with a single profile id, so it exercises the **single-dossier** layout. `…_summary.json` carries two ids and exercises the **catalog**. A full inventory of every sample is in [HOW_TO_TEST_PDFS.md §3](../HOW_TO_TEST_PDFS.md#3-sample-inventory).

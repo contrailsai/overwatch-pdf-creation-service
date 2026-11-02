@@ -543,7 +543,7 @@ test('generateReportHash apps suffix differs from posts/ads/domains and leaves p
   const adsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'ads');
   const domainsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'domains');
   const appsHash = generateReportHash('SEBI', ids, 'Summary', '', 'pdf', 'apps');
-  const expectedRaw = `SEBI-${sorted.join(',')}-Summary--pdf-apps`;
+  const expectedRaw = `SEBI-${ids.join(',')}-Summary--pdf-apps-landscape-summary-v1`;
   assert.equal(appsHash, crypto.createHash('sha256').update(expectedRaw).digest('hex'));
   assert.notEqual(appsHash, postsHash);
   assert.notEqual(appsHash, adsHash);

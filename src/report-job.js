@@ -334,9 +334,9 @@ async function processAndCacheAdImages(ads, { includeAllCards = false, concurren
 
 /**
  * Cache app creatives. Expects **normalized** apps (the evidence image slots the
- * cache keys derive from live on the view model). Summary fetches one thumb per
- * app; Detailed also fetches up to MAX_APP_SCREENSHOTS screenshots and every
- * eligible evidence image. App header banners are deliberately not fetched.
+ * cache keys derive from live on the view model). Summary fetches one thumb and
+ * evidence images per app; Detailed also fetches up to MAX_APP_SCREENSHOTS
+ * screenshots. Evidence images are fetched in batches of four. App header banners are deliberately not fetched.
  *
  * @returns {{
  *   compressedImages: Array<string|null>,
@@ -1039,7 +1039,7 @@ async function runReportJob(client, payload, options = {}) {
 
       await updateReportStatus(reportHash, '[30%] Processing Images');
 
-      const includeDetailedImages = reportType === 'Detailed';
+      const includeDetailedImages = reportType === 'Detailed' || reportType === 'Summary';
       const {
         compressedImages,
         compressedScreenshotImages,
@@ -1049,7 +1049,7 @@ async function runReportJob(client, payload, options = {}) {
         { 'images.count': apps.length, 'entity.type': 'apps' },
         async () =>
           processAndCacheAppImages(apps, {
-            includeScreenshots: includeDetailedImages,
+            includeScreenshots: reportType === 'Detailed',
             includeEvidence: includeDetailedImages,
             concurrency: 10,
           }),

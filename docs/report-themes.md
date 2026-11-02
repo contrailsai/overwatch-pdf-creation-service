@@ -380,16 +380,7 @@ The ads table caps display at **20** rows and, when capped, prints `Showing N of
 
 Both apps renderers import `DomainTheme` (as `AppTheme`) and share the pure helpers in `appPdfShared.js`. There is **no review filter** — every requested app renders, with an `Unreviewed` badge when no reviewer signal exists.
 
-**Apps Summary — `AppsSummaryReportDocument`** — props `{ apps, project }`. Legacy export; its existing layout is unchanged. One flowing A4 page, padding `30/30/40`, fixed header `OVERWATCH` / `App Integrity Report` + IST timestamp, uppercase footer.
-
-| Section | Content |
-| --- | --- |
-| Executive Summary | Six cards: `Total Apps` · `High` · `Medium` · `Low` (risk tiers, coloured only when non-zero) · `Developers` (distinct names) · `Alerted` (explicit `client_status: alerted`, or the legacy `processed` flag) |
-| App List Analysis | Fixed table header + one row per app |
-
-Columns: `#` 5% · `App` 27% · `Developer` 16% · `Store` 19% · `Violations` 11% · `Risk` 13% · `Dates` 9%.
-
-Row: **45×45** icon (`objectFit: 'contain'` on a `#F8FAFC` well, 8 px radius) or `No Img`; app title (2 lines); package id; platform plus a **store link** (`Play Store` / `App Store`, `app.original_url`) underneath; developer name + legal name + a `Developer page` link; store facts one per line (`installs`, genre, `N ratings`, price); up to 3 violation chips or `—`; risk badge; `Sourced` / `Reviewed` dates.
+**Apps Summary — `AppsSummaryReportDocument`** — props `{ apps, project }`. A 16:9 landscape presentation using the report font, theme, header, footer, and watermark. It contains a risk overview, violation signals with reviewer/AI attribution, a paginated app catalog, developer profiles, and one analysis page per app. App pages include the store link and payment and securities evidence previews, or an unavailable state. Evidence categories describe source filing and do not establish a violation.
 
 **Apps Detailed — `AppsDetailedReportDocument`** — props `{ apps, project }`. Detailed is the revised report contract. Each app is rendered in this order: **Case Overview → Evidence → Assessment & supporting evidence → App & Developer information**. The assessment page is omitted when no analysis/review content exists. All pages share a fixed `Overwatch` / `App Integrity` header, right-aligned app title + package, and `Page X of Y` footer.
 
